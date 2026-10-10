@@ -93,8 +93,8 @@ jobs:
           [ -z "$files" ] && all=true
 
           # name|path in repo|preview URL
-          apps="Counter|app/|$base/
-          Counter (standalone)|apps/counter/|$base/apps/counter/
+          apps="Hello World (site root)|app/|$base/
+          Counter|apps/counter/|$base/apps/counter/
           Dice and coin|apps/dice/|$base/apps/dice/"
 
           marker='<!-- review-deployments -->'
