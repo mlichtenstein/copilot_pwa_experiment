@@ -78,12 +78,50 @@ jobs:
           git commit -m "Deploy ${{ github.sha }}"
           git push origin HEAD:gh-pages
 
-      - name: Comment preview URL
-        if: github.event_name == 'pull_request' && github.event.action == 'opened'
+      - name: Post review deployments comment
+        if: always() && github.event_name == 'pull_request' && github.event.action != 'closed'
         env:
           GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+          JOB_STATUS: ${{ job.status }}
         run: |
-          owner=${GITHUB_REPOSITORY_OWNER}
-          repo=${GITHUB_REPOSITORY#*/}
-          gh pr comment ${{ github.event.pull_request.number }} --repo "$GITHUB_REPOSITORY" \
-            --body "Preview: https://$owner.github.io/$repo/previews/pr-${{ github.event.pull_request.number }}/"
+          base="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/previews/pr-${PR}"
+          files=$(gh pr diff "$PR" --repo "$GITHUB_REPOSITORY" --name-only || true)
+          all=false
+          echo "$files" | grep -q '^\.github/' && all=true
+          [ -z "$files" ] && all=true
+
+          # name|path in repo|preview URL
+          apps="Counter|app/|$base/
+          Counter (standalone)|apps/counter/|$base/apps/counter/
+          Dice and coin|apps/dice/|$base/apps/dice/"
+
+          marker='<!-- review-deployments -->'
+          body="$marker"$'\n'"## Review deployments"$'\n\n'
+          found=false
+          while IFS='|' read -r name path url; do
+            name=$(echo "$name" | xargs)
+            if [ "$all" = true ] || echo "$files" | grep -q "^$path"; then
+              found=true
+              if [ "$IS_FORK" = true ]; then
+                body+="- $name: no preview (PRs from forks are not deployed)"$'\n'
+              elif [ "$JOB_STATUS" = success ]; then
+                body+="- $name: $url"$'\n'
+              else
+                body+="- $name: ❌ deployment failed, no preview available"$'\n'
+              fi
+            fi
+          done <<< "$apps"
+          [ "$found" = true ] || body+="No deployable app changed in this PR, so there is no preview."$'\n'
+          if [ "$JOB_STATUS" = success ] && [ "$IS_FORK" != true ]; then
+            body+=$'\n'"Updated for commit ${{ github.event.pull_request.head.sha }}. Links may take a minute to go live after GitHub Pages rebuilds."
+          fi
+
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq "[.[] | select(.user.login==\"github-actions[bot]\" and (.body | contains(\"$marker\")))][0].id // empty" | head -n1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" >/dev/null
+          else
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$body"
+          fi
