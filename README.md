@@ -1,32 +1,60 @@
 # copilot_pwa_experiment
 
-A minimal Progressive Web App (plain HTML/CSS/JS, no framework): it shows "Hello World!" and a button that increments a counter stored in `localStorage`. It is installable on Android (web app manifest + service worker).
+Welcome! This repo is a tiny experiment: a **Progressive Web App (PWA)** that you can build, deploy and test entirely from GitHub, even from a phone, with no computer needed.
 
-The point is to demonstrate an entirely GitHub-hosted workflow for developing and testing a PWA from a phone.
+## What is this?
 
-## Layout
+- **PWA**: a normal website that a phone can "install" like an app, with its own icon and full-screen window. It needs a *manifest* (a JSON file describing the app) and a *service worker* (a background script).
+- **GitHub Pages**: a free GitHub feature that serves files from a branch as a website.
+- **GitHub Actions**: GitHub's automation. A *workflow* file tells it what to do when something happens, such as a push.
 
-All app files live in [`app/`](app/). Every path is relative, so the app works from any sub-path.
+The app itself is deliberately trivial: it says "Hello World!" and has a button that adds one to a counter. The counter is saved in your browser (`localStorage`), so it survives reloads.
 
-## Deployment workflow
+## What's in the repo
 
-`.github/workflows/deploy.yml` publishes to the `gh-pages` branch:
+| Path | Purpose |
+| --- | --- |
+| `app/index.html` | The page |
+| `app/style.css` | Styling |
+| `app/app.js` | Counter logic and service worker registration |
+| `app/manifest.webmanifest` | Tells Android the app name, icons and colors so it can be installed (JSON can't hold comments, so it is explained here) |
+| `app/sw.js` | Service worker: offline caching, required for installability |
+| `app/icons/` | App icons (192 and 512 px) |
+| `.github/workflows/deploy.yml` | The deployment automation |
+
+Each file has a header comment explaining its job. Everything uses **relative paths**, so the same files work at any URL.
+
+## How deployment works
+
+The workflow publishes to a branch called `gh-pages`, which GitHub Pages serves.
 
 | Event | Result |
 | --- | --- |
-| Push to `main` | `app/` is published at the site root, `/`. `previews/` is left untouched. |
-| PR opened/updated | `app/` is published at `/previews/pr-N/`. Only that folder is replaced. |
-| PR closed | `/previews/pr-N/` is removed. |
+| Push/merge to `main` | `app/` is published at the site root. Previews are left alone. |
+| Pull request opened or updated | `app/` is published at `/previews/pr-N/` (N is the PR number), and the URL is commented on the PR when it is opened. |
+| Pull request closed | `/previews/pr-N/` is deleted. |
 
-Production and previews coexist because each deployment only touches its own part of the branch (jobs are serialized with a `concurrency` group).
+Production and previews coexist because each run only replaces its own folder. Runs are queued one at a time (a `concurrency` group) so they can't collide.
 
-Service-worker scopes are isolated: `sw.js` is registered with a relative URL and the manifest uses `"scope": "./"` and `"start_url": "./"`, so each deployment's worker only controls its own directory.
+**Why previews don't clash:** a service worker only controls the folder it was loaded from. Because `sw.js` is registered with a relative path and the manifest uses `"scope": "./"`, every preview has its own isolated worker and cache.
 
 ## One-time setup
 
-1. Run the workflow once (push to `main`) so the `gh-pages` branch exists.
-2. In **Settings → Pages**, set the source to **Deploy from a branch**: `gh-pages` / `/ (root)`.
-3. In **Settings → Actions → General**, allow workflows read and write permissions.
+1. Merge to `main` (or push) so the workflow runs once and creates the `gh-pages` branch.
+2. **Settings → Pages**: set source to *Deploy from a branch*, branch `gh-pages`, folder `/ (root)`.
+3. **Settings → Actions → General → Workflow permissions**: choose *Read and write permissions*.
 
-Production: `https://<owner>.github.io/<repo>/`
-Preview: `https://<owner>.github.io/<repo>/previews/pr-N/` (the URL is also commented on the PR). Note that PRs from forks can't push, so they get no preview.
+## URLs
+
+- Production: `https://<owner>.github.io/<repo>/`
+- Preview: `https://<owner>.github.io/<repo>/previews/pr-N/`
+
+## Trying it from your phone
+
+1. Open a PR and wait for the workflow to finish (Actions tab).
+2. Tap the preview link in the PR comment.
+3. In Chrome on Android, use menu → *Install app* / *Add to Home screen*.
+
+## Limitations
+
+PRs from forks can't push to `gh-pages`, so they get no preview.
