@@ -38,7 +38,7 @@ The workflow publishes to a branch called `gh-pages`, which GitHub Pages serves.
 | Event | Result |
 | --- | --- |
 | Push/merge to `main` | `app/` is published at the site root and `apps/` at `/apps/`. Previews are left alone. |
-| Pull request opened or updated | The same layout is published at `/previews/pr-N/` (N is the PR number), and the URL is commented on the PR when it is opened. |
+| Pull request opened or updated | The same layout is published at `/previews/pr-N/` (N is the PR number), and a "Review deployments" comment on the PR lists a preview URL for each affected app. The comment is created on the first run and refreshed on every update; it only shows links after the deploy succeeds and otherwise says the deployment failed or that no preview exists. |
 | Pull request closed | `/previews/pr-N/` is deleted. |
 
 Production and previews coexist because each run only replaces its own folder. Runs are queued one at a time (a `concurrency` group) so they can't collide.
