@@ -1,5 +1,12 @@
 # copilot_pwa_experiment
 
+## Apps
+
+- [Counter](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/counter/)
+- [Dice roll / coin flip](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/dice/)
+
+Each file has a header comment explaining its job. Everything uses **relative paths**, so the same files work at any URL.
+
 Welcome! This repo is a tiny experiment: a **Progressive Web App (PWA)** that you can build, deploy and test entirely from GitHub, even from a phone, with no computer needed.
 
 ## What is this?
@@ -23,13 +30,6 @@ The app itself is deliberately trivial: it says "Hello World!" and has a button 
 | `.github/workflows/deploy.yml` | The deployment automation |
 | `apps/counter/` | A standalone counter PWA |
 | `apps/dice/` | Dice roller and coin flip PWA |
-
-## Apps
-
-- [Counter](apps/counter/)
-- [Dice roll / coin flip](apps/dice/)
-
-Each file has a header comment explaining its job. Everything uses **relative paths**, so the same files work at any URL.
 
 ## How deployment works
 
