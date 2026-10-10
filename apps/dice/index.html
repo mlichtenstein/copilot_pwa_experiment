@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#4a275e">
+  <link rel="manifest" href="manifest.json">
+  <title>Dice &amp; Coin</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: #f4eff7; color: #342041; }
+    main { width: min(38rem, calc(100% - 2rem)); padding: 2rem; box-sizing: border-box; background: white; border-radius: 1.25rem; box-shadow: 0 1rem 3rem #3420411c; }
+    h1, h2 { text-align: center; }
+    h1 { margin-top: 0; }
+    .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr)); gap: .75rem; }
+    button { padding: .85rem .5rem; border: 0; border-radius: .75rem; background: #70438a; color: white; font: inherit; font-weight: 650; cursor: pointer; }
+    button:hover { background: #57316d; }
+    button:focus-visible { outline: .2rem solid #e39b45; outline-offset: .2rem; }
+    #result { min-height: 3.5rem; margin: 1.5rem 0 .5rem; text-align: center; font-size: 1.6rem; font-weight: 700; }
+    .coin { display: block; width: 100%; margin-top: 1rem; }
+    @media (prefers-color-scheme: dark) { body { background: #1d1722; color: #f7f0fb; } main { background: #30253a; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Dice &amp; Coin</h1>
+    <h2>Roll a die</h2>
+    <div class="choices" aria-label="Choose a die">
+      <button type="button" data-sides="4">d4</button>
+      <button type="button" data-sides="6">d6</button>
+      <button type="button" data-sides="8">d8</button>
+      <button type="button" data-sides="10">d10</button>
+      <button type="button" data-sides="12">d12</button>
+      <button type="button" data-sides="20">d20</button>
+      <button type="button" data-sides="100">d100</button>
+    </div>
+    <button class="coin" id="coin" type="button">Flip coin</button>
+    <p id="result" role="status" aria-live="polite">Choose a die or flip the coin.</p>
+  </main>
+  <script>
+    const result = document.querySelector("#result");
+
+    document.querySelectorAll("[data-sides]").forEach(button => {
+      button.addEventListener("click", () => {
+        const sides = Number(button.dataset.sides);
+        result.textContent = `d${sides}: ${Math.floor(Math.random() * sides) + 1}`;
+      });
+    });
+
+    document.querySelector("#coin").addEventListener("click", () => {
+      result.textContent = `Coin: ${Math.random() < 0.5 ? "Heads" : "Tails"}`;
+    });
+
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+  </script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#17324d">
+  <link rel="manifest" href="manifest.json">
+  <title>Counter</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: #edf3f8; color: #17324d; }
+    main { width: min(24rem, calc(100% - 2rem)); padding: 2rem; box-sizing: border-box; text-align: center; background: white; border-radius: 1.25rem; box-shadow: 0 1rem 3rem #17324d1c; }
+    h1 { margin-top: 0; }
+    output { display: block; margin: 1.5rem 0; font-size: 5rem; font-variant-numeric: tabular-nums; }
+    .controls { display: flex; justify-content: center; gap: .75rem; }
+    button { min-width: 4rem; padding: .75rem 1rem; border: 0; border-radius: .75rem; background: #176b87; color: white; font: inherit; font-size: 1.25rem; cursor: pointer; }
+    button:last-child { background: #526577; }
+    button:focus-visible { outline: .2rem solid #ed9b40; outline-offset: .2rem; }
+    @media (prefers-color-scheme: dark) { body { background: #13202b; color: #eff7fc; } main { background: #223442; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Counter</h1>
+    <output id="count" aria-live="polite">0</output>
+    <div class="controls">
+      <button id="decrement" type="button" aria-label="Decrease count">−</button>
+      <button id="increment" type="button" aria-label="Increase count">+</button>
+      <button id="reset" type="button">Reset</button>
+    </div>
+  </main>
+  <script>
+    const output = document.querySelector("#count");
+    let count = Number.parseInt(localStorage.getItem("counter-value") ?? "0", 10);
+    if (!Number.isFinite(count)) count = 0;
+
+    function render() {
+      output.value = count;
+      output.textContent = count;
+      localStorage.setItem("counter-value", count);
+    }
+
+    document.querySelector("#decrement").addEventListener("click", () => { count--; render(); });
+    document.querySelector("#increment").addEventListener("click", () => { count++; render(); });
+    document.querySelector("#reset").addEventListener("click", () => { count = 0; render(); });
+    render();
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+  </script>
+</body>
+</html>
