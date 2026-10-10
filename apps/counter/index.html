@@ -44,7 +44,7 @@
     document.querySelector("#increment").addEventListener("click", () => { count++; render(); });
     document.querySelector("#reset").addEventListener("click", () => { count = 0; render(); });
     render();
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("counter-sw.js");
   </script>
 </body>
 </html>
