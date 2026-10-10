@@ -21,6 +21,13 @@ The app itself is deliberately trivial: it says "Hello World!" and has a button 
 | `app/sw.js` | Service worker: offline caching, required for installability |
 | `app/icons/` | App icons (192 and 512 px) |
 | `.github/workflows/deploy.yml` | The deployment automation |
+| `apps/counter/` | A standalone counter PWA |
+| `apps/dice/` | Dice roller and coin flip PWA |
+
+## Apps
+
+- [Counter](apps/counter/)
+- [Dice roll / coin flip](apps/dice/)
 
 Each file has a header comment explaining its job. Everything uses **relative paths**, so the same files work at any URL.
 
@@ -30,8 +37,8 @@ The workflow publishes to a branch called `gh-pages`, which GitHub Pages serves.
 
 | Event | Result |
 | --- | --- |
-| Push/merge to `main` | `app/` is published at the site root. Previews are left alone. |
-| Pull request opened or updated | `app/` is published at `/previews/pr-N/` (N is the PR number), and the URL is commented on the PR when it is opened. |
+| Push/merge to `main` | `app/` is published at the site root and `apps/` at `/apps/`. Previews are left alone. |
+| Pull request opened or updated | The same layout is published at `/previews/pr-N/` (N is the PR number), and the URL is commented on the PR when it is opened. |
 | Pull request closed | `/previews/pr-N/` is deleted. |
 
 Production and previews coexist because each run only replaces its own folder. Runs are queued one at a time (a `concurrency` group) so they can't collide.
@@ -47,7 +54,9 @@ Production and previews coexist because each run only replaces its own folder. R
 ## URLs
 
 - Production: `https://<owner>.github.io/<repo>/`
-- Preview: `https://<owner>.github.io/<repo>/previews/pr-N/`
+- Counter: `https://<owner>.github.io/<repo>/apps/counter/`
+- Dice and coin: `https://<owner>.github.io/<repo>/apps/dice/`
+- PR previews use the same paths under `/previews/pr-N/`.
 
 ## Trying it from your phone
 

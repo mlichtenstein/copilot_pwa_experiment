@@ -2,8 +2,8 @@
 # Consumer: GitHub itself runs this automatically; nobody invokes it by hand.
 #
 # How it works: the built site lives on a branch called "gh-pages", which
-# GitHub Pages serves as a website. This workflow copies the app/ folder into
-# that branch:
+# GitHub Pages serves as a website. This workflow copies app/ to the site root
+# and apps/ to its matching path on that branch:
 #   - push to main  -> site root        (https://<owner>.github.io/<repo>/)
 #   - pull request  -> previews/pr-N/   (a separate folder per PR)
 #   - PR closed     -> that PR's folder is deleted
@@ -49,6 +49,8 @@ jobs:
           # Replace everything except previews/ and git metadata
           find ../gh-pages -mindepth 1 -maxdepth 1 ! -name .git ! -name previews -exec rm -rf {} +
           cp -r app/. ../gh-pages/
+          mkdir -p ../gh-pages/apps
+          cp -r apps/. ../gh-pages/apps/
           touch ../gh-pages/.nojekyll
 
       - name: Publish PR preview
@@ -58,6 +60,8 @@ jobs:
           rm -rf "$dest"
           mkdir -p "$dest"
           cp -r app/. "$dest/"
+          mkdir -p "$dest/apps"
+          cp -r apps/. "$dest/apps/"
           touch ../gh-pages/.nojekyll
 
       - name: Remove PR preview
