@@ -8,11 +8,15 @@
  */
 // localStorage name under which the number is saved
 const KEY = 'counter';
+// "document" is the browser's object representing the web page (index.html).
+// getElementById finds the element in the page with that id attribute,
+// here the <span id="count"> that displays the number.
 const countEl = document.getElementById('count');
 // Read the saved value (stored as text); fall back to 0 if nothing saved yet
 let count = parseInt(localStorage.getItem(KEY), 10) || 0;
 countEl.textContent = count;
 
+// Find the <button id="increment"> on the page and run this function on each click
 document.getElementById('increment').addEventListener('click', () => {
   count += 1;
   localStorage.setItem(KEY, count);

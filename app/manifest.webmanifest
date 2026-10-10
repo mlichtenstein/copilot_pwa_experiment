@@ -1,5 +1,6 @@
 {
   "name": "Hello World PWA",
+  "description": "Minimal demo PWA: Hello World and a persistent counter.",
   "short_name": "HelloPWA",
   "start_url": "./",
   "scope": "./",
