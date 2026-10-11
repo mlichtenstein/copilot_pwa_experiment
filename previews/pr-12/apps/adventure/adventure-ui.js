@@ -37,10 +37,14 @@ function makeObjectButton(object) {
       message.textContent = "Choose a verb first.";
       return;
     }
-    const requiredNouns = game.verbs[selectedVerb].nouns;
+    const requiredNouns = game.verbs[selectedVerb].nounCount;
     selectedNouns.push(object.id);
     if (selectedNouns.length === requiredNouns) {
-      game.perform(selectedVerb, selectedNouns[0], selectedNouns[1]);
+      const sentence = new AdventureGame.Sentence(
+        selectedVerb,
+        selectedNouns.map(id => new AdventureGame.Noun(id))
+      );
+      game.perform(sentence);
       message.textContent = game.getState().message;
       selectedVerb = null;
       selectedNouns = [];

@@ -1,4 +1,24 @@
 (function (global) {
+  class Noun {
+    constructor(id) {
+      if (typeof id !== "string" || !id) throw new TypeError("A noun must have a non-empty string ID.");
+      this.id = id;
+      Object.freeze(this);
+    }
+  }
+
+  class Sentence {
+    constructor(verbId, nouns) {
+      if (typeof verbId !== "string" || !verbId || !Array.isArray(nouns) ||
+          !nouns.every(noun => noun instanceof Noun)) {
+        throw new TypeError("A sentence must have a verb ID and contain Noun instances.");
+      }
+      this.verbId = verbId;
+      this.nouns = Object.freeze([...nouns]);
+      Object.freeze(this);
+    }
+  }
+
   function createGame(world) {
     let roomId = world.startRoom;
     const inventory = new Set();
@@ -27,39 +47,36 @@
       };
     }
 
-    function perform(verbId, firstId, secondId) {
-      const verb = world.verbs[verbId];
-      if (!verb || !firstId || (verb.nouns === 2 && !secondId)) return false;
+    function findNoun(id) {
+      const object = roomObjects().find(noun => noun.id === id);
+      return object || getState().inventory.find(noun => noun.id === id);
+    }
 
-      const objects = roomObjects();
-      const carried = getState().inventory;
-      const first = objects.find(object => object.id === firstId) || carried.find(object => object.id === firstId);
-      const second = secondId && (
-        objects.find(object => object.id === secondId) || carried.find(object => object.id === secondId)
-      );
-      if (!first || (verb.nouns === 2 && !second)) return false;
-
-      if (verb.action === "examine") {
-        message = first.description;
-      } else if (verb.action === "take") {
-        if (!world.rooms[roomId].objects.includes(firstId) || inventory.has(firstId)) {
-          message = `You can't take ${first.label}.`;
+    const actionHandlers = {
+      examine(noun) {
+        message = noun.description;
+      },
+      take(noun) {
+        if (!world.rooms[roomId].objects.includes(noun.id) || inventory.has(noun.id)) {
+          message = `You can't take ${noun.label}.`;
         } else {
-          inventory.add(firstId);
-          message = `You put ${first.label} in your inventory.`;
+          inventory.add(noun.id);
+          message = `You put ${noun.label} in your inventory.`;
         }
-      } else if (verb.action === "go") {
-        const exit = world.rooms[roomId].exits.find(option => option.id === firstId);
+      },
+      go(noun) {
+        const exit = world.rooms[roomId].exits.find(option => option.id === noun.id);
         if (!exit) {
-          message = `${first.label} doesn't lead anywhere.`;
+          message = `${noun.label} doesn't lead anywhere.`;
         } else {
           roomId = exit.destination;
           message = `You enter the ${world.rooms[roomId].name.toLowerCase()}.`;
         }
-      } else if (verb.action === "combine") {
+      },
+      combine(first, second) {
         const combination = world.combinations.find(option =>
-          (option.items[0] === firstId && option.items[1] === secondId) ||
-          (option.items[0] === secondId && option.items[1] === firstId)
+          (option.items[0] === first.id && option.items[1] === second.id) ||
+          (option.items[0] === second.id && option.items[1] === first.id)
         );
         if (combination && (!combination.requiresInventory ||
             combination.requiresInventory.every(id => inventory.has(id)))) {
@@ -69,11 +86,23 @@
           message = world.messages.noCombination;
         }
       }
+    };
+
+    function perform(sentence) {
+      if (!(sentence instanceof Sentence)) return false;
+      const verb = world.verbs[sentence.verbId];
+      if (!verb || sentence.nouns.length !== verb.nounCount) return false;
+
+      const nouns = sentence.nouns.map(noun => findNoun(noun.id));
+      const handler = actionHandlers[verb.action];
+      if (!Object.hasOwn(actionHandlers, verb.action) || nouns.some(noun => !noun)) return false;
+
+      handler(...nouns);
       return true;
     }
 
     return { getState, perform, verbs: world.verbs };
   }
 
-  global.AdventureGame = { createGame };
+  global.AdventureGame = { createGame, Noun, Sentence };
 })(globalThis);
