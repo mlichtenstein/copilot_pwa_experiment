@@ -1,8 +1,11 @@
 (function (global) {
   class Noun {
-    constructor(id) {
-      if (typeof id !== "string" || !id) throw new TypeError("A noun must have a non-empty string ID.");
-      this.id = id;
+    constructor(id, kind, label) {
+      if (typeof id !== "string" || !id || typeof kind !== "string" || !kind ||
+          typeof label !== "string" || !label) {
+        throw new TypeError("A noun must have an ID, kind, and label.");
+      }
+      Object.assign(this, { id, kind, label });
       Object.freeze(this);
     }
   }
@@ -28,9 +31,10 @@
     function roomObjects() {
       const room = world.rooms[roomId];
       return [
-        ...room.objects.filter(id => !inventory.has(id)).map(id => ({ id, ...world.items[id] })),
+        ...room.objects.filter(id => !inventory.has(id)).map(id => ({ id, kind: "item", ...world.items[id] })),
         ...room.exits.map(exit => ({
           ...exit,
+          kind: "exit",
           description: `This leads to the ${world.rooms[exit.destination].name}.`
         }))
       ];
@@ -41,7 +45,7 @@
         roomId,
         room: { ...world.rooms[roomId] },
         objects: roomObjects(),
-        inventory: [...inventory].map(id => ({ id, ...world.items[id] })),
+        inventory: [...inventory].map(id => ({ id, kind: "item", ...world.items[id] })),
         message,
         won
       };
@@ -64,7 +68,7 @@
           message = `You put ${noun.label} in your inventory.`;
         }
       },
-      go(noun) {
+      useExit(noun) {
         const exit = world.rooms[roomId].exits.find(option => option.id === noun.id);
         if (!exit) {
           message = `${noun.label} doesn't lead anywhere.`;
@@ -91,11 +95,16 @@
     function perform(sentence) {
       if (!(sentence instanceof Sentence)) return false;
       const verb = world.verbs[sentence.verbId];
-      if (!verb || sentence.nouns.length !== verb.nounCount) return false;
+      if (!verb) return false;
+      const pattern = verb.patterns.find(candidate =>
+        candidate.nounKinds.length === sentence.nouns.length &&
+        candidate.nounKinds.every((kind, index) => kind === sentence.nouns[index].kind)
+      );
+      if (!pattern) return false;
 
       const nouns = sentence.nouns.map(noun => findNoun(noun.id));
-      const handler = actionHandlers[verb.action];
-      if (!Object.hasOwn(actionHandlers, verb.action) || nouns.some(noun => !noun)) return false;
+      const handler = actionHandlers[pattern.action];
+      if (!Object.hasOwn(actionHandlers, pattern.action) || nouns.some(noun => !noun)) return false;
 
       handler(...nouns);
       return true;
