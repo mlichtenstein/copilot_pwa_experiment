@@ -1,4 +1,4 @@
-const CACHE = "adventure-v2";
+const CACHE = "adventure-v3";
 const FILES = ["./", "index.html", "manifest.json", "world.js", "game-engine.js", "adventure-ui.js", "icon.svg"];
 
 self.addEventListener("install", event => {
