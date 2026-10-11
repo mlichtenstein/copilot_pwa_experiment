@@ -4,6 +4,7 @@
 
 - [Counter](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/counter/)
 - [Dice roll / coin flip](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/dice/)
+- [Fizz & Fortune text adventure](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/adventure/)
 
 Each file has a header comment explaining its job. Everything uses **relative paths**, so the same files work at any URL.
 
@@ -30,6 +31,7 @@ The app itself is deliberately trivial: it says "Hello World!" and has a button 
 | `.github/workflows/deploy.yml` | The deployment automation |
 | `apps/counter/` | A standalone counter PWA |
 | `apps/dice/` | Dice roller and coin flip PWA |
+| `apps/adventure/` | Button-driven, three-room text adventure |
 
 ## How deployment works
 
@@ -56,6 +58,7 @@ Production and previews coexist because each run only replaces its own folder. R
 - Production: `https://<owner>.github.io/<repo>/`
 - Counter: `https://<owner>.github.io/<repo>/apps/counter/`
 - Dice and coin: `https://<owner>.github.io/<repo>/apps/dice/`
+- Fizz & Fortune: `https://<owner>.github.io/<repo>/apps/adventure/`
 - PR previews use the same paths under `/previews/pr-N/`.
 
 ## Trying it from your phone

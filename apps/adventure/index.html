@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#31534a">
+  <link rel="manifest" href="manifest.json">
+  <title>Fizz &amp; Fortune</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { min-height: 100vh; margin: 0; padding: 1rem 0; box-sizing: border-box; display: grid; place-items: center; background: #edf4ef; color: #203a32; }
+    main { width: min(42rem, calc(100% - 2rem)); padding: 1.5rem; box-sizing: border-box; background: white; border-radius: 1.25rem; box-shadow: 0 1rem 3rem #203a321c; }
+    h1, h2 { margin-top: 0; }
+    h1 { text-align: center; }
+    h2 { margin-bottom: .5rem; font-size: 1.1rem; }
+    section { margin-top: 1.25rem; }
+    .choices { display: flex; flex-wrap: wrap; gap: .65rem; }
+    button { min-height: 2.8rem; padding: .7rem 1rem; border: 0; border-radius: .75rem; background: #356c59; color: white; font: inherit; font-weight: 650; cursor: pointer; }
+    button:hover, button[aria-pressed="true"] { background: #244d3e; }
+    button:focus-visible { outline: .2rem solid #d58c36; outline-offset: .2rem; }
+    #room-description { line-height: 1.5; }
+    #sentence { min-height: 1.5em; font-weight: 700; }
+    #message { min-height: 3em; padding: .85rem; border-radius: .75rem; background: #edf4ef; line-height: 1.5; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #17251f; color: #edf7f0; }
+      main { background: #263a31; }
+      #message { background: #1c2e25; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Fizz &amp; Fortune</h1>
+    <section aria-labelledby="room-name">
+      <h2 id="room-name"></h2>
+      <p id="room-description"></p>
+    </section>
+    <p id="sentence" aria-live="polite"></p>
+    <p id="message" role="status" aria-live="polite"></p>
+    <section aria-labelledby="verbs-heading">
+      <h2 id="verbs-heading">Verbs</h2>
+      <div class="choices">
+        <button type="button" data-verb="examine" aria-pressed="false">Look at</button>
+        <button type="button" data-verb="take" aria-pressed="false">Take</button>
+        <button type="button" data-verb="go" aria-pressed="false">Go through</button>
+        <button type="button" data-verb="use" aria-pressed="false">Use</button>
+      </div>
+    </section>
+    <section aria-labelledby="objects-heading">
+      <h2 id="objects-heading">Objects here</h2>
+      <div id="room-objects" class="choices"></div>
+    </section>
+    <section aria-labelledby="inventory-heading">
+      <h2 id="inventory-heading">Inventory</h2>
+      <div id="inventory-objects" class="choices"></div>
+    </section>
+  </main>
+  <script src="adventure.js"></script>
+  <script src="adventure-ui.js"></script>
+</body>
+</html>
