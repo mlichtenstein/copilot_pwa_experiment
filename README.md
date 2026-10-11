@@ -5,6 +5,7 @@
 - [Counter](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/counter/)
 - [Dice roll / coin flip](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/dice/)
 - [Fizz & Fortune text adventure](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/adventure/)
+- [Text adventure engine guide](apps/adventure/README.md)
 
 Each file has a header comment explaining its job. Everything uses **relative paths**, so the same files work at any URL.
 
