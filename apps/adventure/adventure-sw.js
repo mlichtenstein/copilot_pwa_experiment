@@ -1,5 +1,5 @@
-const CACHE = "adventure-v1";
-const FILES = ["./", "index.html", "manifest.json", "adventure.js", "adventure-ui.js", "icon.svg"];
+const CACHE = "adventure-v2";
+const FILES = ["./", "index.html", "manifest.json", "world.js", "game-engine.js", "adventure-ui.js", "icon.svg"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)));

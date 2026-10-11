@@ -1,4 +1,4 @@
-const game = AdventureGame.createGame();
+const game = AdventureGame.createGame(AdventureWorld);
 const roomName = document.querySelector("#room-name");
 const roomDescription = document.querySelector("#room-description");
 const roomObjects = document.querySelector("#room-objects");
