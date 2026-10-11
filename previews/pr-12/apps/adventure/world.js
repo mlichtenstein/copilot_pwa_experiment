@@ -34,10 +34,18 @@ globalThis.AdventureWorld = {
     }
   },
   verbs: {
-    examine: { label: "Look at", nounCount: 1, action: "examine" },
-    take: { label: "Take", nounCount: 1, action: "take" },
-    go: { label: "Go through", nounCount: 1, action: "go" },
-    use: { label: "Use", nounCount: 2, action: "combine" }
+    examine: {
+      label: "Look at",
+      patterns: [{ nounKinds: ["item"], action: "examine" }, { nounKinds: ["exit"], action: "examine" }]
+    },
+    take: { label: "Take", patterns: [{ nounKinds: ["item"], action: "take" }] },
+    use: {
+      label: "Use",
+      patterns: [
+        { nounKinds: ["exit"], action: "useExit" },
+        { nounKinds: ["item", "item"], action: "combine" }
+      ]
+    }
   },
   combinations: [
     {
