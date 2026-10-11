@@ -1,0 +1,10 @@
+/*
+ * style.css - the visual styling for index.html.
+ * Consumer: the browser, via the <link> tag in index.html.
+ * Kept tiny: it just centers the content and styles the button so it is
+ * easy to tap on a phone.
+ */
+body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  font-family: system-ui, sans-serif; text-align: center; }
+button { font-size: 1.25rem; padding: 0.75rem 2rem; border: 0; border-radius: 0.5rem;
+  background: #1a73e8; color: #fff; }
