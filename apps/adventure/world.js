@@ -1,5 +1,28 @@
+/*
+ * Fizz & Fortune's world definition.
+ *
+ * To make another game, author a similar object and pass it to
+ * AdventureGame.createGame(world). The engine expects:
+ * - startRoom: the ID of the room where play begins.
+ * - rooms: room IDs mapped to names/descriptions, item IDs, and exit records.
+ *   An exit's `destination` is another room ID; Use on that exit moves there.
+ *   Optional exit `requiresFlags` keep a doorway hidden until flags match.
+ * - items: item IDs mapped to the labels and descriptions shown by the UI.
+ * - verbs: button labels and allowed noun-kind patterns. Each pattern names
+ *   an engine action; Use supports both one exit noun and two item nouns here.
+ * - combinations: item pairs, optional inventory/flag requirements, and
+ *   declarative effects to apply when a pair is used.
+ * - initialFlags: optional starting values for story flags.
+ * - messages: initial and fallback text; wonFlag names the success flag.
+ *
+ * A combination is one piece of game content, not a new engine code path.
+ * Its effects can set flags, move items, and show text using the engine's
+ * existing effect handlers. Add a new effect handler only when a game needs a
+ * new kind of state change, then reuse it in as many world rules as needed.
+ */
 globalThis.AdventureWorld = {
   startRoom: "kitchen",
+  wonFlag: "won",
   rooms: {
     kitchen: {
       name: "Kitchen",
@@ -51,8 +74,11 @@ globalThis.AdventureWorld = {
     {
       items: ["coke", "mentos"],
       requiresInventory: ["coke", "mentos"],
-      message: "You drop the Mentos into the Diet Coke. A fizzy fountain erupts! You solved the adventure.",
-      won: true
+      effects: [
+        { type: "moveItem", item: "mentos", to: "nowhere" },
+        { type: "setFlag", name: "won", value: true },
+        { type: "showMessage", text: "You drop the Mentos into the Diet Coke. A fizzy fountain erupts! You solved the adventure." }
+      ]
     }
   ],
   messages: {
