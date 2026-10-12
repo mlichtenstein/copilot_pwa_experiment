@@ -24,7 +24,13 @@
     #sentence-action.is-complete { background: #72b887; color: #102d1b; opacity: 1; }
     .sentence-connector { color: #68756d; font-weight: 400; }
     @keyframes sentence-ready { from { transform: scale(.98); } to { transform: scale(1); } }
+    @keyframes sentence-effect { from { background: #72b887; color: #102d1b; opacity: 1; } to { background: #e3e9e4; color: #203a32; opacity: .72; } }
+    @media (prefers-reduced-motion: no-preference) {
+      #sentence-action.is-complete { animation: sentence-effect 1s ease-out forwards; }
+      .transcript-turn.is-new { animation: transcript-highlight 1.2s ease-out forwards; }
+    }
     @media (prefers-reduced-motion: reduce) { #sentence-action.is-valid { animation: none; } }
+    @keyframes transcript-highlight { from { background: #f3cb6d; } to { background: transparent; } }
     #room-description { line-height: 1.5; }
     .transcript { height: 10rem; max-height: 35vh; overflow-y: auto; overscroll-behavior: contain; padding: .85rem; border-radius: .75rem; background: #edf4ef; }
     .transcript:focus-visible { outline: .2rem solid #d58c36; }
