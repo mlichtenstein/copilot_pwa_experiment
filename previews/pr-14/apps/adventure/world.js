@@ -101,7 +101,6 @@ globalThis.AdventureWorld = {
     },
     {
       items: ["manual", "lead"],
-      requiresInventory: ["manual", "lead"],
       effects: [
         { type: "moveItem", item: "lead", to: "nowhere" },
         { type: "moveItem", item: "gold", to: "inventory" },

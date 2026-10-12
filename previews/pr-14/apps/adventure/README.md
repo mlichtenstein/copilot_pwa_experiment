@@ -25,7 +25,8 @@ room ID is where the engine moves the player when that exit is used.
 ## Fizz & Fortune puzzles
 
 - Diet Coke (kitchen) + Mentos (lounge) makes a fizzy fountain and wins.
-- Alchemy manual (study, via the lounge) + Lead (garden) produces Gold. The
+- Alchemy manual (study, via the lounge) + Lead (garden) produces Gold. Both can
+  be in the room or carried. The
   lead is consumed and the manual is kept. Gold is defined as an item that
   starts `"nowhere"` and is given with `moveItem` to `"inventory"`.
 
