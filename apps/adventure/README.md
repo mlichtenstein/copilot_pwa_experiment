@@ -22,6 +22,13 @@ For example, the Fizz & Fortune world lets `Use` accept either one `exit` noun
 to travel, or two `item` nouns to attempt a combination. The door's destination
 room ID is where the engine moves the player when that exit is used.
 
+## Fizz & Fortune puzzles
+
+- Diet Coke (kitchen) + Mentos (lounge) makes a fizzy fountain and wins.
+- Alchemy manual (study, via the lounge) + Lead (garden) produces Gold. The
+  lead is consumed and the manual is kept. Gold is defined as an item that
+  starts `"nowhere"` and is given with `moveItem` to `"inventory"`.
+
 ## Files
 
 - `game-engine.js` defines `Noun`, `Sentence`, and `createGame(world)`, along
