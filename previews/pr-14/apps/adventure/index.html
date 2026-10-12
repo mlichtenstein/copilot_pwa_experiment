@@ -24,12 +24,31 @@
     #sentence-action.is-complete { background: #72b887; color: #102d1b; opacity: 1; }
     .sentence-connector { color: #68756d; font-weight: 400; }
     @keyframes sentence-ready { from { transform: scale(.98); } to { transform: scale(1); } }
+    @keyframes sentence-effect { from { background: #72b887; color: #102d1b; opacity: 1; } to { background: #e3e9e4; color: #203a32; opacity: .72; } }
+    @media (prefers-reduced-motion: no-preference) {
+      #sentence-action.is-complete { animation: sentence-effect 1s ease-out forwards; }
+      .transcript-turn.is-new { animation: transcript-highlight 1.2s ease-out forwards; }
+    }
     @media (prefers-reduced-motion: reduce) { #sentence-action.is-valid { animation: none; } }
+    @keyframes transcript-highlight { from { background: #f3cb6d; } to { background: transparent; } }
     #room-description { line-height: 1.5; }
+    .transcript { height: 10rem; max-height: 35vh; overflow-y: auto; overscroll-behavior: contain; padding: .85rem; border-radius: .75rem; background: #edf4ef; }
+    .transcript:focus-visible { outline: .2rem solid #d58c36; }
+    .transcript-empty { margin: 0; color: #68756d; }
+    #transcript-entries { margin: 0; padding: 0; list-style: none; }
+    .transcript-turn { padding: 0 0 .75rem; }
+    .transcript-turn + .transcript-turn { padding-top: .75rem; border-top: 1px solid #cbd8cf; }
+    .transcript-turn p { margin: 0; line-height: 1.5; }
+    .transcript-command { color: #244d3e; font-weight: 700; }
+    .transcript-response { padding-left: 1.25rem; }
+    #sentence-action { position: sticky; bottom: 1rem; z-index: 1; }
     #message { min-height: 3em; padding: .85rem; border-radius: .75rem; background: #edf4ef; line-height: 1.5; }
     @media (prefers-color-scheme: dark) {
       body { background: #17251f; color: #edf7f0; }
       main { background: #263a31; }
+      .transcript { background: #1c2e25; }
+      .transcript-command { color: #b8e2c8; }
+      .transcript-turn + .transcript-turn { border-color: #456052; }
       #message { background: #1c2e25; }
     }
   </style>
@@ -40,6 +59,13 @@
     <section aria-labelledby="room-name">
       <h2 id="room-name"></h2>
       <p id="room-description"></p>
+    </section>
+    <section aria-labelledby="transcript-heading">
+      <h2 id="transcript-heading">Adventure transcript</h2>
+      <div id="transcript" class="transcript" role="region" aria-labelledby="transcript-heading" tabindex="0">
+        <p id="transcript-empty" class="transcript-empty">Commands and responses will appear here.</p>
+        <ol id="transcript-entries" aria-live="polite" aria-relevant="additions"></ol>
+      </div>
     </section>
     <button id="sentence-action" type="button" aria-live="polite" disabled>Choose a verb to make a sentence.</button>
     <p id="message" role="status" aria-live="polite"></p>
