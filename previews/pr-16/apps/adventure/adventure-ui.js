@@ -105,6 +105,12 @@ function makeObjectButton(object) {
     }
     selectedNouns.push(noun);
     render();
+    if (sentencePatterns().some(pattern =>
+      pattern.nounKinds.length === selectedNouns.length &&
+      pattern.nounKinds.every((kind, index) => kind === selectedNouns[index].kind)
+    )) {
+      performSentence();
+    }
   });
   return button;
 }
@@ -129,27 +135,28 @@ function render() {
   updateSentence();
 }
 
-// The player explicitly confirms a complete sentence before its action runs.
-sentence.addEventListener("click", () => {
+// Perform a complete sentence as soon as its final noun is selected.
+function performSentence() {
   if (sentence.disabled || !selectedVerb) return;
   const command = `${game.verbs[selectedVerb].label} ${selectedNouns.map(noun => noun.label).join(" with ")}`;
-  if (game.perform(new AdventureGame.Sentence(selectedVerb, selectedNouns))) {
-    const turn = document.createElement("li");
-    turn.className = "transcript-turn";
-    const playerCommand = document.createElement("p");
-    playerCommand.className = "transcript-command";
-    playerCommand.textContent = `> ${command}`;
-    const response = document.createElement("p");
-    response.className = "transcript-response";
-    response.textContent = game.getState().message;
-    turn.append(playerCommand, response);
-    transcriptEntries.append(turn);
-    transcriptEmpty.hidden = true;
-    transcript.scrollTop = transcript.scrollHeight;
-  }
+  if (!game.perform(new AdventureGame.Sentence(selectedVerb, selectedNouns))) return;
+  const turn = document.createElement("li");
+  turn.className = "transcript-turn is-new";
+  const playerCommand = document.createElement("p");
+  playerCommand.className = "transcript-command";
+  playerCommand.textContent = `> ${command}`;
+  const response = document.createElement("p");
+  response.className = "transcript-response";
+  response.textContent = game.getState().message;
+  turn.append(playerCommand, response);
+  transcriptEntries.append(turn);
+  transcriptEmpty.hidden = true;
+  transcript.scrollTop = transcript.scrollHeight;
   sentenceComplete = true;
   render();
-});
+}
+
+sentence.addEventListener("click", performSentence);
 
 // Choosing a different verb starts a fresh sentence and clears its highlight.
 verbButtons.forEach(button => {
