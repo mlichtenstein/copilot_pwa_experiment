@@ -13,6 +13,9 @@ const roomObjects = document.querySelector("#room-objects");
 const inventoryObjects = document.querySelector("#inventory-objects");
 const message = document.querySelector("#message");
 const sentence = document.querySelector("#sentence-action");
+const transcript = document.querySelector("#transcript");
+const transcriptEntries = document.querySelector("#transcript-entries");
+const transcriptEmpty = document.querySelector("#transcript-empty");
 const verbButtons = [...document.querySelectorAll("[data-verb]")];
 let selectedVerb = null;
 let selectedNouns = [];
@@ -129,7 +132,21 @@ function render() {
 // The player explicitly confirms a complete sentence before its action runs.
 sentence.addEventListener("click", () => {
   if (sentence.disabled || !selectedVerb) return;
-  game.perform(new AdventureGame.Sentence(selectedVerb, selectedNouns));
+  const command = `${game.verbs[selectedVerb].label} ${selectedNouns.map(noun => noun.label).join(" with ")}`;
+  if (game.perform(new AdventureGame.Sentence(selectedVerb, selectedNouns))) {
+    const turn = document.createElement("li");
+    turn.className = "transcript-turn";
+    const playerCommand = document.createElement("p");
+    playerCommand.className = "transcript-command";
+    playerCommand.textContent = `> ${command}`;
+    const response = document.createElement("p");
+    response.className = "transcript-response";
+    response.textContent = game.getState().message;
+    turn.append(playerCommand, response);
+    transcriptEntries.append(turn);
+    transcriptEmpty.hidden = true;
+    transcript.scrollTop = transcript.scrollHeight;
+  }
   sentenceComplete = true;
   render();
 });
