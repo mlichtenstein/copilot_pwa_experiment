@@ -16,7 +16,8 @@ rewriting the engine.
    patterns and checks that the sentence has the required noun kinds in order.
 4. The matching action handler changes the current room, inventory, flags, or
    message. For combinations, the world data specifies reusable effects.
-5. The UI calls `getState()` and renders the updated game.
+5. The UI calls `getState()` and renders the updated game, adding the player's
+   command and the game's response to the scrollable transcript.
 
 For example, the Fizz & Fortune world lets `Use` accept either one `exit` noun
 to travel, or two `item` nouns to attempt a combination. The door's destination
@@ -29,7 +30,8 @@ room ID is where the engine moves the player when that exit is used.
 - `world.js` describes the Fizz & Fortune rooms, items, verbs, and combination
   rules.
 - `adventure-ui.js` turns button selections into sentences, asks the engine to
-  perform confirmed sentences, and displays the returned state.
+  perform confirmed sentences, displays the returned state, and keeps an
+  oldest-first transcript of commands and responses.
 - `index.html` provides the page structure and loads the world, engine, and UI
   in that order.
 
