@@ -95,7 +95,8 @@ jobs:
           # name|path in repo|preview URL
           apps="Hello World (site root)|app/|$base/
           Counter|apps/counter/|$base/apps/counter/
-          Dice and coin|apps/dice/|$base/apps/dice/"
+          Dice and coin|apps/dice/|$base/apps/dice/
+          Fizz and Fortune|apps/adventure/|$base/apps/adventure/"
 
           marker='<!-- review-deployments -->'
           body="$marker"$'\n'"## Review deployments"$'\n\n'
