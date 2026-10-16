@@ -1,0 +1,86 @@
+/* Renders the daily loop and connects the UI to the game controller. */
+(() => {
+  const game = WaitingGame;
+  const state = game.createState();
+  const app = document.querySelector("main");
+
+  function element(tag, text, className) {
+    const node = document.createElement(tag);
+    if (text) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  }
+
+  function button(text, action) {
+    const node = element("button", text);
+    node.type = "button";
+    node.addEventListener("click", action);
+    return node;
+  }
+
+  function renderApartment() {
+    const section = element("section");
+    section.append(element("h2", "At Home"));
+    section.append(element("p", `Day ${state.day} · Money: $${state.player.money}`));
+    section.append(element("p", "Choose an outfit before work."));
+    const choices = element("div", null, "choices");
+    game.outfits.forEach(outfit => {
+      const choice = button(outfit.name, () => {
+        game.selectOutfit(state, outfit.id);
+        render();
+      });
+      choice.setAttribute("aria-pressed", String(state.player.outfit === outfit.id));
+      choices.append(choice);
+    });
+    section.append(choices);
+    section.append(button("Go to Work", () => {
+      game.startShift(state);
+      render();
+    }));
+    app.append(section);
+  }
+
+  function renderWork() {
+    const shift = state.currentShift;
+    const encounter = game.currentEncounter(state);
+    const customer = game.customers.find(person => person.id === encounter.customerId);
+    const section = element("section");
+    section.append(element("h2", "At Work"));
+    section.append(element("p", `Day ${state.day} · Encounter ${shift.currentEncounter + 1} of ${shift.encounters.length}`));
+    section.append(element("h3", customer.name));
+    section.append(element("p", "Your customer is ready to chat."));
+    section.append(element("p", `Conversation ${encounter.interactions + 1} of ${game.interactionsPerEncounter}`));
+    section.append(button("Continue conversation", () => {
+      game.continueInteraction(state);
+      render();
+    }));
+    app.append(section);
+  }
+
+  function renderEndShift() {
+    const section = element("section");
+    section.append(element("h2", "Shift Complete"));
+    section.append(element("p", `Tips earned: $${state.currentShift.totalTips}`));
+    section.append(element("ul", null, "tips"));
+    const list = section.querySelector("ul");
+    state.currentShift.encounters.forEach(encounter => {
+      const customer = game.customers.find(person => person.id === encounter.customerId);
+      list.append(element("li", `${customer.name}: $${encounter.tip}`));
+    });
+    section.append(element("p", `Money: $${state.player.money}`));
+    section.append(button("Go Home", () => {
+      game.goHome(state);
+      render();
+    }));
+    app.append(section);
+  }
+
+  function render() {
+    app.querySelectorAll("section").forEach(section => section.remove());
+    if (state.phase === "apartment") renderApartment();
+    if (state.phase === "work") renderWork();
+    if (state.phase === "endShift") renderEndShift();
+  }
+
+  render();
+})();
