@@ -93,10 +93,19 @@ jobs:
           [ -z "$files" ] && all=true
 
           # name|path in repo|preview URL
-          apps="Hello World (site root)|app/|$base/
-          Counter|apps/counter/|$base/apps/counter/
-          Dice and coin|apps/dice/|$base/apps/dice/
-          Fizz and Fortune|apps/adventure/|$base/apps/adventure/"
+          apps="Hello World (site root)|app/|$base/"
+          for dir in apps/*/; do
+            [ -d "$dir" ] || continue
+            slug=${dir#apps/}
+            slug=${slug%/}
+            case "$slug" in
+              counter) name="Counter" ;;
+              dice) name="Dice and coin" ;;
+              adventure) name="Fizz and Fortune" ;;
+              *) name=$(printf '%s' "$slug" | tr '-' ' ' | sed -E 's/(^| )([a-z])/\1\u\2/g') ;;
+            esac
+            apps+=$'\n'"$name|apps/$slug/|$base/apps/$slug/"
+          done
 
           marker='<!-- review-deployments -->'
           body="$marker"$'\n'"## Review deployments"$'\n\n'
