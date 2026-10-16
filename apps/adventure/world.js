@@ -36,13 +36,20 @@ globalThis.AdventureWorld = {
       objects: ["mentos"],
       exits: [
         { id: "door-to-kitchen", label: "Door to the kitchen", destination: "kitchen" },
-        { id: "door-to-garden", label: "Door to the garden", destination: "garden" }
+        { id: "door-to-garden", label: "Door to the garden", destination: "garden" },
+        { id: "door-to-study", label: "Door to the study", destination: "study" }
       ]
     },
     garden: {
       name: "Garden",
-      description: "A small garden with plenty of room for an experiment.",
-      objects: [],
+      description: "A small garden with plenty of room for an experiment. A dull lead ingot sits by the path.",
+      objects: ["lead"],
+      exits: [{ id: "door-to-lounge", label: "Door to the lounge", destination: "lounge" }]
+    },
+    study: {
+      name: "Study",
+      description: "A dusty study lined with books. An alchemy manual lies open on the desk.",
+      objects: ["manual"],
       exits: [{ id: "door-to-lounge", label: "Door to the lounge", destination: "lounge" }]
     }
   },
@@ -54,6 +61,18 @@ globalThis.AdventureWorld = {
     mentos: {
       label: "Mentos",
       description: "A roll of Mentos. They might make an interesting combination with Diet Coke."
+    },
+    manual: {
+      label: "Alchemy manual",
+      description: "A worn manual of alchemy. One chapter explains how to turn lead into gold."
+    },
+    lead: {
+      label: "Lead",
+      description: "A heavy, dull ingot of lead."
+    },
+    gold: {
+      label: "Gold",
+      description: "A gleaming ingot of pure gold."
     }
   },
   verbs: {
@@ -78,6 +97,14 @@ globalThis.AdventureWorld = {
         { type: "moveItem", item: "mentos", to: "nowhere" },
         { type: "setFlag", name: "won", value: true },
         { type: "showMessage", text: "You drop the Mentos into the Diet Coke. A fizzy fountain erupts! You solved the adventure." }
+      ]
+    },
+    {
+      items: ["manual", "lead"],
+      effects: [
+        { type: "moveItem", item: "lead", to: "nowhere" },
+        { type: "moveItem", item: "gold", to: "inventory" },
+        { type: "showMessage", text: "Following the manual's instructions, you transmute the lead. It shimmers and becomes a gleaming ingot of gold!" }
       ]
     }
   ],
