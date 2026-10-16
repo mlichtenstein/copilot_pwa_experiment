@@ -1,5 +1,7 @@
 /*
  * Fizz & Fortune's world definition.
+ * Dependencies: none; this file declares data consumed by game-engine.js.
+ * Consumer: adventure-ui.js, which supplies this world to AdventureGame.
  *
  * To make another game, author a similar object and pass it to
  * AdventureGame.createGame(world). The engine expects:

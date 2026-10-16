@@ -1,4 +1,8 @@
-/* Renders the daily loop and connects the UI to the game controller. */
+/*
+ * Waiting Game browser UI.
+ * Dependencies: WaitingGame from game.js and the <main> element in index.html.
+ * Consumer: the browser, through the script element in index.html.
+ */
 (() => {
   const game = WaitingGame;
   const state = game.createState();
