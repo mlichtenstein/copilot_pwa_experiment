@@ -1,0 +1,41 @@
+<!--
+  Waiting Game PWA page.
+  Dependencies: manifest.json, game.js, ui.js, and waiting-game-sw.js.
+  Consumer: the browser, which loads this standalone app from its own folder.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#31534a">
+  <link rel="manifest" href="manifest.json">
+  <title>Waiting Game</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { min-height: 100vh; margin: 0; padding: 1rem; box-sizing: border-box; display: grid; place-items: center; background: #edf4ef; color: #203a32; }
+    main { width: min(38rem, 100%); padding: 1.5rem; box-sizing: border-box; background: white; border-radius: 1.25rem; box-shadow: 0 1rem 3rem #203a321c; }
+    h1 { text-align: center; }
+    section { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #cbd8cf; }
+    .choices { display: flex; flex-wrap: wrap; gap: .65rem; margin-bottom: 1rem; }
+    button { min-height: 2.8rem; margin: .25rem; padding: .7rem 1rem; border: 0; border-radius: .75rem; background: #356c59; color: white; font: inherit; font-weight: 650; cursor: pointer; }
+    button:hover, button[aria-pressed="true"] { background: #244d3e; }
+    button:focus-visible { outline: .2rem solid #d58c36; outline-offset: .2rem; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #17251f; color: #edf7f0; }
+      main { background: #263a31; }
+      section { border-color: #456052; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Waiting Game</h1>
+  </main>
+  <script src="game.js"></script>
+  <script src="ui.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("waiting-game-sw.js");
+  </script>
+</body>
+</html>
