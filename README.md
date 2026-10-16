@@ -5,6 +5,7 @@
 - [Counter](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/counter/)
 - [Dice roll / coin flip](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/dice/)
 - [Fizz & Fortune text adventure](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/adventure/)
+- [Waiting Game](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/waiting-game/)
 - [Text adventure engine guide](apps/adventure/README.md)
 
 Each file has a header comment explaining its job. Everything uses **relative paths**, so the same files work at any URL.
@@ -33,6 +34,7 @@ The app itself is deliberately trivial: it says "Hello World!" and has a button 
 | `apps/counter/` | A standalone counter PWA |
 | `apps/dice/` | Dice roller and coin flip PWA |
 | `apps/adventure/` | Button-driven, three-room text adventure |
+| `apps/waiting-game/` | Waiting Game daily-loop prototype |
 
 ## How deployment works
 
@@ -60,6 +62,7 @@ Production and previews coexist because each run only replaces its own folder. R
 - Counter: `https://<owner>.github.io/<repo>/apps/counter/`
 - Dice and coin: `https://<owner>.github.io/<repo>/apps/dice/`
 - Fizz & Fortune: `https://<owner>.github.io/<repo>/apps/adventure/`
+- Waiting Game: `https://<owner>.github.io/<repo>/apps/waiting-game/`
 - PR previews use the same paths under `/previews/pr-N/`.
 
 ## Trying it from your phone
