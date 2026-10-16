@@ -1,7 +1,3 @@
-<!--
-  Dependencies: game-engine.js, world.js, adventure-ui.js, and index.html.
-  Consumers: contributors extending the engine or authoring another adventure world.
--->
 # Text Adventure Engine
 
 This folder contains both a reusable text-adventure engine and the world data

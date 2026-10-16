@@ -1,9 +1,3 @@
-/*
- * Counter PWA service worker.
- * Dependencies: browser service-worker and Cache Storage APIs; the local page,
- * manifest, and icon listed in FILES.
- * Consumer: the browser, registered by the Counter page to cache this app.
- */
 const CACHE = "counter-v1";
 const FILES = ["./", "index.html", "manifest.json", "icon.svg"];
 

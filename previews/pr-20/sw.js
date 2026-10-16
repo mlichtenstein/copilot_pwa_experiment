@@ -4,8 +4,6 @@
  * from the page. Browsers require one (plus the manifest) before offering to
  * install a site as an app on Android.
  * Consumer: the browser only. app.js registers it; nobody calls it directly.
- * Dependencies: browser service-worker and Cache Storage APIs; app files named
- * in FILES below.
  * It reacts to three "hooks" (events), each explained where it is handled below.
  * Because paths are relative and it is registered from its own folder, it only
  * controls that folder, so production and previews don't interfere.
