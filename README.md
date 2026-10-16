@@ -54,6 +54,10 @@ Production and previews coexist because each run only replaces its own folder. R
 2. **Settings → Pages**: set source to *Deploy from a branch*, branch `gh-pages`, folder `/ (root)`.
 3. **Settings → Actions → General → Workflow permissions**: choose *Read and write permissions*.
 
+## ChatGPT PR reviews
+
+The ChatGPT Integration workflow reviews pull requests and posts its review as a comment. Add a `CHATGPT_SESSION_TOKEN` Actions secret in **Settings → Secrets and variables → Actions** for the workflow to run. Fork pull requests are skipped because repository secrets are not available to them. The action is experimental, so its reviews may be misleading.
+
 ## URLs
 
 - Production: `https://<owner>.github.io/<repo>/`

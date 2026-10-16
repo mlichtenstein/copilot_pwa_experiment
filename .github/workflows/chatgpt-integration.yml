@@ -1,0 +1,24 @@
+name: ChatGPT Integration
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  chatgpt-review:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: ChatGPT Integration
+        uses: kxxt/chatgpt-action@v0.3
+        with:
+          number: ${{ github.event.pull_request.number }}
+          sessionToken: ${{ secrets.CHATGPT_SESSION_TOKEN }}
+          split: 'yolo'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
