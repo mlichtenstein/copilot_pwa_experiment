@@ -1,4 +1,8 @@
-/* Game state and daily-loop rules for Waiting Game. */
+/*
+ * Waiting Game state and daily-loop rules.
+ * Dependencies: browser JavaScript only; no DOM or UI framework.
+ * Consumer: ui.js, which calls these state and progression functions.
+ */
 (() => {
   const outfits = [
     { id: "uniform", name: "Work Uniform", tags: ["professional", "formal"] },

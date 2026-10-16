@@ -1,3 +1,7 @@
+<!--
+  Dependencies: GitHub's pull-request template handling and the Deploy workflow's preview comment.
+  Consumers: pull-request authors and reviewers.
+-->
 ## Summary
 
 ## Review deployments

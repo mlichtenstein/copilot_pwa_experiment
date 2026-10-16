@@ -7,6 +7,10 @@
  * This file owns the reusable rules for making sentences, validating them,
  * keeping the current room/inventory/flags, and applying effects.
  *
+ * Dependencies: none beyond browser JavaScript; receives world data as an
+ * argument to createGame().
+ * Consumer: browser game UIs that load this file and use AdventureGame.
+ *
  * The main loop is:
  *   1. The UI creates a Sentence from the selected verb and Noun buttons.
  *   2. perform() checks the sentence against that verb's patterns.

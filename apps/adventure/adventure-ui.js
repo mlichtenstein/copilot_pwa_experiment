@@ -4,6 +4,10 @@
  * This file translates button presses into typed sentences and renders the
  * engine's state. It does not decide how actions change rooms or inventory;
  * game-engine.js owns those rules and world.js supplies their data.
+ *
+ * Dependencies: AdventureWorld and AdventureGame globals loaded before this
+ * script, plus the page elements declared in index.html.
+ * Consumer: the browser, through the script element in index.html.
  */
 const game = AdventureGame.createGame(AdventureWorld);
 // Keep references to the page elements so render() can update the same UI.

@@ -1,3 +1,9 @@
+/*
+ * Waiting Game service worker.
+ * Dependencies: browser service-worker and Cache Storage APIs; the local app
+ * files named in FILES.
+ * Consumer: the browser, registered by index.html to cache this game.
+ */
 const CACHE = "waiting-game-v1";
 const FILES = ["./", "index.html", "manifest.json", "game.js", "ui.js", "icon.svg"];
 

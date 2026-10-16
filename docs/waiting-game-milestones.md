@@ -1,3 +1,7 @@
+<!--
+  Dependencies: milestone scope and acceptance criteria in waiting-game-design.md.
+  Consumers: contributors planning and implementing the Waiting Game milestones.
+-->
 # Waiting Game — Milestones and Issues
 
 One GitHub milestone per milestone in section 15 of [waiting-game-design.md](waiting-game-design.md), each with one issue. Implement in order.

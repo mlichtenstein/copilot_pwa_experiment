@@ -1,3 +1,9 @@
+/*
+ * Fizz & Fortune service worker.
+ * Dependencies: browser service-worker and Cache Storage APIs; the local app
+ * files named in FILES.
+ * Consumer: the browser, registered by index.html to cache this game.
+ */
 const CACHE = "adventure-v8";
 const FILES = ["./", "index.html", "manifest.json", "world.js", "game-engine.js", "adventure-ui.js", "icon.svg"];
 

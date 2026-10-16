@@ -9,6 +9,8 @@
 #   - PR closed     -> that PR's folder is deleted
 # Each step only touches its own folder, so production and previews never
 # overwrite each other.
+# Dependencies: GitHub Actions event context/token, app/, apps/, and gh-pages.
+# Consumer: GitHub Actions, which runs this workflow on main pushes and PR events.
 name: Deploy
 
 # When to run
