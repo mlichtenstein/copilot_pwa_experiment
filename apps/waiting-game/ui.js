@@ -7,6 +7,11 @@
   const game = WaitingGame;
   const state = game.createState();
   const app = document.querySelector("main");
+  const conversationCards = [
+    { id: "sass", name: "Sass", description: "Humorous and irreverent" },
+    { id: "empathize", name: "Empathize", description: "Supportive and attentive" },
+    { id: "flirt", name: "Flirt", description: "Playful and charming" }
+  ];
 
   function element(tag, text, className) {
     const node = document.createElement(tag);
@@ -15,9 +20,10 @@
     return node;
   }
 
-  function button(text, action) {
+  function button(text, action, className) {
     const node = element("button", text);
     node.type = "button";
+    if (className) node.className = className;
     node.addEventListener("click", action);
     return node;
   }
@@ -48,16 +54,27 @@
     const shift = state.currentShift;
     const encounter = game.currentEncounter(state);
     const customer = game.customers.find(person => person.id === encounter.customerId);
+    const interactionAvailable = encounter.interactions < game.interactionsPerEncounter;
     const section = element("section");
     section.append(element("h2", "At Work"));
     section.append(element("p", `Day ${state.day} · Encounter ${shift.currentEncounter + 1} of ${shift.encounters.length}`));
     section.append(element("h3", customer.name));
     section.append(element("p", "Your customer is ready to chat."));
     section.append(element("p", `Conversation ${encounter.interactions + 1} of ${game.interactionsPerEncounter}`));
-    section.append(button("Continue conversation", () => {
-      game.continueInteraction(state);
-      render();
-    }));
+    section.append(element("p", "Play a conversational strategy card."));
+    const cards = element("div", null, "conversation-cards");
+    conversationCards.forEach(card => {
+      const choice = button("", () => {
+        game.continueInteraction(state);
+        render();
+      }, "card-button");
+      choice.disabled = !interactionAvailable;
+      choice.setAttribute("aria-label", `${card.name}: ${card.description}`);
+      choice.append(element("span", card.name, "card-title"));
+      choice.append(element("span", card.description, "card-description"));
+      cards.append(choice);
+    });
+    section.append(cards);
     app.append(section);
   }
 
