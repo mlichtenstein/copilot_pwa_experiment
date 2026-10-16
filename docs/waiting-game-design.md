@@ -1,7 +1,3 @@
-<!--
-  Dependencies: the existing PWA repository and static GitHub Pages deployment model.
-  Consumers: contributors implementing or reviewing the Waiting Game.
--->
 Narrative Deck-Builder
 
 Hello World — Technical Design Document

@@ -1,6 +1,5 @@
 /*
  * app.js - the behavior of the app.
- * Dependencies: browser DOM, localStorage, and the relative sw.js worker.
  * Consumer: the browser, via the <script> tag in index.html.
  * It does two jobs:
  *   1. Runs the counter, saving the value in localStorage (a small

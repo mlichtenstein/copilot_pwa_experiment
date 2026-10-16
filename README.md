@@ -1,8 +1,4 @@
 # copilot_pwa_experiment
-<!--
-  Dependencies: the app folders and GitHub Pages deployment workflow described below.
-  Consumers: repository users and contributors looking for apps, deployment details, and setup.
--->
 
 ## Apps
 
@@ -12,7 +8,7 @@
 - [Waiting Game](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/waiting-game/)
 - [Text adventure engine guide](apps/adventure/README.md)
 
-Commentable source files have a header describing their dependencies and consumers. JSON manifests cannot contain comments without becoming invalid JSON, and PNG icons are binary. Everything uses **relative paths**, so the same files work at any URL.
+Each file has a header comment explaining its job. Everything uses **relative paths**, so the same files work at any URL.
 
 Welcome! This repo is a tiny experiment: a **Progressive Web App (PWA)** that you can build, deploy and test entirely from GitHub, even from a phone, with no computer needed.
 
