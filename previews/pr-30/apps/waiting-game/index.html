@@ -19,12 +19,54 @@
     section { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #cbd8cf; }
     .choices { display: flex; flex-wrap: wrap; gap: .65rem; margin-bottom: 1rem; }
     button { min-height: 2.8rem; margin: .25rem; padding: .7rem 1rem; border: 0; border-radius: .75rem; background: #356c59; color: white; font: inherit; font-weight: 650; cursor: pointer; }
-    button:hover, button[aria-pressed="true"] { background: #244d3e; }
+    button:hover:not(:disabled), button[aria-pressed="true"] { background: #244d3e; }
+    button:active:not(:disabled) { transform: translateY(1px); }
+    button:disabled { cursor: not-allowed; opacity: .7; }
+    .conversation-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: .75rem; }
+    .conversation-cards .card-button {
+      min-height: 5.75rem;
+      margin: 0;
+      padding: .9rem .85rem;
+      border: 1px solid #244d3e;
+      border-radius: .85rem;
+      background: #f4fbf6;
+      color: #203a32;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      gap: .3rem;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+    .conversation-cards .card-button:hover:not(:disabled) { background: #dfeee4; border-color: #1c4032; }
+    .conversation-cards .card-button:active:not(:disabled) { background: #d1e6d7; transform: translateY(1px); }
+    .conversation-cards .card-button:disabled {
+      border-style: dashed;
+      background: #e7ece8;
+      color: #4a5b54;
+    }
+    .card-title { display: block; font-size: 1.05rem; font-weight: 700; }
+    .card-description { display: block; font-size: .84rem; font-weight: 500; opacity: .95; }
     button:focus-visible { outline: .2rem solid #d58c36; outline-offset: .2rem; }
     @media (prefers-color-scheme: dark) {
       body { background: #17251f; color: #edf7f0; }
       main { background: #263a31; }
       section { border-color: #456052; }
+      button:disabled { opacity: .85; }
+      .conversation-cards .card-button {
+        background: #2f4339;
+        border-color: #7fa391;
+        color: #edf7f0;
+      }
+      .conversation-cards .card-button:hover:not(:disabled) { background: #395446; border-color: #92baa5; }
+      .conversation-cards .card-button:active:not(:disabled) { background: #476551; }
+      .conversation-cards .card-button:disabled {
+        background: #2a3b33;
+        border-color: #5f7d6f;
+        color: #b8cfc2;
+      }
     }
   </style>
 </head>
