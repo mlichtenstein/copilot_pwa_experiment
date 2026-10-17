@@ -13,3 +13,5 @@ Before changes, read and follow [CONTRIBUTING.md](CONTRIBUTING.md), [CODING_STAN
 4. Do not use automatic issue-closing keywords in PR titles, descriptions, or commits. Use plain references such as “Related to #123”; humans close issues.
 5. Read and address all outstanding PR feedback: conversation comments, review summaries, and inline comments/replies/threads, including outdated ones and every page. Make and validate changes or reply with reasoning; acknowledge comments requiring no change. Recheck after updates, report unresolved items, and resolve threads only after addressing feedback. Do not infer that an empty conversation feed means there are no review comments.
 6. Before final review, update the PR title/description to explain the final diff, update progress and issue links, and report remaining limitations. Keep changes scoped; follow existing architecture and avoid unnecessary dependencies.
+
+7. Prefix every commit subject you create with your identity, following [the agent commit convention](CONTRIBUTING.md#agent-commit-identity), for example `ChatGPT: Add coding standards`. This labels the work without changing Git author metadata.
