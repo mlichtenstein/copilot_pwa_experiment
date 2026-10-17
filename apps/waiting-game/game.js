@@ -32,7 +32,8 @@
         { speaker: "Customer", text: "Good save. I'll allow it." }
       ],
       effects: [],
-      repeatable: true
+      repeatable: true,
+      coverage: "intentional"
     },
     {
       id: "sass-failure-fallback",
@@ -45,7 +46,8 @@
         { speaker: "Customer", text: "Maybe keep workshopping it." }
       ],
       effects: [],
-      repeatable: true
+      repeatable: true,
+      coverage: "intentional"
     },
     {
       id: "empathy-success-fallback",
@@ -58,7 +60,8 @@
         { speaker: "Customer", text: "Thanks. It's nice to be heard." }
       ],
       effects: [],
-      repeatable: true
+      repeatable: true,
+      coverage: "intentional"
     },
     {
       id: "empathy-failure-fallback",
@@ -71,7 +74,8 @@
         { speaker: "Customer", text: "It's okay. Let's talk about something else." }
       ],
       effects: [],
-      repeatable: true
+      repeatable: true,
+      coverage: "intentional"
     },
     {
       id: "flirting-success-fallback",
@@ -84,7 +88,8 @@
         { speaker: "Customer", text: "Careful, that almost worked." }
       ],
       effects: [],
-      repeatable: true
+      repeatable: true,
+      coverage: "intentional"
     },
     {
       id: "flirting-failure-fallback",
@@ -97,7 +102,8 @@
         { speaker: "Customer", text: "Let's pretend you didn't say it." }
       ],
       effects: [],
-      repeatable: true
+      repeatable: true,
+      coverage: "intentional"
     }
   ];
   const interactionsPerEncounter = 2;
@@ -183,7 +189,7 @@
   }
 
   function evaluateCondition(condition, state) {
-    if (!condition || typeof condition !== "object") return false;
+    if (!condition || typeof condition !== "object") throw new Error("Malformed narrative condition");
     if (condition.type === "flag") {
       return state.narrative.flags[condition.key] === condition.value;
     }
@@ -198,7 +204,7 @@
     if (condition.type === "day_min") {
       return state.day >= condition.value;
     }
-    return false;
+    throw new Error(`Unknown narrative condition: ${condition.type}`);
   }
 
   function selectExchange(state, customerId, cardResult, availableExchanges = exchanges) {
@@ -218,11 +224,13 @@
     exchange.effects.forEach(effect => {
       if (effect.type === "set_flag") {
         state.narrative.flags[effect.key] = effect.value;
+      } else {
+        throw new Error(`Unknown narrative effect: ${effect.type}`);
       }
     });
   }
 
-  function playCard(state, cardId) {
+  function playCard(state, cardId, availableExchanges = exchanges) {
     const encounter = currentEncounter(state);
     const card = cards.find(option => option.id === cardId);
     if (!encounter || !card || encounter.pendingResult) return false;
@@ -232,7 +240,7 @@
     encounter.mood += result.moodChange;
     customer.relationship += result.relationshipChange;
     customer.trust = Math.max(0, customer.trust + result.trustChange);
-    const exchange = selectExchange(state, encounter.customerId, result);
+    const exchange = selectExchange(state, encounter.customerId, result, availableExchanges);
     if (exchange) {
       if (!state.narrative.seenExchanges.includes(exchange.id)) {
         state.narrative.seenExchanges.push(exchange.id);
