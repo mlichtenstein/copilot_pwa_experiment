@@ -30,3 +30,38 @@ change expectations just to make a failing test green without explaining why.
 Generic fallback exchanges remain in `game.js`; Maria-specific writing belongs in
 her arc module. New arc assets must be loaded before the engine and included in the
 service worker asset list. Cache namespace isolation is tracked separately in #40.
+
+## Diagnostics and safe recovery
+
+Run `node apps/waiting-game/testing/validate.cjs` and
+`node --test apps/waiting-game/*.test.js`. Both Test and Deploy execute these;
+publication stops on failure. Closed-PR cleanup skips validation.
+
+The browser UI uses `WaitingGameSafety.createSession`: each action runs against a
+copy, validates its resulting state, and commits only on success. Failures retain
+the prior state and add a persistent, nonblocking notice with expandable details.
+Malformed exchanges are reported and excluded as whole units (including effects).
+If none matches, emergency text accompanies the mechanical result and Continue
+remains available. Generic fallbacks are explicitly marked `coverage: "intentional"`;
+authors can mark future placeholders `"unwritten"` for coverage reporting.
+
+Content validation rejects unknown conditions/effects, duplicate IDs, malformed
+lines, bad customer references, and missing unconditional repeatable fallbacks.
+Direct engine evaluation throws on unknown conditions/effects. The safety layer
+handles runtime recovery; tests and CI treat content errors as failures. Syntax
+errors that prevent scripts loading are not recoverable content diagnostics.
+
+### Scope of validation
+
+The validator checks the exchange contract already consumed by selection,
+dialogue rendering, and narrative effects. It does not revalidate the code-authored
+outfit/card/customer metadata or anticipate future condition/effect types. The
+state assertions check the current controller's invariants before committing an
+action. These are contracts, not a claim that players have encountered each error.
+Fault-injection tests demonstrate the recovery paths deliberately.
+
+Add a new defensive rule when a concrete failure/reproducer or a new engine
+contract justifies it, and put the regression example beside that rule. Avoid
+turning this module into a list of speculative future failure modes. For workflow
+triggers, token permissions, and verification limits, see
+[deployment verification](../../docs/deployment-verification.md).
