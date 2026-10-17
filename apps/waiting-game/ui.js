@@ -15,9 +15,10 @@
     return node;
   }
 
-  function button(text, action) {
+  function button(text, action, className) {
     const node = element("button", text);
     node.type = "button";
+    if (className) node.className = className;
     node.addEventListener("click", action);
     return node;
   }
@@ -65,13 +66,17 @@
       }));
     } else {
       section.append(element("p", `Conversation ${encounter.interactions + 1} of ${game.interactionsPerEncounter}`));
-      section.append(element("p", "Choose a conversational approach."));
-      const choices = element("div", null, "choices");
+      section.append(element("p", "Play a conversational strategy card."));
+      const choices = element("div", null, "conversation-cards");
       game.cards.forEach(card => {
-        choices.append(button(`${card.name} — ${card.description}`, () => {
+        const choice = button("", () => {
           game.playCard(state, card.id);
           render();
-        }));
+        }, "card-button");
+        choice.setAttribute("aria-label", `${card.name}: ${card.description}`);
+        choice.append(element("span", card.name, "card-title"));
+        choice.append(element("span", card.description, "card-description"));
+        choices.append(choice);
       });
       section.append(choices);
     }
