@@ -39,7 +39,7 @@ Audience: humans and agents. Purpose: one lightweight issue-to-merge process.
 
 Expected sections:
 
-1. **Use issues as concise change overviews.** Keep the issue body to a short problem/motivation paragraph, a succinct bullet summary of changes, and a list linking every associated PR. Initially label changes as planned; keep the summary current as PRs deliver work, and make it a summary of actual delivered changes before human closure. One issue may span several PRs. Keep technical specifications, detailed acceptance checks, investigation history, and verification evidence in the relevant PRs.
+1. **Use issues as concise change overviews.** Keep the issue body to a short problem/motivation paragraph, a succinct task-list summary of changes, and a list linking every associated PR. Initially label changes as planned; keep the summary current as PRs deliver work, and make it a summary of actual delivered changes before human closure. One issue may span several PRs. Keep technical specifications, detailed acceptance checks, investigation history, and verification evidence in the relevant PRs.
 2. **Maintain both directions of the relationship.** Each PR links its issue, and the issue body explicitly links every associated PR with a short description. Add PR links when opening PRs; maintain the issue's change summary as scope evolves, distinguishing planned, proposed, and delivered work. Read relevant design documents and coding standards, work on a branch, and split unrelated follow-up work.
 3. **Use PRs for technical detail.** Reference the issue and explain the specific changes in this PR: affected files/components, behavior and contracts, important implementation choices, acceptance checks, and consequential tradeoffs. Put verification evidence here. An issue may have multiple PRs; each describes and verifies its own portion. Before final review, rewrite the title and description around the final diff. Issues provide a quick overview of what changed and why; PRs provide the technical explanation and evidence.
 4. **Provide verification evidence.** State what was checked, how to repeat it, expected versus observed results, and what remains unverified. Appropriate evidence can include automated test results, manual steps, screenshots, or successful app preview links. Explicitly distinguish executed checks from instructions supplied for a reviewer.
@@ -49,12 +49,18 @@ Expected sections:
 8. **Readiness and closure.** A PR is ready when purpose and scope are clear, verification evidence is recorded, and actionable review feedback is addressed. Preserve the current repository rule: reference issues with “Related to #N”; do not use automatic issue-closing keywords. Humans close issues.
 9. **Document relationships.** Link CODING_STANDARDS.md, AGENTS.md, the README, relevant game design documents, and GitHub templates. Keep policy in shared documents rather than duplicating long rules in templates.
 
+### Progress checkboxes
+
+Use empty checkboxes for work to do and update them as work progresses. On issues, check an item only when the deliverable is merged and its verification evidence is recorded in the linked PR(s). An open draft or proposal does not mean the final deliverable is complete. Leave partial work unchecked and link the relevant PR; split items only when useful. Reopen a checkbox if later changes invalidate completion. Remove canceled work with a brief explanation rather than marking it completed.
+
+PRs may use finer-grained implementation and verification checklists. Check those items when the work or check is actually completed on the PR branch, backed by the evidence in that PR; this does not mark the issue deliverable complete before merge. Update issue and PR checklists at meaningful progress points and before final review. Checkboxes track status; they do not replace technical descriptions or verification evidence. Keep the issue's PR index as ordinary links.
+
 ## GitHub issue template
 
 Use a concise template under .github/ISSUE_TEMPLATE/ with these prompts:
 
 - **Problem:** a short description of the observed problem and why it matters.
-- **Change summary:** a succinct bullet list; label planned work while open and summarize actual delivered changes before closure.
+- **Change summary:** a succinct GitHub task list using `- [ ]` for pending work and `- [x]` for completed work. Keep items at the deliverable level; detailed implementation tasks belong in PRs.
 - **Pull requests:** an explicit list of every associated PR, each with a link and a brief description.
 
 Keep the issue body readable as a quick history of what changed and why. One issue may link multiple PRs. Technical specifications and verification evidence belong in those PRs, not in the issue. Decide on a Markdown template or issue form based on the existing repository; either is sufficient.
@@ -80,6 +86,7 @@ Keep this file short and agent-specific:
 - Require completing the issue/PR templates, adding every PR to the issue body's PR list, and reconciling the concise issue change summary with delivered scope. Keep technical detail and verification evidence in each PR.
 - Preserve existing requirements for verification evidence, honest preview reporting, human issue closure, and responding to all outstanding review comments.
 - Explicitly include inline review comments/replies, outdated threads, review summaries, and pagination. Agents must not infer that an empty conversation feed means no review feedback exists.
+- Maintain issue and PR task checkboxes as work progresses, following the completion rules in CONTRIBUTING.md; do not check pending, partially completed, or unverified work.
 - Require a clear account of checks run, checks not run, and unresolved feedback.
 - Link shared rules rather than reproducing them in full.
 
