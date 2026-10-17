@@ -18,7 +18,11 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
 
-# Default read-only: game code runs only in the validate job.
+# Validation now executes repository game/test code. It needs only read access;
+# leaving the former workflow-wide write token would give that code publishing
+# privileges. Keep write access explicitly on deploy (push + PR comments) below.
+# This changes who holds the token, not the production/preview destination paths.
+# See docs/deployment-verification.md for event behavior and verification limits.
 permissions:
   contents: read
 
@@ -28,6 +32,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Main push and open/update/reopen PR events must validate before publishing.
+  # Closed PRs need only cleanup; broken content must not strand their previews.
   validate:
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
@@ -40,7 +46,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Validate content and test/explore game
+      - name: Validate content and run game tests
         run: |
           node apps/waiting-game/testing/validate.cjs
           node --test apps/waiting-game/*.test.js
@@ -53,13 +59,16 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # needs normally skips a job when its dependency is skipped. always() lets
+  # closed-PR cleanup run after skipped validation; the explicit result check
+  # still blocks publication when validation fails. This job runs no game tests.
   deploy:
     needs: validate
     if: always() && (needs.validate.result == 'success' || github.event.action == 'closed')
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
+      contents: write       # Commit/push the copied assets to gh-pages.
+      pull-requests: write  # Create/update the preview-link comment.
     steps:
       - uses: actions/checkout@v4
       # Only workflow-owned code executes in this job; no app/test scripts.
