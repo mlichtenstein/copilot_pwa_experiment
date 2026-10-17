@@ -1,7 +1,7 @@
 /*
  * Purpose: Verify narrative rules and executable player journeys.
  * Consumers: Node test runner and CI.
- * Dependencies: game.js, story-examples.js, testing/journey.cjs, Node built-ins.
+ * Dependencies: game.js, maria-arc.js, testing/journey.cjs, Node built-ins.
  */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -11,6 +11,7 @@ const vm = require("node:vm");
 
 const context = { window: {} };
 const gamePath = path.join(__dirname, "game.js");
+vm.runInNewContext(fs.readFileSync(path.join(__dirname, "maria-arc.js"), "utf8"), context);
 vm.runInNewContext(fs.readFileSync(gamePath, "utf8"), context);
 const game = context.window.WaitingGame;
 const mariaStoryExchange = "maria-sass-success";
@@ -63,6 +64,6 @@ test("Maria's Day 1 conversation unlocks the follow-up on Day 2", () => {
 });
 
 const { journey } = require("./testing/journey.cjs");
-for (const example of require("./story-examples.js")) {
+for (const example of context.window.WaitingGameArcs.maria.examples) {
   test(example.name, () => example.run(journey(game)));
 }

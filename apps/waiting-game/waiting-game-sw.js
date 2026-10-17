@@ -4,8 +4,8 @@
  * files named in FILES.
  * Consumer: the browser, registered by index.html to cache this game.
  */
-const CACHE = "waiting-game-v2";
-const FILES = ["./", "index.html", "manifest.json", "game.js", "ui.js", "icon.svg"];
+const CACHE = "waiting-game-v3";
+const FILES = ["./", "index.html", "manifest.json", "maria-arc.js", "game.js", "ui.js", "icon.svg"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)));
