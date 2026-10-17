@@ -113,6 +113,7 @@
       customers: Object.fromEntries(customers.map(customer => [customer.id, {
         id: customer.id,
         relationship: 0,
+        trust: 0,
         encounters: 0,
         traits: { ...customer.traits }
       }])),
@@ -176,7 +177,8 @@
       strategy: card.strategy,
       outcome: success ? "success" : "failure",
       moodChange: success ? 2 : -1,
-      relationshipChange: success ? 1 : -1
+      relationshipChange: success ? 1 : -1,
+      trustChange: card.strategy === "empathy" ? (success ? 1 : -1) : 0
     };
   }
 
@@ -188,6 +190,10 @@
     if (condition.type === "relationship_min") {
       const customer = state.customers[condition.customerId];
       return Boolean(customer && customer.relationship >= condition.value);
+    }
+    if (condition.type === "trust_min") {
+      const customer = state.customers[condition.customerId];
+      return Boolean(customer && customer.trust >= condition.value);
     }
     if (condition.type === "day_min") {
       return state.day >= condition.value;
@@ -225,6 +231,7 @@
     const result = resolveCard(card, state.player, customer, encounter);
     encounter.mood += result.moodChange;
     customer.relationship += result.relationshipChange;
+    customer.trust = Math.max(0, customer.trust + result.trustChange);
     const exchange = selectExchange(state, encounter.customerId, result);
     if (exchange) {
       if (!state.narrative.seenExchanges.includes(exchange.id)) {

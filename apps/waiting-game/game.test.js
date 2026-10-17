@@ -34,7 +34,7 @@ test("Maria's follow-up requires the first story flag and Day 2", () => {
   );
 });
 
-test("Maria's Day 1 conversation unlocks the follow-up on Day 2", () => {
+test("Maria's Day 1 conversation and further listening unlock the follow-up on Day 2", () => {
   const state = game.createState();
   assert.equal(game.startShift(state), true);
 
@@ -48,7 +48,7 @@ test("Maria's Day 1 conversation unlocks the follow-up on Day 2", () => {
     assert.ok(game.playCard(state, cardId));
     assert.equal(game.continueInteraction(state), true);
   };
-  playAndContinue("sass");
+  playAndContinue("empathize");
   playAndContinue("sass");
   playAndContinue("sass");
   assert.equal(state.phase, "endShift");
@@ -67,3 +67,32 @@ const { journey } = require("./testing/journey.cjs");
 for (const example of context.window.WaitingGameArcs.maria.examples) {
   test(example.name, () => example.run(journey(game)));
 }
+
+test("Trust changes only through empathy, floors at zero, and resolution stays pure", () => {
+  const state = game.createState();
+  const customer = state.customers.alex;
+  state.player.outfit = "casual";
+  const before = JSON.stringify(state);
+  const empathy = game.cards.find(card => card.id === "empathize");
+  assert.equal(game.resolveCard(empathy, state.player, customer, {}).trustChange, -1);
+  assert.equal(JSON.stringify(state), before);
+  game.startShift(state);
+  for (const card of ["sass", "sass", "empathize", "empathize"]) {
+    assert.ok(game.playCard(state, card));
+    assert.equal(game.continueInteraction(state), true);
+  }
+  assert.equal(customer.trust, 0);
+  assert.equal(state.customers.maria.trust, 0);
+});
+
+test("Maria follow-up needs sufficient trust even with other prerequisites met", () => {
+  const state = game.createState();
+  state.day = 2;
+  state.narrative.flags["maria.discussed_work"] = true;
+  state.customers.maria.trust = 1;
+  assert.notEqual(game.selectExchange(state, "maria", sassSuccess).id, mariaStoryExchange);
+  state.customers.maria.trust = 2;
+  assert.equal(game.selectExchange(state, "maria", sassSuccess).id, mariaStoryExchange);
+  state.narrative.seenExchanges.push(mariaStoryExchange);
+  assert.notEqual(game.selectExchange(state, "maria", sassSuccess).id, mariaStoryExchange);
+});

@@ -6,10 +6,15 @@
 (() => {
   // PRINCIPLES
   // Maria wants to feel heard about a difficult job. Listening opens the subject;
-  // humor on a later visit gives her room to imagine leaving. Other characters
+  // two successful empathetic responses build the trust she needs before humor
+  // on a later visit helps her imagine leaving. One response opens the subject,
+  // but does not resolve her hesitation. Other characters
   // can progress independently. These examples are possible journeys, not a script.
 
   // MECHANICS AND VIGNETTES
+  // Trust starts at zero. Successful empathy adds one; failed empathy removes
+  // one (floor zero). Other strategies do not change trust. The follow-up needs
+  // trust >= 2, a prior work conversation, and Day 2+. Trust is separate from liking.
   // Mechanical relationship changes happen before eligibility is checked.
   // Exchanges are once-only unless repeatable is true. Flags/history commit when
   // the card is played; Continue acknowledges the result and advances the encounter.
@@ -35,7 +40,8 @@
       priority: 10,
       conditions: [
         { type: "flag", key: "maria.discussed_work", value: true },
-        { type: "day_min", value: 2 }
+        { type: "day_min", value: 2 },
+        { type: "trust_min", customerId: "maria", value: 2 }
       ],
       lines: [
         { speaker: "Player", text: "So, have you overthrown your terrible boss yet?" },
@@ -49,13 +55,33 @@
   // The browser loads definitions only; the Node test runner executes these.
   const examples = [
   {
-    name: 'Listening today opens a conversation about leaving work tomorrow',
+    name: 'Pushing after one empathetic response is too early; more listening opens the way',
+    run(player) {
+      player.beginDay();
+      player.play('empathize');
+      player.expectDialogue('maria-empathy-success');
+      player.finishDay(['sass', 'sass', 'sass']);
+      player.beginDay();
+      player.meet('maria');
+      player.play('sass');
+      player.expectDialogue('sass-success-fallback');
+      player.expectFlag('maria.considering_quitting', false);
+      player.play('empathize');
+      player.finishDay(['sass', 'sass']);
+      player.beginDay();
+      player.play('sass');
+      player.expectDialogue('maria-sass-success');
+      player.expectFlag('maria.considering_quitting', true);
+    }
+  },
+  {
+    name: 'Listening twice builds trust for encouragement on a later visit',
     run(player) {
       player.beginDay();
       player.meet('maria');
       player.play('empathize');
       player.expectDialogue('maria-empathy-success');
-      player.finishDay(['sass', 'sass', 'sass']);
+      player.finishDay(['empathize', 'sass', 'sass']);
       player.expectDay(2);
       player.beginDay();
       player.meet('maria');

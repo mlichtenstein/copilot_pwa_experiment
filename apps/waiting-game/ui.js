@@ -54,7 +54,7 @@
     section.append(element("h2", "At Work"));
     section.append(element("p", `Day ${state.day} · Encounter ${shift.currentEncounter + 1} of ${shift.encounters.length}`));
     section.append(element("h3", customer.name));
-    section.append(element("p", `Mood: ${encounter.mood} · Relationship: ${customerState.relationship}`));
+    section.append(element("p", `Mood: ${encounter.mood} · Relationship: ${customerState.relationship} · Trust: ${customerState.trust}`));
     if (encounter.pendingResult) {
       const card = game.cards.find(option => option.id === encounter.pendingResult.cardId);
       const result = encounter.pendingResult;
