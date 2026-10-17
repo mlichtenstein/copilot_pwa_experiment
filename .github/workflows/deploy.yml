@@ -18,10 +18,9 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
 
-# contents: write lets us push to gh-pages; pull-requests: write lets us comment
+# Default read-only: game code runs only in the validate job.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 # Run one deployment at a time so two runs can't push to gh-pages simultaneously
 concurrency:
@@ -29,11 +28,32 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  validate:
+    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate content and test/explore game
+        run: |
+          node apps/waiting-game/testing/validate.cjs
+          node --test apps/waiting-game/*.test.js
 
+  deploy:
+    needs: validate
+    if: always() && (needs.validate.result == 'success' || github.event.action == 'closed')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
       - name: Prepare gh-pages branch
         run: |
           if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then

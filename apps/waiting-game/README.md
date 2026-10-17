@@ -30,3 +30,23 @@ change expectations just to make a failing test green without explaining why.
 Generic fallback exchanges remain in `game.js`; Maria-specific writing belongs in
 her arc module. New arc assets must be loaded before the engine and included in the
 service worker asset list. Cache namespace isolation is tracked separately in #40.
+
+## Diagnostics and safe recovery
+
+Run `node apps/waiting-game/testing/validate.cjs` and
+`node --test apps/waiting-game/*.test.js`. Both Test and Deploy execute these;
+publication stops on failure. Closed-PR cleanup skips validation.
+
+The browser UI uses `WaitingGameSafety.createSession`: each action runs against a
+copy, validates its resulting state, and commits only on success. Failures retain
+the prior state and add a persistent, nonblocking notice with expandable details.
+Malformed exchanges are reported and excluded as whole units (including effects).
+If none matches, emergency text accompanies the mechanical result and Continue
+remains available. Generic fallbacks are explicitly marked `coverage: "intentional"`;
+authors can mark future placeholders `"unwritten"` for coverage reporting.
+
+Content validation rejects unknown conditions/effects, duplicate IDs, malformed
+lines, bad customer references, and missing unconditional repeatable fallbacks.
+Direct engine evaluation throws on unknown conditions/effects. The safety layer
+handles runtime recovery; tests and CI treat content errors as failures. Syntax
+errors that prevent scripts loading are not recoverable content diagnostics.

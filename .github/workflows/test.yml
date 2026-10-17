@@ -13,4 +13,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node --test apps/waiting-game/game.test.js
+      - run: node apps/waiting-game/testing/validate.cjs
+      - run: node --test apps/waiting-game/*.test.js
