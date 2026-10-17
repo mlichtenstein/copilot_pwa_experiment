@@ -1,2 +1,2 @@
 /* Purpose: Identify deployed code. Consumers: debug reports. Dependencies: none. */
-window.WaitingGameBuild = {"commit":"155c31c55a8d8c1bce2a3292266dcf939741a0b2","sourceCommit":"3ce9148e2d8abcb003fc7cf0a15e493ab55173b1"};
+window.WaitingGameBuild = {"commit":"d13e57f844bee9b5d3c201b0e584c1eac32ead6c","sourceCommit":"ebd6a7d2eda28ce5814cb96eaefd2af55394aa0a"};

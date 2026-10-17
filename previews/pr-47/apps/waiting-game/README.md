@@ -90,3 +90,18 @@ the run and save a report including its seed. Test and Deploy's read-only valida
 job upload these outputs as workflow artifacts (14-day retention), even on failure.
 Publishing waits for validation success; closed-PR cleanup bypasses game checks.
 These bounded samples do not exhaust all possible play sequences.
+
+### Scope of validation
+
+The validator checks the exchange contract already consumed by selection,
+dialogue rendering, and narrative effects. It does not revalidate the code-authored
+outfit/card/customer metadata or anticipate future condition/effect types. The
+state assertions check the current controller's invariants before committing an
+action. These are contracts, not a claim that players have encountered each error.
+Fault-injection tests demonstrate the recovery paths deliberately.
+
+Add a new defensive rule when a concrete failure/reproducer or a new engine
+contract justifies it, and put the regression example beside that rule. Avoid
+turning this module into a list of speculative future failure modes. For workflow
+triggers, token permissions, and verification limits, see
+[deployment verification](../../docs/deployment-verification.md).

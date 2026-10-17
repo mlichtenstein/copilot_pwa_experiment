@@ -4,7 +4,7 @@
  * files named in FILES.
  * Consumer: the browser, registered by index.html to cache this game.
  */
-const CACHE = "waiting-game-v6";
+const CACHE = "waiting-game-v8";
 const FILES = ["./", "index.html", "manifest.json", "maria-arc.js", "game.js", "build-info.js", "safety.js", "ui.js", "icon.svg"];
 
 self.addEventListener("install", event => {
