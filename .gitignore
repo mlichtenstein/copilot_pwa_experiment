@@ -1,0 +1,3 @@
+# Purpose: Keep generated debug/coverage output out of source control.
+# Consumers: Git. Dependencies: Waiting Game exploration commands.
+/artifacts/

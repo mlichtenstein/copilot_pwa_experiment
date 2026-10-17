@@ -80,6 +80,17 @@ content and execution checks still apply. Reports are JSON, never executable cod
 The CLI limits input to 10 MiB. Reproducing a bug then writing a readable journey
 beside the affected arc is preferable to treating a raw report as intended behavior.
 
+## Seeded exploration
+
+Run `node apps/waiting-game/testing/explore.cjs` to exercise 128 seeded three-day
+journeys, replay each, and write `artifacts/waiting-game/coverage.json`. Coverage
+counts every observed day/outfit/customer/card/outcome/exchange combination and
+lists unvisited exchanges. Intentional fallbacks count as coverage; `unwritten`
+placeholders produce coverage-gap notices. Neither proves all content is reachable.
+Unexpected diagnostics, invalid state, stuck exploration, or divergent replay fail
+the run and save a report including its seed. CI integration is a separate PR.
+These bounded samples do not exhaust all possible play sequences.
+
 ### Scope of validation
 
 The validator checks the exchange contract already consumed by selection,
