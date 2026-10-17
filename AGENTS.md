@@ -15,3 +15,4 @@ Before changes, read and follow [CONTRIBUTING.md](CONTRIBUTING.md), [CODING_STAN
 6. Before final review, update the PR title/description to explain the final diff, update progress and issue links, and report remaining limitations. Keep changes scoped; follow existing architecture and avoid unnecessary dependencies.
 
 7. Prefix every commit subject you create with your identity, following [the agent commit convention](CONTRIBUTING.md#agent-commit-identity), for example `ChatGPT: Add coding standards`. This labels the work without changing Git author metadata.
+8. Keep PRs short and succinct, with short, descriptive titles and one to three clear reviewable tasks each. Prefer several smaller PRs over one large PR; include the tests and documentation needed to verify each task. When steps depend on one another, state the review/merge order and target the preceding branch so each diff shows only its own changes.
