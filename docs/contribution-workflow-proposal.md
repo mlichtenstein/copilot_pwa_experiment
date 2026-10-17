@@ -39,9 +39,9 @@ Audience: humans and agents. Purpose: one lightweight issue-to-merge process.
 
 Expected sections:
 
-1. **Start with an issue.** State the observed problem and why it matters in a short paragraph. Specify observable acceptance criteria and material scope boundaries. Separate the desired result from a suggested implementation. Avoid chat transcripts and chronological investigation logs.
-2. **Implement the agreed scope.** Read relevant architecture/design documents and coding standards first. Work on a branch. When discoveries change the scope, update the issue or split follow-up work; do not let the PR silently drift.
-3. **Write the PR for a reviewer.** Reference the issue, explain motivation, summarize the final changes, and record verification evidence. Before final review, rewrite the title and description around the final implementation. Explain significant architectural decisions or tradeoffs when applicable, without requiring boilerplate for routine changes.
+1. **Use issues as concise change overviews.** Keep the issue body to a short problem/motivation paragraph, a succinct bullet summary of changes, and a list linking every associated PR. Initially label changes as planned; keep the summary current as PRs deliver work, and make it a summary of actual delivered changes before human closure. One issue may span several PRs. Keep technical specifications, detailed acceptance checks, investigation history, and verification evidence in the relevant PRs.
+2. **Maintain both directions of the relationship.** Each PR links its issue, and the issue body explicitly links every associated PR with a short description. Add PR links when opening PRs; maintain the issue's change summary as scope evolves, distinguishing planned, proposed, and delivered work. Read relevant design documents and coding standards, work on a branch, and split unrelated follow-up work.
+3. **Use PRs for technical detail.** Reference the issue and explain the specific changes in this PR: affected files/components, behavior and contracts, important implementation choices, acceptance checks, and consequential tradeoffs. Put verification evidence here. An issue may have multiple PRs; each describes and verifies its own portion. Before final review, rewrite the title and description around the final diff. Issues provide a quick overview of what changed and why; PRs provide the technical explanation and evidence.
 4. **Provide verification evidence.** State what was checked, how to repeat it, expected versus observed results, and what remains unverified. Appropriate evidence can include automated test results, manual steps, screenshots, or successful app preview links. Explicitly distinguish executed checks from instructions supplied for a reviewer.
 5. **Use current tooling honestly.** Inspect the checkout for available tooling. The repository currently has no automated test runner or build step; do not invent test commands. Describe local HTTP serving and browser checks for affected behavior, mobile layout, persistence where implemented, and service workers/offline behavior when relevant. Link planned game tests without claiming they exist.
 6. **Verify deployments.** Use the Deploy workflow and its “Review deployments” comment. Only present a preview as available after successful deployment; otherwise state failed, pending, or unavailable. Note fork preview limitations. Documentation-only PRs should explain why app verification is not applicable.
@@ -53,12 +53,11 @@ Expected sections:
 
 Use a concise template under .github/ISSUE_TEMPLATE/ with these prompts:
 
-- **Problem and motivation:** what is wrong or missing, why it matters, and a short example where useful.
-- **Acceptance criteria:** observable outcomes a reviewer can verify.
-- **Scope:** important boundaries; optional when there are none worth stating.
-- **Suggested approach:** optional, clearly separated from requirements.
+- **Problem:** a short description of the observed problem and why it matters.
+- **Change summary:** a succinct bullet list; label planned work while open and summarize actual delivered changes before closure.
+- **Pull requests:** an explicit list of every associated PR, each with a link and a brief description.
 
-Keep instructions short. Do not require contributors to invent implementation details before investigation. Decide on a Markdown template or issue form based on the existing repository; either is sufficient.
+Keep the issue body readable as a quick history of what changed and why. One issue may link multiple PRs. Technical specifications and verification evidence belong in those PRs, not in the issue. Decide on a Markdown template or issue form based on the existing repository; either is sufficient.
 
 ## .github/pull_request_template.md
 
@@ -66,7 +65,7 @@ Replace the generic Summary prompt with:
 
 - **Related issue:** plain reference/link, without automatic closing keywords.
 - **Motivation:** a short description of the problem and its consequence.
-- **Changes:** a concise account of the final implementation.
+- **Technical changes:** a detailed explanation of this PR's final implementation, affected files/components, behavior/contracts, and relevant acceptance checks. Explain this PR's portion when the issue has several PRs.
 - **Verification evidence:** executed checks and results, reproduction steps or supporting artifacts, and explicit limitations.
 - **Significant design decisions:** optional explanation of architecture changes or consequential tradeoffs.
 - **Review deployments:** preserve the existing guidance about workflow success and affected-app preview URLs.
@@ -78,20 +77,14 @@ Provide short HTML-comment prompts, not lengthy policy text. A compact readiness
 Keep this file short and agent-specific:
 
 - Require reading and following CONTRIBUTING.md and CODING_STANDARDS.md before changes.
-- Require completing the issue/PR templates and reconciling final descriptions with delivered scope.
+- Require completing the issue/PR templates, adding every PR to the issue body's PR list, and reconciling the concise issue change summary with delivered scope. Keep technical detail and verification evidence in each PR.
 - Preserve existing requirements for verification evidence, honest preview reporting, human issue closure, and responding to all outstanding review comments.
 - Explicitly include inline review comments/replies, outdated threads, review summaries, and pagination. Agents must not infer that an empty conversation feed means no review feedback exists.
 - Require a clear account of checks run, checks not run, and unresolved feedback.
 - Link shared rules rather than reproducing them in full.
 
-## Scope and verification of this proposal
+## Scope of this proposal
 
-This proposal adds documentation only. It does not change application code, templates, existing AGENTS.md instructions, repository settings, or merge enforcement.
-
-Reviewer verification:
-1. Compare the proposed file responsibilities with issue #38.
-2. Confirm that each required topic has a clear home and templates remain concise.
-3. Confirm preservation of existing AGENTS.md rules, particularly human issue closure and all review comments.
-4. Check that proposed verification distinguishes actual evidence from unexecuted instructions.
+This proposal adds documentation only. Final standards, templates, existing AGENTS.md instructions, application code, repository settings, and merge enforcement are unchanged. Verification evidence and reviewer instructions for this proposal live in PR #39.
 
 Follow-up implementation should replace this proposal with the agreed documents/templates, avoiding a stale second source of policy. Automated merge enforcement remains outside issue #38.
