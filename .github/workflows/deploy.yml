@@ -50,6 +50,14 @@ jobs:
         run: |
           node apps/waiting-game/testing/validate.cjs
           node --test apps/waiting-game/*.test.js
+          node apps/waiting-game/testing/explore.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: waiting-game-deploy-reports
+          path: artifacts/waiting-game/
+          if-no-files-found: ignore
+          retention-days: 14
 
   # needs normally skips a job when its dependency is skipped. always() lets
   # closed-PR cleanup run after skipped validation; the explicit result check
@@ -63,6 +71,20 @@ jobs:
       pull-requests: write  # Create/update the preview-link comment.
     steps:
       - uses: actions/checkout@v4
+      # Only workflow-owned code executes in this job; no app/test scripts.
+      - name: Stamp game build identity
+        if: github.event.action != 'closed'
+        env:
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const cp = require('node:child_process');
+          const commit = cp.execFileSync('git', ['rev-parse', 'HEAD'], {encoding: 'utf8'}).trim();
+          const build = {commit, sourceCommit: process.env.GITHUB_HEAD_SHA || commit};
+          fs.writeFileSync('apps/waiting-game/build-info.js', '/* Purpose: Identify deployed code. Consumers: debug reports. Dependencies: none. */\nwindow.WaitingGameBuild = ' + JSON.stringify(build) + ';\n');
+          NODE
+
       - name: Prepare gh-pages branch
         run: |
           if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
