@@ -32,6 +32,15 @@ Before final review, rewrite the title and description around the final diff. Ke
 
 Do not use automatic issue-closing keywords in PR titles, descriptions, or commits. Humans close issues.
 
+## Agent commit identity
+
+AI coding agents must prefix every commit subject they create with their identity, using `<Agent identity>: <summary>`. For example:
+
+- `ChatGPT: Add shared coding standards`
+- `GitHub Copilot: Update card styles`
+
+Use the actual agent or product identity; do not invent a model version. This convention identifies agent-created work even when the connector records the human account as the Git author. It does not change Git author/committer metadata. Apply it to new commits; rewriting existing history is separate work.
+
 ## Progress checkboxes
 
 Use `- [ ]` for pending work and `- [x]` for completed work.
