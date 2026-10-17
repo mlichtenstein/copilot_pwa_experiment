@@ -76,15 +76,6 @@ jobs:
           fs.writeFileSync('apps/waiting-game/build-info.js', '/* Purpose: Identify deployed code. Consumers: debug reports. Dependencies: none. */\nwindow.WaitingGameBuild = ' + JSON.stringify(build) + ';\n');
           NODE
 
-  deploy:
-    needs: validate
-    if: always() && (needs.validate.result == 'success' || github.event.action == 'closed')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v4
       - name: Prepare gh-pages branch
         run: |
           if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
