@@ -60,6 +60,14 @@
       const result = encounter.pendingResult;
       section.append(element("h4", `${card.name}: ${result.outcome}`));
       section.append(element("p", `Mood ${result.moodChange > 0 ? "+" : ""}${result.moodChange} · Relationship ${result.relationshipChange > 0 ? "+" : ""}${result.relationshipChange}`));
+      const exchange = game.exchanges.find(option => option.id === result.exchangeId);
+      if (exchange) {
+        const dialogue = element("div", null, "dialogue");
+        exchange.lines.forEach(line => {
+          dialogue.append(element("p", `${line.speaker}: ${line.text}`));
+        });
+        section.append(dialogue);
+      }
       section.append(button("Continue", () => {
         game.continueInteraction(state);
         render();

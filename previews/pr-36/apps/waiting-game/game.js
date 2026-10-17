@@ -19,6 +19,99 @@
     { id: "empathize", name: "Empathize", description: "Offer understanding and support.", strategy: "empathy" },
     { id: "flirt", name: "Flirt", description: "Make a playful romantic advance.", strategy: "flirting" }
   ];
+  const exchanges = [
+    {
+      id: "maria-empathy-success",
+      strategy: "empathy",
+      outcome: "success",
+      customerId: "maria",
+      priority: 10,
+      conditions: [{ type: "relationship_min", customerId: "maria", value: 1 }],
+      lines: [
+        { speaker: "Player", text: "You look like you've had a long day." },
+        { speaker: "Maria", text: "That's one way to describe it. My boss has been driving me crazy." }
+      ],
+      effects: [{ type: "set_flag", key: "maria.discussed_work", value: true }]
+    },
+    {
+      id: "sass-success-fallback",
+      strategy: "sass",
+      outcome: "success",
+      priority: 0,
+      conditions: [],
+      lines: [
+        { speaker: "Player", text: "I was going to make a joke, but you look like you can handle the truth." },
+        { speaker: "Customer", text: "Good save. I'll allow it." }
+      ],
+      effects: [],
+      repeatable: true
+    },
+    {
+      id: "sass-failure-fallback",
+      strategy: "sass",
+      outcome: "failure",
+      priority: 0,
+      conditions: [],
+      lines: [
+        { speaker: "Player", text: "Well, that joke sounded better in my head." },
+        { speaker: "Customer", text: "Maybe keep workshopping it." }
+      ],
+      effects: [],
+      repeatable: true
+    },
+    {
+      id: "empathy-success-fallback",
+      strategy: "empathy",
+      outcome: "success",
+      priority: 0,
+      conditions: [],
+      lines: [
+        { speaker: "Player", text: "Sounds like it's been a lot. I'm here if you want to talk." },
+        { speaker: "Customer", text: "Thanks. It's nice to be heard." }
+      ],
+      effects: [],
+      repeatable: true
+    },
+    {
+      id: "empathy-failure-fallback",
+      strategy: "empathy",
+      outcome: "failure",
+      priority: 0,
+      conditions: [],
+      lines: [
+        { speaker: "Player", text: "I wanted to help, but I'm not sure I got that right." },
+        { speaker: "Customer", text: "It's okay. Let's talk about something else." }
+      ],
+      effects: [],
+      repeatable: true
+    },
+    {
+      id: "flirting-success-fallback",
+      strategy: "flirting",
+      outcome: "success",
+      priority: 0,
+      conditions: [],
+      lines: [
+        { speaker: "Player", text: "Is it always this easy to lose track of time with you?" },
+        { speaker: "Customer", text: "Careful, that almost worked." }
+      ],
+      effects: [],
+      repeatable: true
+    },
+    {
+      id: "flirting-failure-fallback",
+      strategy: "flirting",
+      outcome: "failure",
+      priority: 0,
+      conditions: [],
+      lines: [
+        { speaker: "Player", text: "That came out smoother in my head." },
+        { speaker: "Customer", text: "Let's pretend you didn't say it." }
+      ],
+      effects: [],
+      repeatable: true
+    }
+  ];
   const interactionsPerEncounter = 2;
 
   function createState() {
@@ -99,6 +192,42 @@
     };
   }
 
+  function evaluateCondition(condition, state) {
+    if (!condition || typeof condition !== "object") return false;
+    if (condition.type === "flag") {
+      return state.narrative.flags[condition.key] === condition.value;
+    }
+    if (condition.type === "relationship_min") {
+      const customer = state.customers[condition.customerId];
+      return Boolean(customer && customer.relationship >= condition.value);
+    }
+    if (condition.type === "day_min") {
+      return state.day >= condition.value;
+    }
+    return false;
+  }
+
+  function selectExchange(state, customerId, cardResult, availableExchanges = exchanges) {
+    return availableExchanges
+      .filter(exchange =>
+        exchange.strategy === cardResult.strategy
+        && exchange.outcome === cardResult.outcome
+        && (!exchange.customerId || exchange.customerId === customerId)
+        && exchange.conditions.every(condition => evaluateCondition(condition, state))
+        && (exchange.repeatable || !state.narrative.seenExchanges.includes(exchange.id)))
+      .sort((first, second) =>
+        second.priority - first.priority
+        || (first.id < second.id ? -1 : first.id > second.id ? 1 : 0))[0] || null;
+  }
+
+  function applyNarrativeEffects(state, exchange) {
+    exchange.effects.forEach(effect => {
+      if (effect.type === "set_flag") {
+        state.narrative.flags[effect.key] = effect.value;
+      }
+    });
+  }
+
   function playCard(state, cardId) {
     const encounter = currentEncounter(state);
     const card = cards.find(option => option.id === cardId);
@@ -108,7 +237,14 @@
     const result = resolveCard(card, state.player, customer, encounter);
     encounter.mood += result.moodChange;
     customer.relationship += result.relationshipChange;
-    encounter.pendingResult = { cardId, ...result };
+    const exchange = selectExchange(state, encounter.customerId, result);
+    if (exchange) {
+      if (!state.narrative.seenExchanges.includes(exchange.id)) {
+        state.narrative.seenExchanges.push(exchange.id);
+      }
+      applyNarrativeEffects(state, exchange);
+    }
+    encounter.pendingResult = { cardId, ...result, exchangeId: exchange && exchange.id };
     return result;
   }
 
@@ -150,6 +286,9 @@
     selectOutfit,
     startShift,
     resolveCard,
+    exchanges,
+    evaluateCondition,
+    selectExchange,
     playCard,
     continueInteraction,
     goHome
