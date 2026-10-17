@@ -27,8 +27,8 @@
       min-height: 5.75rem;
       margin: 0;
       padding: .9rem .85rem;
-      border: 1px solid #244d3e;
-      border-radius: .85rem;
+      border: 2px solid #244d3e;
+      border-radius: .2rem;
       background: #f4fbf6;
       color: #203a32;
       text-align: left;
@@ -39,13 +39,34 @@
       gap: .3rem;
       font-weight: 600;
       line-height: 1.2;
+      box-shadow:
+        inset 0 1px 0 #ffffffcc,
+        0 2px 0 #1f4134,
+        0 .45rem .75rem #203a3226;
     }
-    .conversation-cards .card-button:hover:not(:disabled) { background: #dfeee4; border-color: #1c4032; }
-    .conversation-cards .card-button:active:not(:disabled) { background: #d1e6d7; transform: translateY(1px); }
+    .conversation-cards .card-button:hover:not(:disabled) {
+      background: #dfeee4;
+      border-color: #1c4032;
+      box-shadow:
+        inset 0 1px 0 #ffffffcc,
+        0 3px 0 #19372c,
+        0 .55rem .85rem #203a3233;
+    }
+    .conversation-cards .card-button:active:not(:disabled) {
+      background: #d1e6d7;
+      transform: translateY(2px);
+      box-shadow:
+        inset 0 1px 0 #ffffffc7,
+        0 1px 0 #19372c,
+        0 .2rem .4rem #203a321f;
+    }
     .conversation-cards .card-button:disabled {
       border-style: dashed;
       background: #e7ece8;
       color: #4a5b54;
+      box-shadow:
+        inset 0 1px 0 #ffffffa8,
+        0 1px 0 #5a6d64;
     }
     .card-title { display: block; font-size: 1.05rem; font-weight: 700; }
     .card-description { display: block; font-size: .84rem; font-weight: 500; opacity: .95; }
@@ -57,15 +78,35 @@
       button:disabled { opacity: .85; }
       .conversation-cards .card-button {
         background: #2f4339;
-        border-color: #7fa391;
+        border-color: #8eb3a0;
         color: #edf7f0;
+        box-shadow:
+          inset 0 1px 0 #ffffff1f,
+          0 2px 0 #18241e,
+          0 .45rem .75rem #00000059;
       }
-      .conversation-cards .card-button:hover:not(:disabled) { background: #395446; border-color: #92baa5; }
-      .conversation-cards .card-button:active:not(:disabled) { background: #476551; }
+      .conversation-cards .card-button:hover:not(:disabled) {
+        background: #395446;
+        border-color: #a4ccb6;
+        box-shadow:
+          inset 0 1px 0 #ffffff26,
+          0 3px 0 #141f19,
+          0 .55rem .85rem #00000070;
+      }
+      .conversation-cards .card-button:active:not(:disabled) {
+        background: #476551;
+        box-shadow:
+          inset 0 1px 0 #ffffff22,
+          0 1px 0 #141f19,
+          0 .2rem .4rem #0000004f;
+      }
       .conversation-cards .card-button:disabled {
         background: #2a3b33;
         border-color: #5f7d6f;
         color: #b8cfc2;
+        box-shadow:
+          inset 0 1px 0 #ffffff14,
+          0 1px 0 #1a2721;
       }
     }
   </style>
