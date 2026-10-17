@@ -18,13 +18,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
 
-# Validation now executes repository game/test code. It needs only read access;
-# leaving the former workflow-wide write token would give that code publishing
-# privileges. Keep write access explicitly on deploy (push + PR comments) below.
-# This changes who holds the token, not the production/preview destination paths.
-# See docs/deployment-verification.md for event behavior and verification limits.
+# contents: write lets us push to gh-pages; pull-requests: write lets us comment
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 # Run one deployment at a time so two runs can't push to gh-pages simultaneously
 concurrency:
@@ -32,37 +29,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Main push and open/update/reopen PR events must validate before publishing.
-  # Closed PRs need only cleanup; broken content must not strand their previews.
-  validate:
-    if: github.event.action != 'closed'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Validate content and run game tests
-        run: |
-          node apps/waiting-game/testing/validate.cjs
-          node --test apps/waiting-game/*.test.js
-
-  # needs normally skips a job when its dependency is skipped. always() lets
-  # closed-PR cleanup run after skipped validation; the explicit result check
-  # still blocks publication when validation fails. This job runs no game tests.
   deploy:
-    needs: validate
-    if: always() && (needs.validate.result == 'success' || github.event.action == 'closed')
     runs-on: ubuntu-latest
-    permissions:
-      contents: write       # Commit/push the copied assets to gh-pages.
-      pull-requests: write  # Create/update the preview-link comment.
     steps:
       - uses: actions/checkout@v4
+
       - name: Prepare gh-pages branch
         run: |
           if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then

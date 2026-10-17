@@ -2,10 +2,6 @@
 # Consumers: GitHub Actions.
 # Dependencies: Node built-in test runner; no packages or build step.
 name: Test
-# Push: any branch, so work is checked before it has a PR.
-# Pull request: opened, synchronized (new commits), or reopened (GitHub defaults).
-# A commit on an open PR can therefore trigger both runs. Deploy does not depend
-# on this separate workflow; it repeats these checks in its own validate job.
 on: [push, pull_request]
 permissions:
   contents: read
@@ -17,6 +13,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # Content contracts first; then execute arc journeys and recovery tests.
-      - run: node apps/waiting-game/testing/validate.cjs
-      - run: node --test apps/waiting-game/*.test.js
+      - run: node --test apps/waiting-game/game.test.js

@@ -1,12 +1,11 @@
 /*
  * Waiting Game browser UI.
- * Dependencies: WaitingGameSafety from safety.js; WaitingGame from game.js and the <main> element in index.html.
+ * Dependencies: WaitingGame from game.js and the <main> element in index.html.
  * Consumer: the browser, through the script element in index.html.
  */
 (() => {
   const game = WaitingGame;
-  const session = WaitingGameSafety.createSession(game);
-  const state = session.state;
+  const state = game.createState();
   const app = document.querySelector("main");
 
   function element(tag, text, className) {
@@ -32,7 +31,7 @@
     const choices = element("div", null, "choices");
     game.outfits.forEach(outfit => {
       const choice = button(outfit.name, () => {
-        session.dispatch("selectOutfit", outfit.id);
+        game.selectOutfit(state, outfit.id);
         render();
       });
       choice.setAttribute("aria-pressed", String(state.player.outfit === outfit.id));
@@ -40,7 +39,7 @@
     });
     section.append(choices);
     section.append(button("Go to Work", () => {
-      session.dispatch("startShift");
+      game.startShift(state);
       render();
     }));
     app.append(section);
@@ -68,11 +67,9 @@
           dialogue.append(element("p", `${line.speaker}: ${line.text}`));
         });
         section.append(dialogue);
-      } else {
-        section.append(element("p", "Story error: dialogue unavailable. You can continue playing."));
       }
       section.append(button("Continue", () => {
-        session.dispatch("continueInteraction");
+        game.continueInteraction(state);
         render();
       }));
     } else {
@@ -81,7 +78,7 @@
       const choices = element("div", null, "conversation-cards");
       game.cards.forEach(card => {
         const choice = button("", () => {
-          session.dispatch("playCard", card.id);
+          game.playCard(state, card.id);
           render();
         }, "card-button");
         choice.setAttribute("aria-label", `${card.name}: ${card.description}`);
@@ -106,7 +103,7 @@
     });
     section.append(element("p", `Money: $${state.player.money}`));
     section.append(button("Go Home", () => {
-      session.dispatch("goHome");
+      game.goHome(state);
       render();
     }));
     app.append(section);
@@ -114,18 +111,6 @@
 
   function render() {
     app.querySelectorAll("section").forEach(section => section.remove());
-    if (session.diagnostics.length) {
-      const notice = element("section", null, "diagnostics");
-      notice.setAttribute("role", "status");
-      notice.setAttribute("aria-live", "polite");
-      notice.append(element("h2", "Story diagnostics — play can continue"));
-      notice.append(element("p", session.diagnostics.at(-1).message));
-      const details = element("details");
-      details.append(element("summary", `Details (${session.diagnostics.length} recent notices)`));
-      details.append(element("pre", JSON.stringify(session.diagnostics, null, 2)));
-      notice.append(details);
-      app.append(notice);
-    }
     if (state.phase === "apartment") renderApartment();
     if (state.phase === "work") renderWork();
     if (state.phase === "endShift") renderEndShift();
