@@ -1,6 +1,6 @@
 /*
  * Waiting Game state and daily-loop rules.
- * Dependencies: browser JavaScript only; no DOM or UI framework.
+ * Dependencies: maria-arc.js content; no DOM or UI framework.
  * Consumer: ui.js, which calls these state and progression functions.
  */
 (() => {
@@ -20,35 +20,7 @@
     { id: "flirt", name: "Flirt", description: "Make a playful romantic advance.", strategy: "flirting" }
   ];
   const exchanges = [
-    {
-      id: "maria-empathy-success",
-      strategy: "empathy",
-      outcome: "success",
-      customerId: "maria",
-      priority: 10,
-      conditions: [{ type: "relationship_min", customerId: "maria", value: 1 }],
-      lines: [
-        { speaker: "Player", text: "You look like you've had a long day." },
-        { speaker: "Maria", text: "That's one way to describe it. My boss has been driving me crazy." }
-      ],
-      effects: [{ type: "set_flag", key: "maria.discussed_work", value: true }]
-    },
-    {
-      id: "maria-sass-success",
-      strategy: "sass",
-      outcome: "success",
-      customerId: "maria",
-      priority: 10,
-      conditions: [
-        { type: "flag", key: "maria.discussed_work", value: true },
-        { type: "day_min", value: 2 }
-      ],
-      lines: [
-        { speaker: "Player", text: "So, have you overthrown your terrible boss yet?" },
-        { speaker: "Maria", text: "Not yet. But I've started drafting my resignation letter." }
-      ],
-      effects: [{ type: "set_flag", key: "maria.considering_quitting", value: true }]
-    },
+    ...window.WaitingGameArcs.maria.exchanges,
     {
       id: "sass-success-fallback",
       strategy: "sass",
