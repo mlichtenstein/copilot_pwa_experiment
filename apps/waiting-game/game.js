@@ -230,7 +230,7 @@
     });
   }
 
-  function playCard(state, cardId, availableExchanges = exchanges) {
+  function playCard(state, cardId, availableExchanges = exchanges, observeSelection = () => {}) {
     const encounter = currentEncounter(state);
     const card = cards.find(option => option.id === cardId);
     if (!encounter || !card || encounter.pendingResult) return false;
@@ -241,6 +241,7 @@
     customer.relationship += result.relationshipChange;
     customer.trust = Math.max(0, customer.trust + result.trustChange);
     const exchange = selectExchange(state, encounter.customerId, result, availableExchanges);
+    observeSelection(state, result, exchange);
     if (exchange) {
       if (!state.narrative.seenExchanges.includes(exchange.id)) {
         state.narrative.seenExchanges.push(exchange.id);

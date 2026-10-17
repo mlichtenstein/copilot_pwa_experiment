@@ -51,6 +51,35 @@ Direct engine evaluation throws on unknown conditions/effects. The safety layer
 handles runtime recovery; tests and CI treat content errors as failures. Syntax
 errors that prevent scripts loading are not recoverable content diagnostics.
 
+## Reports and replay
+
+Download a debug report from any game phase. Reports contain versioned JSON,
+build identity when provided (currently `development`; deployment stamping is a separate PR), deployment path, content
+fingerprint, the last 100 actions, their before/after states, outcomes, diagnostics,
+and dialogue-selection reasons. Older actions become a starting checkpoint;
+reports disclose how many were dropped. Diagnostics retain at most 100 notices.
+The fingerprint detects content differences, not malicious tampering.
+
+The latest report is saved locally after each action under a deployment-path key.
+After reloading, Download previous session report retrieves that saved report;
+current gameplay still starts fresh. Storage errors are visible and current report
+export remains available. Nothing is uploaded automatically. Reports contain game
+state and chosen actions; players decide which reports to attach to an issue.
+A report is a bounded debugging window, not a permanent record of all play.
+
+Check out the report's `build.commit`, then run:
+
+```
+node apps/waiting-game/testing/replay.cjs /path/to/report.json
+```
+
+Replay rejects a different commit, changed content, malformed input, or divergent
+states/outcomes/selection traces. `--allow-version-mismatch` explicitly relaxes
+only the commit check for investigating fixes or local development reports;
+content and execution checks still apply. Reports are JSON, never executable code.
+The CLI limits input to 10 MiB. Reproducing a bug then writing a readable journey
+beside the affected arc is preferable to treating a raw report as intended behavior.
+
 ### Scope of validation
 
 The validator checks the exchange contract already consumed by selection,
