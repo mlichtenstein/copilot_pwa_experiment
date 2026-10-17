@@ -92,22 +92,59 @@
     require(state.phase === "endShift" ? shift.currentEncounter === shift.encounters.length : shift.currentEncounter < shift.encounters.length, "phase/cursor");
   }
 
+  function contentHash(game) {
+    const source = JSON.stringify([game.outfits, game.customers, game.cards, game.exchanges, game.interactionsPerEncounter]);
+    let hash = 2166136261;
+    for (let i = 0; i < source.length; i++) hash = Math.imul(hash ^ source.charCodeAt(i), 16777619) >>> 0;
+    return hash.toString(16).padStart(8, "0");
+  }
+
+  function explainSelection(game, state, customerId, result, selected, candidates) {
+    return candidates.filter(e => e.strategy === result.strategy && e.outcome === result.outcome).map(e => {
+      const reasons = [];
+      if (e.customerId && e.customerId !== customerId) reasons.push("different customer");
+      if (!e.repeatable && state.narrative.seenExchanges.includes(e.id)) reasons.push("already seen");
+      for (const condition of e.conditions) if (!game.evaluateCondition(condition, state)) reasons.push(`unmet ${JSON.stringify(condition)}`);
+      if (!reasons.length && e.id !== selected?.id) reasons.push("lower priority or ID tie-break");
+      return { id: e.id, selected: e.id === selected?.id, reasons };
+    });
+  }
+
   function createSession(game, options = {}) {
     const state = clone(options.state || game.createState());
     const diagnostics = [];
-    const record = issue => { diagnostics.push(clone(issue)); if (diagnostics.length > 100) diagnostics.shift(); };
+    let emitted = null;
+    const record = issue => {
+      const entry = clone(issue);
+      diagnostics.push(entry);
+      if (emitted) emitted.push(entry);
+      if (diagnostics.length > 100) diagnostics.shift();
+    };
+    const limit = options.limit ?? 100;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error("Journal limit must be 1..1000");
+    const journal = [];
+    let initialState = clone(state);
+    let droppedActions = 0;
+    let selection = [];
     const content = validateContent(game);
     content.issues.forEach(record);
     validateState(state, game);
     const actions = {
       selectOutfit: (working, args) => game.selectOutfit(working, ...args),
       startShift: working => game.startShift(working),
-      playCard: (working, args) => game.playCard(working, ...args, content.validExchanges),
+      playCard: (working, args) => game.playCard(working, ...args, content.validExchanges, (at, result, selected) => {
+        selection = explainSelection(game, at, game.currentEncounter(at).customerId, result, selected, content.validExchanges);
+        if (selected?.coverage === "unwritten") record({ code: "coverage_gap", message: `Unwritten dialogue: ${selected.id}` });
+      }),
       continueInteraction: working => game.continueInteraction(working),
       goHome: working => game.goHome(working)
     };
     function dispatch(type, ...args) {
       const before = clone(state);
+      emitted = [];
+      selection = [];
+      let ok = false;
+      let resultValue = false;
       try {
         if (content.blocked) throw new Error("Invalid base content; action was not applied");
         if (!Object.hasOwn(actions, type)) throw new Error(`Unknown action ${type}`);
@@ -119,13 +156,43 @@
         if (type === "playCard" && !game.currentEncounter(working).pendingResult.exchangeId) record({ code: "missing_dialogue", message: "No valid dialogue matched; mechanical result applied with emergency text.", action: { type, args }, before });
         Object.keys(state).forEach(key => delete state[key]);
         Object.assign(state, working);
+        ok = true;
+        resultValue = result;
         return result;
       } catch (error) {
         record({ code: "action_failed", message: String(error.message || error), action: { type, args }, before });
         return false;
+      } finally {
+        journal.push({ action: { type, args: clone(args) }, ok, result: clone(resultValue), before, after: clone(state), selection: clone(selection), diagnostics: emitted });
+        emitted = null;
+        if (journal.length > limit) {
+          initialState = journal.shift().after;
+          droppedActions += 1;
+        }
       }
     }
-    return { state, diagnostics, dispatch };
+    function report() {
+      return clone({ formatVersion: 1, build: options.build || window.WaitingGameBuild || { commit: "development" }, deployment: options.deployment || "local", contentHash: contentHash(game), droppedActions, initialState, entries: journal, diagnostics });
+    }
+    return { state, diagnostics, dispatch, report, addDiagnostic: record };
   }
-  window.WaitingGameSafety = { clone, validateContent, validateState, createSession };
+
+  function replayReport(game, report, options = {}) {
+    if (!object(report) || report.formatVersion !== 1 || !object(report.build) || !text(report.build.commit) || !text(report.deployment) || !Number.isInteger(report.droppedActions) || report.droppedActions < 0 || !Array.isArray(report.entries) || report.entries.length > 1000) throw new Error("Invalid report format");
+    if (report.contentHash !== contentHash(game)) throw new Error("Content version mismatch; check out the report's commit");
+    if (options.commit && report.build.commit !== options.commit) throw new Error("Commit mismatch; check out the report's commit");
+    for (const entry of report.entries) {
+      if (!object(entry) || !object(entry.action) || !text(entry.action.type) || !Array.isArray(entry.action.args) || entry.action.args.length > 1 || !entry.action.args.every(a => typeof a === "string") || typeof entry.ok !== "boolean" || !Array.isArray(entry.selection) || !Array.isArray(entry.diagnostics)) throw new Error("Invalid report entry");
+    }
+    const session = createSession(game, { state: report.initialState, build: report.build, limit: 1000 });
+    const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    report.entries.forEach((entry, index) => {
+      if (!equal(session.state, entry.before)) throw new Error(`Replay diverged before action ${index}`);
+      session.dispatch(entry.action.type, ...entry.action.args);
+      const actual = session.report().entries.at(-1);
+      if (!equal(actual, entry)) throw new Error(`Replay diverged at action ${index}`);
+    });
+    return session;
+  }
+  window.WaitingGameSafety = { clone, validateContent, validateState, createSession, contentHash, replayReport };
 })();

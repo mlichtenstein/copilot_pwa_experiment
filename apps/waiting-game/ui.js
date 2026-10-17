@@ -5,7 +5,29 @@
  */
 (() => {
   const game = WaitingGame;
-  const session = WaitingGameSafety.createSession(game);
+  const session = WaitingGameSafety.createSession(game, { deployment: location.pathname });
+  const storageKey = `waiting-game-debug:${location.pathname}`;
+  let previousReport = null;
+  try { previousReport = localStorage.getItem(storageKey); }
+  catch (error) { session.addDiagnostic({ code: "storage_failed", message: `Debug log storage unavailable: ${error.message}` }); }
+  let storageWarned = false;
+  function act(type, ...args) {
+    const result = session.dispatch(type, ...args);
+    try { localStorage.setItem(storageKey, JSON.stringify(session.report())); }
+    catch (error) {
+      if (!storageWarned) session.addDiagnostic({ code: "storage_failed", message: `Debug log could not be saved: ${error.message}. Download the current report instead.` });
+      storageWarned = true;
+    }
+    return result;
+  }
+  function download(contents) {
+    const url = URL.createObjectURL(new Blob([contents], { type: "application/json" }));
+    const link = element("a");
+    link.href = url;
+    link.download = "waiting-game-debug.json";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
   const state = session.state;
   const app = document.querySelector("main");
 
@@ -32,7 +54,7 @@
     const choices = element("div", null, "choices");
     game.outfits.forEach(outfit => {
       const choice = button(outfit.name, () => {
-        session.dispatch("selectOutfit", outfit.id);
+        act("selectOutfit", outfit.id);
         render();
       });
       choice.setAttribute("aria-pressed", String(state.player.outfit === outfit.id));
@@ -40,7 +62,7 @@
     });
     section.append(choices);
     section.append(button("Go to Work", () => {
-      session.dispatch("startShift");
+      act("startShift");
       render();
     }));
     app.append(section);
@@ -72,7 +94,7 @@
         section.append(element("p", "Story error: dialogue unavailable. You can continue playing."));
       }
       section.append(button("Continue", () => {
-        session.dispatch("continueInteraction");
+        act("continueInteraction");
         render();
       }));
     } else {
@@ -81,7 +103,7 @@
       const choices = element("div", null, "conversation-cards");
       game.cards.forEach(card => {
         const choice = button("", () => {
-          session.dispatch("playCard", card.id);
+          act("playCard", card.id);
           render();
         }, "card-button");
         choice.setAttribute("aria-label", `${card.name}: ${card.description}`);
@@ -106,7 +128,7 @@
     });
     section.append(element("p", `Money: $${state.player.money}`));
     section.append(button("Go Home", () => {
-      session.dispatch("goHome");
+      act("goHome");
       render();
     }));
     app.append(section);
@@ -114,6 +136,10 @@
 
   function render() {
     app.querySelectorAll("section").forEach(section => section.remove());
+    const debug = element("section");
+    debug.append(button("Download debug report", () => download(JSON.stringify(session.report(), null, 2))));
+    if (previousReport) debug.append(button("Download previous session report", () => download(previousReport)));
+    app.append(debug);
     if (session.diagnostics.length) {
       const notice = element("section", null, "diagnostics");
       notice.setAttribute("role", "status");
