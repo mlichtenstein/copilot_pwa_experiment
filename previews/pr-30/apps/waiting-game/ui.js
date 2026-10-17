@@ -7,11 +7,6 @@
   const game = WaitingGame;
   const state = game.createState();
   const app = document.querySelector("main");
-  const conversationCards = [
-    { id: "sass", name: "Sass", description: "Humorous and irreverent" },
-    { id: "empathize", name: "Empathize", description: "Supportive and attentive" },
-    { id: "flirt", name: "Flirt", description: "Playful and charming" }
-  ];
 
   function element(tag, text, className) {
     const node = document.createElement(tag);
@@ -54,27 +49,37 @@
     const shift = state.currentShift;
     const encounter = game.currentEncounter(state);
     const customer = game.customers.find(person => person.id === encounter.customerId);
-    const interactionAvailable = encounter.interactions < game.interactionsPerEncounter;
+    const customerState = state.customers[encounter.customerId];
     const section = element("section");
     section.append(element("h2", "At Work"));
     section.append(element("p", `Day ${state.day} · Encounter ${shift.currentEncounter + 1} of ${shift.encounters.length}`));
     section.append(element("h3", customer.name));
-    section.append(element("p", "Your customer is ready to chat."));
-    section.append(element("p", `Conversation ${encounter.interactions + 1} of ${game.interactionsPerEncounter}`));
-    section.append(element("p", "Play a conversational strategy card."));
-    const cards = element("div", null, "conversation-cards");
-    conversationCards.forEach(card => {
-      const choice = button("", () => {
+    section.append(element("p", `Mood: ${encounter.mood} · Relationship: ${customerState.relationship}`));
+    if (encounter.pendingResult) {
+      const card = game.cards.find(option => option.id === encounter.pendingResult.cardId);
+      const result = encounter.pendingResult;
+      section.append(element("h4", `${card.name}: ${result.outcome}`));
+      section.append(element("p", `Mood ${result.moodChange > 0 ? "+" : ""}${result.moodChange} · Relationship ${result.relationshipChange > 0 ? "+" : ""}${result.relationshipChange}`));
+      section.append(button("Continue", () => {
         game.continueInteraction(state);
         render();
-      }, "card-button");
-      choice.disabled = !interactionAvailable;
-      choice.setAttribute("aria-label", `${card.name}: ${card.description}`);
-      choice.append(element("span", card.name, "card-title"));
-      choice.append(element("span", card.description, "card-description"));
-      cards.append(choice);
-    });
-    section.append(cards);
+      }));
+    } else {
+      section.append(element("p", `Conversation ${encounter.interactions + 1} of ${game.interactionsPerEncounter}`));
+      section.append(element("p", "Play a conversational strategy card."));
+      const choices = element("div", null, "conversation-cards");
+      game.cards.forEach(card => {
+        const choice = button("", () => {
+          game.playCard(state, card.id);
+          render();
+        }, "card-button");
+        choice.setAttribute("aria-label", `${card.name}: ${card.description}`);
+        choice.append(element("span", card.name, "card-title"));
+        choice.append(element("span", card.description, "card-description"));
+        choices.append(choice);
+      });
+      section.append(choices);
+    }
     app.append(section);
   }
 
