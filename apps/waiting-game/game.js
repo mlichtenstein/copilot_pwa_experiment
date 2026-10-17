@@ -34,6 +34,22 @@
       effects: [{ type: "set_flag", key: "maria.discussed_work", value: true }]
     },
     {
+      id: "maria-sass-success",
+      strategy: "sass",
+      outcome: "success",
+      customerId: "maria",
+      priority: 10,
+      conditions: [
+        { type: "flag", key: "maria.discussed_work", value: true },
+        { type: "day_min", value: 2 }
+      ],
+      lines: [
+        { speaker: "Player", text: "So, have you overthrown your terrible boss yet?" },
+        { speaker: "Maria", text: "Not yet. But I've started drafting my resignation letter." }
+      ],
+      effects: [{ type: "set_flag", key: "maria.considering_quitting", value: true }]
+    },
+    {
       id: "sass-success-fallback",
       strategy: "sass",
       outcome: "success",
