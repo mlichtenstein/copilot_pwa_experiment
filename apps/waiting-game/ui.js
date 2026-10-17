@@ -48,16 +48,33 @@
     const shift = state.currentShift;
     const encounter = game.currentEncounter(state);
     const customer = game.customers.find(person => person.id === encounter.customerId);
+    const customerState = state.customers[encounter.customerId];
     const section = element("section");
     section.append(element("h2", "At Work"));
     section.append(element("p", `Day ${state.day} · Encounter ${shift.currentEncounter + 1} of ${shift.encounters.length}`));
     section.append(element("h3", customer.name));
-    section.append(element("p", "Your customer is ready to chat."));
-    section.append(element("p", `Conversation ${encounter.interactions + 1} of ${game.interactionsPerEncounter}`));
-    section.append(button("Continue conversation", () => {
-      game.continueInteraction(state);
-      render();
-    }));
+    section.append(element("p", `Mood: ${encounter.mood} · Relationship: ${customerState.relationship}`));
+    if (encounter.pendingResult) {
+      const card = game.cards.find(option => option.id === encounter.pendingResult.cardId);
+      const result = encounter.pendingResult;
+      section.append(element("h4", `${card.name}: ${result.outcome}`));
+      section.append(element("p", `Mood ${result.moodChange > 0 ? "+" : ""}${result.moodChange} · Relationship ${result.relationshipChange > 0 ? "+" : ""}${result.relationshipChange}`));
+      section.append(button("Continue", () => {
+        game.continueInteraction(state);
+        render();
+      }));
+    } else {
+      section.append(element("p", `Conversation ${encounter.interactions + 1} of ${game.interactionsPerEncounter}`));
+      section.append(element("p", "Choose a conversational approach."));
+      const choices = element("div", null, "choices");
+      game.cards.forEach(card => {
+        choices.append(button(`${card.name} — ${card.description}`, () => {
+          game.playCard(state, card.id);
+          render();
+        }));
+      });
+      section.append(choices);
+    }
     app.append(section);
   }
 

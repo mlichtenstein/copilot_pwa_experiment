@@ -14,8 +14,12 @@
     { id: "alex", name: "Alex", traits: { humor: 4, empathy: 2, flirting: 3 } },
     { id: "jordan", name: "Jordan", traits: { humor: 2, empathy: 3, flirting: 4 } }
   ];
+  const cards = [
+    { id: "sass", name: "Sass", description: "Try some irreverent humor.", strategy: "sass" },
+    { id: "empathize", name: "Empathize", description: "Offer understanding and support.", strategy: "empathy" },
+    { id: "flirt", name: "Flirt", description: "Make a playful romantic advance.", strategy: "flirting" }
+  ];
   const interactionsPerEncounter = 2;
-  const placeholderTip = 5;
 
   function createState() {
     return {
@@ -51,6 +55,8 @@
       encounters: shiftCustomers.map(customer => ({
         customerId: customer.id,
         interactions: 0,
+        mood: 0,
+        pendingResult: null,
         completed: false,
         tip: 0
       })),
@@ -77,14 +83,44 @@
     return true;
   }
 
+  function resolveCard(card, player, customer, encounter) {
+    const preference = card.strategy === "sass" ? "humor" : card.strategy;
+    const outfitModifier = (player.outfit === "uniform" && card.strategy === "empathy")
+      || (player.outfit === "casual" && card.strategy === "flirting") ? 1 : 0;
+    const score = (player.skills[card.strategy] || 0)
+      + (customer.traits[preference] || 0)
+      + outfitModifier;
+    const success = score >= 4;
+    return {
+      strategy: card.strategy,
+      outcome: success ? "success" : "failure",
+      moodChange: success ? 2 : -1,
+      relationshipChange: success ? 1 : -1
+    };
+  }
+
+  function playCard(state, cardId) {
+    const encounter = currentEncounter(state);
+    const card = cards.find(option => option.id === cardId);
+    if (!encounter || !card || encounter.pendingResult) return false;
+
+    const customer = state.customers[encounter.customerId];
+    const result = resolveCard(card, state.player, customer, encounter);
+    encounter.mood += result.moodChange;
+    customer.relationship += result.relationshipChange;
+    encounter.pendingResult = { cardId, ...result };
+    return result;
+  }
+
   function continueInteraction(state) {
     const encounter = currentEncounter(state);
-    if (!encounter) return false;
+    if (!encounter || !encounter.pendingResult) return false;
 
     encounter.interactions += 1;
+    encounter.pendingResult = null;
     if (encounter.interactions === interactionsPerEncounter) {
       encounter.completed = true;
-      encounter.tip = placeholderTip;
+      encounter.tip = Math.max(0, 5 + encounter.mood);
       state.currentShift.totalTips += encounter.tip;
       state.currentShift.currentEncounter += 1;
       if (state.currentShift.currentEncounter === state.currentShift.encounters.length) {
@@ -106,12 +142,15 @@
   window.WaitingGame = {
     outfits,
     customers,
+    cards,
     interactionsPerEncounter,
     createState,
     selectCustomers,
     currentEncounter,
     selectOutfit,
     startShift,
+    resolveCard,
+    playCard,
     continueInteraction,
     goHome
   };
