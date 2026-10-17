@@ -1,0 +1,129 @@
+<!--
+  Waiting Game PWA page.
+  Dependencies: manifest.json, maria-arc.js, game.js, build-info.js, safety.js, ui.js, and waiting-game-sw.js.
+  Consumer: the browser, which loads this standalone app from its own folder.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#31534a">
+  <link rel="manifest" href="manifest.json">
+  <title>Waiting Game</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { min-height: 100vh; margin: 0; padding: 1rem; box-sizing: border-box; display: grid; place-items: center; background: #edf4ef; color: #203a32; }
+    main { width: min(38rem, 100%); padding: 1.5rem; box-sizing: border-box; background: white; border-radius: 1.25rem; box-shadow: 0 1rem 3rem #203a321c; }
+    .diagnostics { border: 2px solid #d58c36; padding: .75rem; }
+    .diagnostics pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 16rem; overflow: auto; font-size: .8rem; }
+    h1 { text-align: center; }
+    section { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #cbd8cf; }
+    .choices { display: flex; flex-wrap: wrap; gap: .65rem; margin-bottom: 1rem; }
+    button { min-height: 2.8rem; margin: .25rem; padding: .7rem 1rem; border: 0; border-radius: .75rem; background: #356c59; color: white; font: inherit; font-weight: 650; cursor: pointer; }
+    button:hover:not(:disabled), button[aria-pressed="true"] { background: #244d3e; }
+    button:active:not(:disabled) { transform: translateY(1px); }
+    button:disabled { cursor: not-allowed; opacity: .7; }
+    .conversation-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: .75rem; }
+    .conversation-cards .card-button {
+      min-height: 5.75rem;
+      margin: 0;
+      padding: .9rem .85rem;
+      border: 2px solid #244d3e;
+      border-radius: .2rem;
+      background: #f4fbf6;
+      color: #203a32;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      gap: .3rem;
+      font-weight: 600;
+      line-height: 1.2;
+      box-shadow:
+        inset 0 1px 0 #ffffffcc,
+        0 2px 0 #1f4134,
+        0 .45rem .75rem #203a3226;
+    }
+    .conversation-cards .card-button:hover:not(:disabled) {
+      background: #dfeee4;
+      border-color: #1c4032;
+      box-shadow:
+        inset 0 1px 0 #ffffffcc,
+        0 3px 0 #19372c,
+        0 .55rem .85rem #203a3233;
+    }
+    .conversation-cards .card-button:active:not(:disabled) {
+      background: #d1e6d7;
+      transform: translateY(2px);
+      box-shadow:
+        inset 0 1px 0 #ffffffc7,
+        0 1px 0 #19372c,
+        0 .2rem .4rem #203a321f;
+    }
+    .conversation-cards .card-button:disabled {
+      border-style: dashed;
+      background: #e7ece8;
+      color: #4a5b54;
+      box-shadow:
+        inset 0 1px 0 #ffffffa8,
+        0 1px 0 #5a6d64;
+    }
+    .card-title { display: block; font-size: 1.05rem; font-weight: 700; }
+    .card-description { display: block; font-size: .84rem; font-weight: 500; opacity: .95; }
+    button:focus-visible { outline: .2rem solid #d58c36; outline-offset: .2rem; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #17251f; color: #edf7f0; }
+      main { background: #263a31; }
+      section { border-color: #456052; }
+      button:disabled { opacity: .85; }
+      .conversation-cards .card-button {
+        background: #2f4339;
+        border-color: #8eb3a0;
+        color: #edf7f0;
+        box-shadow:
+          inset 0 1px 0 #ffffff1f,
+          0 2px 0 #18241e,
+          0 .45rem .75rem #00000059;
+      }
+      .conversation-cards .card-button:hover:not(:disabled) {
+        background: #395446;
+        border-color: #a4ccb6;
+        box-shadow:
+          inset 0 1px 0 #ffffff26,
+          0 3px 0 #141f19,
+          0 .55rem .85rem #00000070;
+      }
+      .conversation-cards .card-button:active:not(:disabled) {
+        background: #476551;
+        box-shadow:
+          inset 0 1px 0 #ffffff22,
+          0 1px 0 #141f19,
+          0 .2rem .4rem #0000004f;
+      }
+      .conversation-cards .card-button:disabled {
+        background: #2a3b33;
+        border-color: #5f7d6f;
+        color: #b8cfc2;
+        box-shadow:
+          inset 0 1px 0 #ffffff14,
+          0 1px 0 #1a2721;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Waiting Game</h1>
+  </main>
+  <script src="maria-arc.js"></script>
+  <script src="game.js"></script>
+  <script src="build-info.js"></script>
+  <script src="safety.js"></script>
+  <script src="ui.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("waiting-game-sw.js");
+  </script>
+</body>
+</html>
