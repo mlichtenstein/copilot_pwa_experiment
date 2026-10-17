@@ -1,5 +1,9 @@
 # copilot_pwa_experiment
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the issue/PR workflow and verification, [CODING_STANDARDS.md](CODING_STANDARDS.md) for code conventions, and [AGENTS.md](AGENTS.md) for agent instructions.
+
 ## Apps
 
 - [Counter](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/counter/)
