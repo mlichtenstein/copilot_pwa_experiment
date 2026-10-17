@@ -20,3 +20,11 @@ jobs:
       # Content contracts first; then execute arc journeys and recovery tests.
       - run: node apps/waiting-game/testing/validate.cjs
       - run: node --test apps/waiting-game/*.test.js
+      - run: node apps/waiting-game/testing/explore.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: waiting-game-test-reports
+          path: artifacts/waiting-game/
+          if-no-files-found: ignore
+          retention-days: 14
