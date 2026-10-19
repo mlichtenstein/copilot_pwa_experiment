@@ -24,7 +24,9 @@ document.getElementById('increment').addEventListener('click', () => {
 });
 
 // The path is relative ('sw.js', not '/sw.js') so the worker's scope is the
-// folder this page lives in. That keeps production and each PR preview isolated.
+// folder this page lives in. Each deployment's worker only controls its own
+// folder. sw.js puts that scope in the cache name so production and previews
+// do not share a Cache Storage bucket.
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');
 }

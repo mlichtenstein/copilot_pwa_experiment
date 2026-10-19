@@ -43,6 +43,6 @@ Follow the [adventure engine guide](apps/adventure/README.md) and the [Waiting G
 
 ## PWA behavior
 
-Preserve static GitHub Pages compatibility and relative URLs. Keep manifests, service-worker registration scopes, and production/preview paths working. When changing assets, update relevant service-worker asset lists and cache versions as needed; consider both installed and offline clients. Avoid cache cleanup that affects other apps or previews on the same origin.
+Preserve static GitHub Pages compatibility and relative URLs. Keep manifests, service-worker registration scopes, and production/preview paths working. When adding or removing cached files, update that worker's precache list. Each cache name includes the worker's registration scope, and the fetch handler refreshes the bucket from the network, so a content deploy does not need a cache-name bump. On activate, delete only older cache names for that same scope. Do not delete another app's or preview's caches. Consider both installed and offline clients.
 
 Preserve existing functionality outside the issue's scope and update documentation when behavior or contracts change. Record appropriate verification in the PR.
