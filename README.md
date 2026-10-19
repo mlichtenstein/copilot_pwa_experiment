@@ -52,7 +52,11 @@ The workflow publishes to a branch called `gh-pages`, which GitHub Pages serves.
 
 Production and previews coexist because each run only replaces its own folder. Runs are queued one at a time (a `concurrency` group) so they can't collide.
 
-**Why previews don't clash:** a service worker only controls the folder it was loaded from. Because `sw.js` is registered with a relative path and the manifest uses `"scope": "./"`, every preview has its own isolated worker and cache.
+**Why previews don't clash:** a service worker only controls pages under the folder it was registered from. Each app registers its worker with a relative path, and each manifest uses `"scope": "./"`. If more than one worker matches a URL, the browser uses the longest scope, so the worker for that folder controls the page. On the deployed site the site-root worker's folder also contains `apps/` and `previews/`; a nested page switches to its own worker once that worker has been registered.
+
+Cache Storage is shared by the whole origin, including every app and every `/previews/pr-N/` folder. Folder scope alone does not isolate caches. Each worker therefore names its bucket with its own registration scope, for example `counter::/copilot_pwa_experiment/apps/counter::v1` in production and `counter::/copilot_pwa_experiment/previews/pr-12/apps/counter::v1` for a preview. On activate, a worker deletes only older names that start with its own scope prefix. It does not delete another app's or preview's caches, and it leaves older shared names (such as `waiting-game-v2`) in place so a deployment that has not picked up this scheme yet can still read them.
+
+Online loads use the network (`cache: "no-cache"`) and then store that response in the scope's bucket, so a deploy shows fresh pages without renaming the cache. If the network fails, the worker serves the last copy it stored. New files still need to be added to that worker's precache list so the first offline visit has them.
 
 ## One-time setup
 
