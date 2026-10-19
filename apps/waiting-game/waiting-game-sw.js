@@ -1,24 +1,38 @@
 /*
- * Waiting Game service worker.
- * Dependencies: browser service-worker and Cache Storage APIs; the local app
- * files named in FILES.
- * Consumer: the browser, registered by index.html to cache this game.
+ * Purpose: Cache the Waiting Game for offline use within this registration's scope.
+ * Consumers: the browser, registered by index.html.
+ * Dependencies: service worker and Cache Storage APIs; files listed in FILES.
+ *
+ * Cache Storage is shared by every app and preview on this origin. The cache
+ * name includes the registration scope so production and /previews/pr-N/ do
+ * not share a bucket. Activation deletes only older names with this prefix,
+ * not every waiting-game-* cache on the origin.
  */
-const CACHE = "waiting-game-v2";
+const SCOPE_PATH = new URL(self.registration.scope).pathname.replace(/\/+$/, "") || "/";
+const CACHE_PREFIX = "waiting-game::" + SCOPE_PATH + "::";
+const CACHE = CACHE_PREFIX + "v1";
 const FILES = ["./", "index.html", "manifest.json", "game.js", "ui.js", "icon.svg"];
 
+function precache() {
+  return caches.open(CACHE).then(cache => Promise.all(FILES.map(path => {
+    const url = new URL(path, self.registration.scope);
+    return fetch(url, { cache: "no-cache" }).then(response => {
+      if (!response.ok) throw new Error("Precache failed for " + url.href + " (" + response.status + ")");
+      return cache.put(url, response);
+    });
+  })));
+}
+
 self.addEventListener("install", event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)));
-  self.skipWaiting();
+  event.waitUntil(precache().then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys().then(keys => Promise.all(
-      keys.filter(key => key.startsWith("waiting-game-") && key !== CACHE).map(key => caches.delete(key))
-    ))
+      keys.filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE).map(key => caches.delete(key))
+    )).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", event => {
@@ -27,7 +41,7 @@ self.addEventListener("fetch", event => {
     fetch(event.request, { cache: "no-cache" }).then(response => {
       if (response.ok && new URL(event.request.url).origin === self.location.origin) {
         const copy = response.clone();
-        caches.open(CACHE).then(cache => cache.put(event.request, copy));
+        event.waitUntil(caches.open(CACHE).then(cache => cache.put(event.request, copy)));
       }
       return response;
     }).catch(() => caches.match(event.request))
