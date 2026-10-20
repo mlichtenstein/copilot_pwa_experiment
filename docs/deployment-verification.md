@@ -40,3 +40,17 @@ the main-push and closed-PR paths ran. Until those events actually occur, their
 hosted behavior remains unverified; local filesystem checks and workflow inspection
 are narrower evidence. No merge or production publication is performed just to
 claim that verification. Existing fork-preview restrictions still apply.
+
+## GitHub deployment records and preview links
+
+Publishing declares `production` for main or `preview-pr-N` for a PR. GitHub
+creates deployment/status records for that environment and exposes the configured
+URL in its deployment history and the PR timeline's View deployment control.
+That URL opens Waiting Game; the existing bot comment retains links to every app.
+These records describe publishing activity, not player sessions or CI artifacts.
+
+Closed-PR directory cleanup runs in a separate job without an environment. It
+retains the existing gh-pages deletion behavior without creating a deployment for
+cleanup. Readiness polling and marking closed previews inactive are deliberately
+deferred. A successful publish means the workflow pushed the files; Pages may
+still need time to serve them. Older deployment links can remain after cleanup.
