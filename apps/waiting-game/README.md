@@ -51,10 +51,10 @@ Direct engine evaluation throws on unknown conditions/effects. The safety layer
 handles runtime recovery; tests and CI treat content errors as failures. Syntax
 errors that prevent scripts loading are not recoverable content diagnostics.
 
-## Reports and replay
+## Reports, replay, and exploration
 
 Download a debug report from any game phase. Reports contain versioned JSON,
-build identity when provided (currently `development`; deployment stamping is a separate PR), deployment path, content
+the exact deployed checkout SHA (and PR source SHA), deployment path, content
 fingerprint, the last 100 actions, their before/after states, outcomes, diagnostics,
 and dialogue-selection reasons. Older actions become a starting checkpoint;
 reports disclose how many were dropped. Diagnostics retain at most 100 notices.
@@ -80,15 +80,15 @@ content and execution checks still apply. Reports are JSON, never executable cod
 The CLI limits input to 10 MiB. Reproducing a bug then writing a readable journey
 beside the affected arc is preferable to treating a raw report as intended behavior.
 
-## Seeded exploration
-
 Run `node apps/waiting-game/testing/explore.cjs` to exercise 128 seeded three-day
 journeys, replay each, and write `artifacts/waiting-game/coverage.json`. Coverage
 counts every observed day/outfit/customer/card/outcome/exchange combination and
 lists unvisited exchanges. Intentional fallbacks count as coverage; `unwritten`
 placeholders produce coverage-gap notices. Neither proves all content is reachable.
 Unexpected diagnostics, invalid state, stuck exploration, or divergent replay fail
-the run and save a report including its seed. CI integration is a separate PR.
+the run and save a report including its seed. Test and Deploy's read-only validation
+job upload these outputs as workflow artifacts (14-day retention), even on failure.
+Publishing waits for validation success; closed-PR cleanup bypasses game checks.
 These bounded samples do not exhaust all possible play sequences.
 
 ### Scope of validation

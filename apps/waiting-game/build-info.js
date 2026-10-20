@@ -1,6 +1,6 @@
 /*
- * Purpose: Identify local and unstamped builds.
+ * Purpose: Identify unbuilt local runs; Deploy stamps this with the checked-out SHA.
  * Consumers: debug reports through safety.js.
- * Dependencies: browser window; deployment stamping is added separately.
+ * Dependencies: browser window; Deploy workflow replaces this file before publishing.
  */
 window.WaitingGameBuild = { commit: "development" };

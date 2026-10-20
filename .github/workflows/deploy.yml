@@ -50,19 +50,56 @@ jobs:
         run: |
           node apps/waiting-game/testing/validate.cjs
           node --test apps/waiting-game/*.test.js
+          node apps/waiting-game/testing/explore.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: waiting-game-deploy-reports
+          path: artifacts/waiting-game/
+          if-no-files-found: ignore
+          retention-days: 14
 
-  # needs normally skips a job when its dependency is skipped. always() lets
-  # closed-PR cleanup run after skipped validation; the explicit result check
-  # still blocks publication when validation fails. This job runs no game tests.
+  # Only publishing creates an environment/deployment record. Cleanup is a
+  # separate job below, so closing a PR cannot appear as a fresh deployment.
+  # needs keeps this job from running when validation fails or is skipped.
   deploy:
     needs: validate
-    if: always() && (needs.validate.result == 'success' || github.event.action == 'closed')
+    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     permissions:
       contents: write       # Commit/push the copied assets to gh-pages.
       pull-requests: write  # Create/update the preview-link comment.
+      deployments: write    # Record this publication in GitHub Deployments.
+    environment:
+      name: ${{ github.event_name == 'pull_request' && format('preview-pr-{0}', github.event.pull_request.number) || 'production' }}
+      url: ${{ steps.environment-url.outputs.url }}
     steps:
+      # GitHub exposes this URL in the PR timeline and deployment history.
+      # Point at Waiting Game; the bot comment still lists every app's URL.
+      - name: Set deployment URL
+        id: environment-url
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          base="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
+          if [ -n "$PR_NUMBER" ]; then base="$base/previews/pr-$PR_NUMBER"; fi
+          echo "url=$base/apps/waiting-game/" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
+      # Only workflow-owned code executes in this job; no app/test scripts.
+      - name: Stamp game build identity
+        if: github.event.action != 'closed'
+        env:
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const cp = require('node:child_process');
+          const commit = cp.execFileSync('git', ['rev-parse', 'HEAD'], {encoding: 'utf8'}).trim();
+          const build = {commit, sourceCommit: process.env.GITHUB_HEAD_SHA || commit};
+          fs.writeFileSync('apps/waiting-game/build-info.js', '/* Purpose: Identify deployed code. Consumers: debug reports. Dependencies: none. */\nwindow.WaitingGameBuild = ' + JSON.stringify(build) + ';\n');
+          NODE
+
       - name: Prepare gh-pages branch
         run: |
           if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
@@ -92,10 +129,6 @@ jobs:
           mkdir -p "$dest/apps"
           cp -r apps/. "$dest/apps/"
           touch ../gh-pages/.nojekyll
-
-      - name: Remove PR preview
-        if: github.event_name == 'pull_request' && github.event.action == 'closed'
-        run: rm -rf ../gh-pages/previews/pr-${{ github.event.pull_request.number }}
 
       - name: Commit and push
         working-directory: ../gh-pages
@@ -164,3 +197,34 @@ jobs:
           else
             gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$body"
           fi
+
+  # Preserve the existing directory deletion without recording a new deployment.
+  # Inactive statuses/environment deletion and URL readiness checks are deferred.
+  cleanup:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare gh-pages branch
+        run: |
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
+            git fetch origin gh-pages
+            git worktree add ../gh-pages gh-pages
+          else
+            git worktree add --orphan -b gh-pages ../gh-pages
+          fi
+
+      - name: Remove PR preview
+        run: rm -rf ../gh-pages/previews/pr-${{ github.event.pull_request.number }}
+
+      - name: Commit and push
+        working-directory: ../gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+          git commit -m "Deploy ${{ github.sha }}"
+          git push origin HEAD:gh-pages
