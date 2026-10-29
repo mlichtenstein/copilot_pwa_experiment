@@ -23,6 +23,17 @@
     <button id="step" type="button">Step</button><button id="reset" type="button">Reset seed</button>
     <button id="new-seed" type="button">New seed</button></div>
   <p id="stats" class="stats"></p>
+  <section aria-labelledby="rules-title">
+    <h2 id="rules-title">Rules of this experiment</h2>
+    <ul>
+      <li>Each pixel holds temperature and water. Temperature stays fixed, with colder air toward the top.</li>
+      <li>Each tick, water above the local threshold triggers a downward transfer. Warmer pixels have higher thresholds and can stop a streak.</li>
+      <li>A triggered pixel sends the <strong>Fall transfer</strong> fraction of its total water to the pixel below, keeping the rest.</li>
+      <li>All pixels update together: water travels at most one pixel per tick. Water crossing the bottom leaves the grid and counts as drained.</li>
+      <li>Water starts in noisy upper patches. No new water is added, so the run eventually settles.</li>
+    </ul>
+    <p>Local threshold = <strong>Threshold × (0.55 + 0.9 × temperature)</strong>, where temperature ranges from 0 to 1. This is a simplified rule experiment: no wind, evaporation, or separate droplets yet.</p>
+  </section>
   <section class="controls" aria-label="Experiment parameters">
     <label>View<select id="view"><option value="water">Water content</option><option value="temperature">Temperature</option><option value="saturation">Relative saturation</option></select></label>
     <label>Fall transfer <output id="transfer-value"></output><input id="transfer" type="range" min="0" max="1" step="0.05" value="0.65"></label>
@@ -36,10 +47,10 @@
     </fieldset>
   </section>
   <p id="legend">Water: dark = dry, pale blue = wet. Fixed color scale; no decorative trails.</p>
-  <details><summary>The rule</summary><p>Each tick, a cell above its temperature-dependent threshold sends the selected fraction of its water straight down. Every cell reads the old grid, so water moves at most one pixel per tick. Warm cells have higher thresholds and can stop a streak.</p>
-    <p>Temperature stays fixed. Water starts in noisy upper patches and leaves through the bottom. No replenishment, wind, evaporation, or separate droplets yet: this is a dimensionless rule experiment, not a physical precipitation model.</p></details>
+
   <p id="status" role="status"></p><noscript>This experiment needs JavaScript to run.</noscript>
 </main>
 <script type="module" src="app.js"></script>
 </body>
 </html>
+
