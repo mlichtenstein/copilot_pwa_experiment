@@ -42,15 +42,15 @@ jobs:
       orphan: ${{ steps.pack.outputs.orphan }}
       base_sha: ${{ steps.pack.outputs.base_sha }}
     steps:
-      - name: Skip deploy for fork pull request
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        run: |
-          echo "Fork pull request: skipping gh-pages prepare, publish, and push."
-
       # Checkout stays credential-free. Forks still need the tree so the review comment can list apps/.
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - name: Skip deploy for fork pull request
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "Fork pull request: skipping gh-pages prepare, publish, and push."
 
       - name: Record app directories for the review comment
         if: github.event_name == 'pull_request' && github.event.action != 'closed'
