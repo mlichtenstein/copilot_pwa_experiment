@@ -35,7 +35,7 @@ Follow existing file-local indentation, quoting, naming, and organization. Prefe
 
 ## Architecture
 
-The [README](README.md) describes the static HTML/CSS/browser JavaScript PWAs: `app/` serves the site root, `apps/` holds independent apps, and `docs/` holds design documents. There is currently no build step or automated test runner; inspect the current checkout before choosing tools.
+The [README](README.md) describes the static HTML/CSS/browser JavaScript PWAs: `app/` serves the site root, `apps/` holds independent apps, and `docs/` holds design documents. Waiting Game uses the Node built-in test runner and the Test workflow; there is no build step; inspect the current checkout before choosing tools.
 
 Keep game rules/state independent of the browser UI and authored content separate from engine logic. Keep canonical state JSON-serializable where required by the game design. Prefer content data over story-specific branches in UI code.
 
