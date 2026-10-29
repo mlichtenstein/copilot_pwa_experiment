@@ -1,0 +1,33 @@
+/* Purpose: Responsive pixel-field laboratory layout. Consumers: index.html.
+ * Dependencies: native HTML controls and canvas; no external assets. */
+:root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0b1220; color: #e0eaf6; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 900px; margin: auto; padding: 24px 18px 40px; }
+h1 { margin: 4px 0; font-size: clamp(2rem, 6vw, 3rem); font-weight: 600; }
+p { line-height: 1.55; color: #b9c9dd; }
+.eyebrow { text-transform: uppercase; font-size: .75rem; letter-spacing: .14em; color: #8ebbcf; }
+.viewport { border: 1px solid #34455e; border-radius: 10px; overflow: hidden; background: #111c30; }
+canvas { display: block; width: 100%; aspect-ratio: 4 / 3; image-rendering: pixelated; }
+.axis { display: flex; justify-content: space-between; padding: 8px 12px; font-size: .75rem; color: #abbdd6; }
+.playback { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+button, select, input[type=number] { font: inherit; color: inherit; background: #1b2a40; border: 1px solid #536781; border-radius: 6px; min-height: 44px; padding: 8px 12px; }
+button { cursor: pointer; }
+button:hover { background: #2b405b; }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid #aadbea; outline-offset: 3px; }
+#play { background: #294b5a; }
+.stats { font: .8rem ui-monospace, monospace; }
+.controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; }
+label { display: grid; gap: 7px; font-size: .9rem; min-width: 0; }
+code { overflow-wrap: anywhere; }
+label small { color: #b9c9dd; line-height: 1.4; }
+output { color: #9ed8ec; font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; min-height: 32px; accent-color: #9ed8ec; margin: 0; }
+fieldset { grid-column: 1 / -1; border: 1px solid #34455e; border-radius: 8px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; padding: 16px; min-width: 0; }
+legend, #legend, details { font-size: .85rem; color: #b9c9dd; }
+select, input[type=number] { width: 100%; min-width: 0; }
+summary { cursor: pointer; padding: 10px 0; }
+#status { font-size: .8rem; }
+@media (max-width: 480px) { main { padding: 16px 12px 32px; } .controls, fieldset { gap: 14px; } legend { max-width: 100%; } }
+
+a { color: #9ed8ec; }
