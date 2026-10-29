@@ -26,3 +26,15 @@ Maria's two-part arc, persistent narrative flags, exchange history, cross-day pr
 Design sections: 10, 11, 16.
 Unit and integration tests, basic mobile layout, production build validation, deploy via the existing GitHub Pages workflow.
 **Acceptance:** playable in the deployed PWA and all automated tests pass.
+
+## Authoring and verification pilot (after the M4 baseline)
+
+Related to #41. Before expanding gameplay, establish executable player journeys,
+collect Maria's principles/content/examples in one arc module, then pilot an
+empathy-based trust rule with successful and premature approaches. Tests accompany
+each change from this point onward; M5 retains broader coverage and deployment
+validation rather than postponing all testing until the end.
+
+Run `node --test apps/waiting-game/game.test.js` (Node 22+). The Test workflow
+runs this command on pushes and PRs. Journey examples use real controller actions;
+remaining shift choices are explicit, and helpers must not inject flags or days.
