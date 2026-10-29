@@ -1,5 +1,6 @@
-# deploy.yml - GitHub Actions workflow that publishes the app to GitHub Pages.
-# Consumer: GitHub itself runs this automatically; nobody invokes it by hand.
+# Purpose: Publish app/ and apps/ to the gh-pages branch for production and pull request previews.
+# Consumers: GitHub Actions runs this on push to main and on pull_request events. GitHub Pages serves the branch.
+# Dependencies: actions/checkout, git, the GitHub CLI (gh), and GitHub Pages from the gh-pages branch.
 #
 # How it works: the built site lives on a branch called "gh-pages", which
 # GitHub Pages serves as a website. This workflow copies app/ to the site root
@@ -8,7 +9,8 @@
 #   - pull request  -> previews/pr-N/   (a separate folder per PR)
 #   - PR closed     -> that PR's folder is deleted
 # Each step only touches its own folder, so production and previews never
-# overwrite each other.
+# overwrite each other. Published copies omit symlinks and names matching
+# .git* so those entries from app/ or apps/ are not committed to gh-pages.
 name: Deploy
 
 # When to run
@@ -36,6 +38,7 @@ jobs:
 
       - name: Prepare gh-pages branch
         run: |
+          set -euo pipefail
           if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
             git fetch origin gh-pages
             git worktree add ../gh-pages gh-pages
@@ -46,36 +49,74 @@ jobs:
       - name: Publish production (main)
         if: github.event_name == 'push'
         run: |
+          set -euo pipefail
+          # Copy source contents into dest. Symlinks and .git* names are dropped
+          # in a staging directory first so they cannot land in dest or merge into its .git.
+          copy_published() {
+            local src=$1 dest=$2 stage
+            stage=$(mktemp -d)
+            cp -r "$src/." "$stage/"
+            find "$stage" -mindepth 1 -depth \( -name '.git*' -o -type l \) -exec rm -rf {} +
+            mkdir -p "$dest"
+            cp -r "$stage/." "$dest/"
+            rm -rf "$stage"
+          }
           # Replace everything except previews/ and git metadata
           find ../gh-pages -mindepth 1 -maxdepth 1 ! -name .git ! -name previews -exec rm -rf {} +
-          cp -r app/. ../gh-pages/
-          mkdir -p ../gh-pages/apps
-          cp -r apps/. ../gh-pages/apps/
+          copy_published app ../gh-pages
+          copy_published apps ../gh-pages/apps
           touch ../gh-pages/.nojekyll
 
       - name: Publish PR preview
         if: github.event_name == 'pull_request' && github.event.action != 'closed'
+        env:
+          PR: ${{ github.event.pull_request.number }}
         run: |
-          dest=../gh-pages/previews/pr-${{ github.event.pull_request.number }}
+          set -euo pipefail
+          if [[ ! "$PR" =~ ^[0-9]+$ ]]; then
+            echo "Pull request number must be digits only" >&2
+            exit 1
+          fi
+          # Copy source contents into dest. Symlinks and .git* names are dropped
+          # in a staging directory first so they cannot land in dest or merge into its .git.
+          copy_published() {
+            local src=$1 dest=$2 stage
+            stage=$(mktemp -d)
+            cp -r "$src/." "$stage/"
+            find "$stage" -mindepth 1 -depth \( -name '.git*' -o -type l \) -exec rm -rf {} +
+            mkdir -p "$dest"
+            cp -r "$stage/." "$dest/"
+            rm -rf "$stage"
+          }
+          dest="../gh-pages/previews/pr-${PR}"
           rm -rf "$dest"
-          mkdir -p "$dest"
-          cp -r app/. "$dest/"
-          mkdir -p "$dest/apps"
-          cp -r apps/. "$dest/apps/"
+          copy_published app "$dest"
+          copy_published apps "$dest/apps"
           touch ../gh-pages/.nojekyll
 
       - name: Remove PR preview
         if: github.event_name == 'pull_request' && github.event.action == 'closed'
-        run: rm -rf ../gh-pages/previews/pr-${{ github.event.pull_request.number }}
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$PR" =~ ^[0-9]+$ ]]; then
+            echo "Pull request number must be digits only" >&2
+            exit 1
+          fi
+          rm -rf "../gh-pages/previews/pr-${PR}"
 
       - name: Commit and push
         working-directory: ../gh-pages
+        env:
+          DEPLOY_SHA: ${{ github.sha }}
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then echo "No changes"; exit 0; fi
-          git commit -m "Deploy ${{ github.sha }}"
+          git commit -m "Deploy ${DEPLOY_SHA}"
           git push origin HEAD:gh-pages
 
       - name: Post review deployments comment
@@ -85,7 +126,9 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
           JOB_STATUS: ${{ job.status }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          set -euo pipefail
           base="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/previews/pr-${PR}"
           files=$(gh pr diff "$PR" --repo "$GITHUB_REPOSITORY" --name-only || true)
           all=false
@@ -125,7 +168,7 @@ jobs:
           done <<< "$apps"
           [ "$found" = true ] || body+="No deployable app changed in this PR, so there is no preview."$'\n'
           if [ "$JOB_STATUS" = success ] && [ "$IS_FORK" != true ]; then
-            body+=$'\n'"Updated for commit ${{ github.event.pull_request.head.sha }}. Links may take a minute to go live after GitHub Pages rebuilds."
+            body+=$'\n'"Updated for commit ${HEAD_SHA}. Links may take a minute to go live after GitHub Pages rebuilds."
           fi
 
           id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
