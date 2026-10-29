@@ -29,3 +29,5 @@ select, input[type=number] { width: 100%; min-width: 0; }
 summary { cursor: pointer; padding: 10px 0; }
 #status { font-size: .8rem; }
 @media (max-width: 480px) { main { padding: 16px 12px 32px; } .controls, fieldset { gap: 14px; } legend { max-width: 100%; } }
+
+a { color: #9ed8ec; }
