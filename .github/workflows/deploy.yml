@@ -1,5 +1,6 @@
-# deploy.yml - GitHub Actions workflow that publishes the app to GitHub Pages.
-# Consumer: GitHub itself runs this automatically; nobody invokes it by hand.
+# Purpose: Publish app/ at the site root and apps/ under apps/ on the gh-pages branch.
+# Consumers: GitHub Actions runs this on push to main and on pull_request events. GitHub Pages serves the branch.
+# Dependencies: actions/checkout, actions/upload-artifact, actions/download-artifact, git, and the GitHub CLI (gh).
 #
 # How it works: the built site lives on a branch called "gh-pages", which
 # GitHub Pages serves as a website. This workflow copies app/ to the site root
@@ -9,6 +10,10 @@
 #   - PR closed     -> that PR's folder is deleted
 # Each step only touches its own folder, so production and previews never
 # overwrite each other.
+# The default token is contents: read. The build job checks out and copies
+# files with that read-only token and does not persist it in .git/config.
+# Only the deploy job, which pushes gh-pages and posts the review comment,
+# has write scopes. Pull requests from forks skip the deploy and push steps.
 name: Deploy
 
 # When to run
@@ -18,10 +23,9 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
 
-# contents: write lets us push to gh-pages; pull-requests: write lets us comment
+# Read-only unless a job below opts into a write scope.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 # Run one deployment at a time so two runs can't push to gh-pages simultaneously
 concurrency:
@@ -29,12 +33,49 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  # Checkout and copy only. This job never has a write token.
+  build:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
+    outputs:
+      orphan: ${{ steps.pack.outputs.orphan }}
+      base_sha: ${{ steps.pack.outputs.base_sha }}
     steps:
+      - name: Skip deploy for fork pull request
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "Fork pull request: skipping gh-pages prepare, publish, and push."
+
+      # Checkout stays credential-free. Forks still need the tree so the review comment can list apps/.
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Record app directories for the review comment
+        if: github.event_name == 'pull_request' && github.event.action != 'closed'
+        run: |
+          # Directory names only. The comment lists apps/ from this index, not from gh-pages.
+          root="${RUNNER_TEMP}/source-app-index"
+          mkdir -p "$root/apps"
+          echo ok > "$root/index-ready"
+          for dir in apps/*/; do
+            [ -d "$dir" ] || continue
+            mkdir -p "$root/$dir"
+            echo ok > "$root/${dir}index-ready"
+          done
+
+      - name: Upload app directory index
+        if: github.event_name == 'pull_request' && github.event.action != 'closed'
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-app-index
+          path: ${{ runner.temp }}/source-app-index
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Prepare gh-pages branch
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         run: |
           if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
             git fetch origin gh-pages
@@ -54,7 +95,7 @@ jobs:
           touch ../gh-pages/.nojekyll
 
       - name: Publish PR preview
-        if: github.event_name == 'pull_request' && github.event.action != 'closed'
+        if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
         run: |
           dest=../gh-pages/previews/pr-${{ github.event.pull_request.number }}
           rm -rf "$dest"
@@ -65,26 +106,99 @@ jobs:
           touch ../gh-pages/.nojekyll
 
       - name: Remove PR preview
-        if: github.event_name == 'pull_request' && github.event.action == 'closed'
+        if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
         run: rm -rf ../gh-pages/previews/pr-${{ github.event.pull_request.number }}
 
-      - name: Commit and push
-        working-directory: ../gh-pages
+      - name: Pack gh-pages tree
+        id: pack
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         run: |
+          if git -C ../gh-pages rev-parse --verify HEAD >/dev/null 2>&1; then
+            echo "orphan=false" >> "$GITHUB_OUTPUT"
+            echo "base_sha=$(git -C ../gh-pages rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          else
+            echo "orphan=true" >> "$GITHUB_OUTPUT"
+            echo "base_sha=" >> "$GITHUB_OUTPUT"
+          fi
+          tar --exclude=.git -C ../gh-pages -cf gh-pages.tar .
+
+      - name: Upload gh-pages tree
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/upload-artifact@v4
+        with:
+          name: gh-pages-tree
+          path: gh-pages.tar
+          if-no-files-found: error
+          retention-days: 1
+
+  # Push the packed tree and post the review comment. Fork pull requests skip the push.
+  deploy:
+    needs: build
+    if: always() && !cancelled() && ((github.event_name == 'push' && needs.build.result == 'success') || github.event_name == 'pull_request')
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout gh-pages
+        if: needs.build.result == 'success' && needs.build.outputs.orphan != 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.build.outputs.base_sha }}
+          persist-credentials: false
+
+      - name: Initialize gh-pages
+        if: needs.build.result == 'success' && needs.build.outputs.orphan == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        run: |
+          git init -b gh-pages
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+
+      - name: Download gh-pages tree
+        if: needs.build.result == 'success' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: actions/download-artifact@v4
+        with:
+          name: gh-pages-tree
+          path: ${{ runner.temp }}/gh-pages-tree
+
+      - name: Commit and push
+        if: needs.build.result == 'success' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SITE_TAR: ${{ runner.temp }}/gh-pages-tree/gh-pages.tar
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          tar -xf "$SITE_TAR"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then echo "No changes"; exit 0; fi
           git commit -m "Deploy ${{ github.sha }}"
-          git push origin HEAD:gh-pages
+          # The helper reads GH_TOKEN when it runs. The token is not written to .git/config.
+          git -c credential.helper= \
+            -c 'credential.helper=!f() { echo "username=x-access-token"; echo "password=$GH_TOKEN"; }; f' \
+            push origin HEAD:gh-pages
+
+      - name: Download app directory index
+        if: always() && github.event_name == 'pull_request' && github.event.action != 'closed'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: source-app-index
+          path: ${{ runner.temp }}/source-app-index
+
+      - name: Ensure app directory index
+        if: always() && github.event_name == 'pull_request' && github.event.action != 'closed'
+        run: mkdir -p "${{ runner.temp }}/source-app-index/apps"
 
       - name: Post review deployments comment
         if: always() && github.event_name == 'pull_request' && github.event.action != 'closed'
+        working-directory: ${{ runner.temp }}/source-app-index
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
-          JOB_STATUS: ${{ job.status }}
+          JOB_STATUS: ${{ needs.build.result == 'success' && job.status == 'success' && 'success' || 'failure' }}
         run: |
           base="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/previews/pr-${PR}"
           files=$(gh pr diff "$PR" --repo "$GITHUB_REPOSITORY" --name-only || true)
@@ -131,7 +245,18 @@ jobs:
           id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
             --jq "[.[] | select(.user.login==\"github-actions[bot]\" and (.body | contains(\"$marker\")))][0].id // empty" | head -n1)
           if [ -n "$id" ]; then
-            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" >/dev/null
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" >/dev/null || comment_rc=$?
           else
-            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$body"
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$body" || comment_rc=$?
           fi
+          if [ "${comment_rc:-0}" -ne 0 ]; then
+            if [ "$IS_FORK" = true ]; then
+              echo "Fork pull request: the review comment was not posted because the token is read-only. Continuing."
+              exit 0
+            fi
+            exit "$comment_rc"
+          fi
+
+      - name: Fail when the site was not built
+        if: always() && needs.build.result != 'success' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        run: exit 1

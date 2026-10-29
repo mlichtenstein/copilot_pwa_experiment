@@ -62,7 +62,7 @@ Online loads use the network (`cache: "no-cache"`) and then store that response 
 
 1. Merge to `main` (or push) so the workflow runs once and creates the `gh-pages` branch.
 2. **Settings → Pages**: set source to *Deploy from a branch*, branch `gh-pages`, folder `/ (root)`.
-3. **Settings → Actions → General → Workflow permissions**: choose *Read and write permissions*.
+3. **Settings → Actions → General → Workflow permissions**: the restricted read default is enough. The workflow requests `contents: read` by default. Only the job that pushes `gh-pages` requests `contents: write`, and that same job requests `pull-requests: write` for the review comment.
 
 ## URLs
 
@@ -81,4 +81,4 @@ Online loads use the network (`cache: "no-cache"`) and then store that response 
 
 ## Limitations
 
-PRs from forks can't push to `gh-pages`, so they get no preview.
+PRs from forks skip the gh-pages deploy and push, so they get no preview. The review comment is posted when the token can write; a read-only fork token does not fail the workflow.
