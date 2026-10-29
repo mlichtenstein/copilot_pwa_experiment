@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<!-- Purpose: Rain experiment controls and field display. Consumers: browser.
+     Dependencies: style.css, app.js, manifest.json. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111c30">
+  <title>Cloud Simulator · Rain study</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header><p class="eyebrow">Cloud simulator / Experiment 01</p><h1>Rain study</h1>
+    <p>Two fields. One local rule. See what falls.</p></header>
+  <section class="viewport" aria-label="Vertical slice of the atmosphere">
+    <canvas id="sky" width="128" height="96" role="img" aria-label="Animated pixel grid showing atmospheric water; use the view menu for temperature or saturation."></canvas>
+    <div class="axis"><span>Cold upper air</span><span>Warm lower air ↓</span></div>
+  </section>
+  <div class="playback"><button id="play" type="button" aria-pressed="true">Pause</button>
+    <button id="step" type="button">Step</button><button id="reset" type="button">Reset seed</button>
+    <button id="new-seed" type="button">New seed</button></div>
+  <p id="stats" class="stats"></p>
+  <section class="controls" aria-label="Experiment parameters">
+    <label>View<select id="view"><option value="water">Water content</option><option value="temperature">Temperature</option><option value="saturation">Relative saturation</option></select></label>
+    <label>Fall transfer <output id="transfer-value"></output><input id="transfer" type="range" min="0" max="1" step="0.05" value="0.65"></label>
+    <label>Threshold <output id="threshold-value"></output><input id="threshold" type="range" min="0.05" max="1.5" step="0.05" value="0.4"></label>
+    <label>Ticks / second <output id="speed-value"></output><input id="speed" type="range" min="1" max="40" step="1" value="15"></label>
+    <fieldset><legend>Starting fields · changing these resets the run</legend>
+      <label>Water amount <output id="moisture-value"></output><input id="moisture" type="range" min="0" max="4" step="0.1" value="1.7"></label>
+      <label>Temperature noise <output id="noise-value"></output><input id="noise" type="range" min="0" max="2" step="0.05" value="0.35"></label>
+      <label>Patch size <output id="patch-value"></output><input id="patch" type="range" min="2" max="24" step="1" value="8"></label>
+      <label>Seed<input id="seed" type="number" min="0" max="4294967295" step="1" value="42"></label>
+    </fieldset>
+  </section>
+  <p id="legend">Water: dark = dry, pale blue = wet. Fixed color scale; no decorative trails.</p>
+  <details><summary>The rule</summary><p>Each tick, a cell above its temperature-dependent threshold sends the selected fraction of its water straight down. Every cell reads the old grid, so water moves at most one pixel per tick. Warm cells have higher thresholds and can stop a streak.</p>
+    <p>Temperature stays fixed. Water starts in noisy upper patches and leaves through the bottom. No replenishment, wind, evaporation, or separate droplets yet: this is a dimensionless rule experiment, not a physical precipitation model.</p></details>
+  <p id="status" role="status"></p><noscript>This experiment needs JavaScript to run.</noscript>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>

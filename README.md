@@ -1,3 +1,4 @@
+<!-- Purpose: Repository overview and app navigation. Consumers: users and contributors. Dependencies: app folders and contribution documents. -->
 # copilot_pwa_experiment
 
 ## Contributing
@@ -5,6 +6,8 @@
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the issue/PR workflow and verification, [CODING_STANDARDS.md](CODING_STANDARDS.md) for code conventions, and [AGENTS.md](AGENTS.md) for agent instructions.
 
 ## Apps
+
+- [Cloud simulator · Rain study](apps/cloud-simulator/)
 
 - [Counter](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/counter/)
 - [Dice roll / coin flip](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/dice/)
@@ -35,6 +38,7 @@ The app itself is deliberately trivial: it says "Hello World!" and has a button 
 | `app/sw.js` | Service worker: offline caching, required for installability |
 | `app/icons/` | App icons (192 and 512 px) |
 | `.github/workflows/deploy.yml` | The deployment automation |
+| `apps/cloud-simulator/` | Temperature/water cellular rain experiment; see its [guide](apps/cloud-simulator/README.md) |
 | `apps/counter/` | A standalone counter PWA |
 | `apps/dice/` | Dice roller and coin flip PWA |
 | `apps/adventure/` | Button-driven, three-room text adventure |
