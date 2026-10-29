@@ -24,10 +24,12 @@ module.exports = [
     name: 'Humor cannot skip the first conversation, even on a later day',
     run(player) {
       player.beginDay();
+      player.meet('maria');
       player.play('sass');
       player.expectDialogue('sass-success-fallback');
       player.finishDay(['sass', 'sass', 'sass']);
       player.beginDay();
+      player.meet('maria');
       player.play('sass');
       player.expectDialogue('sass-success-fallback');
       player.expectFlag('maria.considering_quitting', false);
@@ -37,6 +39,7 @@ module.exports = [
     name: 'Maria does not decide to quit during the first visit',
     run(player) {
       player.beginDay();
+      player.meet('maria');
       player.play('empathize');
       player.play('sass');
       player.expectDialogue('sass-success-fallback');
