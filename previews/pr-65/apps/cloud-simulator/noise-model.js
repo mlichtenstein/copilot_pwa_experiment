@@ -1,10 +1,12 @@
 /*
  * Purpose: Browser-independent noise-weather experiment: humidity, temperature and pressure
  *   are slices of seeded 3D gradient noise moving through time and scrolling with one global
- *   wind; cloud forms where relative humidity, weighted by a cloud-layer band of height,
- *   crosses a threshold; charged cloud drops real rain that falls slowly, drifts with the
- *   wind, evaporates (fast once no cloud is left above it) and collects; plus the views and
- *   the rain-streak layer that draws rain falling out of cloud bases.
+ *   wind; the noise only forces the weather: where relative humidity, weighted by a
+ *   cloud-layer band of height, crosses a threshold, stored cloud water condenses fast, and
+ *   it evaporates slowly once the forcing is gone; dense, lasting cloud water turns into real
+ *   rain (draining the cloud) that falls slowly, drifts with the wind, evaporates (fast once
+ *   no cloud is left above it) and collects; plus the views and the rain-streak layer that
+ *   draws rain falling out of cloud bases.
  * Consumers: noise.js and noise-model.test.js.
  * Dependencies: none; values are dimensionless experimental units, not a weather model.
  */
@@ -33,6 +35,9 @@ export const defaults = {
   // the centre (a sharper bottom); `layerSharpness` 2 is a Gaussian, higher is flatter
   // inside with sharper edges.
   layerHeight: 0.45, layerThickness: 0.3, layerAsymmetry: 0.35, layerSharpness: 4,
+  // Persistence: 0 = cloud vanishes about as fast as the noise moves on, 1 = it lingers for
+  // tens of seconds (see dissipation).
+  persistence: 0.6,
   // Rain: rain made per tick by charged cloud (× density), and fall speed in pixels per tick.
   rainAmount: 0.003, fallSpeed: 0.25
 };
@@ -40,7 +45,15 @@ export const defaults = {
 // Fixed rules.
 export const RULES = {
   pressureLift: 0.3, cloudThreshold: 1, cloudGain: 8,
-  charge: 0.02, discharge: 0.04, rainThreshold: 0.6,
+  // Cloud water closes 30% of the gap to the forcing's potential per tick when the potential
+  // is higher (fast condensation); when it is lower it only loses `dissipation(persistence)`
+  // per tick (slow evaporation).
+  condensation: 0.3,
+  // Rain needs dense cloud water (≥ denseWater) that has stayed dense: charge builds by
+  // `charge` per tick there and falls 10% per tick elsewhere; at `rainThreshold` it rains.
+  // Each unit of rain made takes `rainDrain` units of cloud water, so a cloud cut off from
+  // its forcing rains itself back below denseWater and stops, while the cloud remains.
+  denseWater: 0.8, charge: 0.012, discharge: 0.1, rainThreshold: 0.6, rainDrain: 2,
   // Rain dries 1.5% per tick outside cloud while cloud is still overhead (a falling shaft),
   // and 10% per tick once its column has no cloud above (the cloud it fell from is gone).
   rainEvaporation: 0.015, orphanEvaporation: 0.1, puddleEvaporation: 0.002
@@ -51,6 +64,12 @@ export const RULES = {
 export function textureShape(texture = defaults.texture) {
   const t = Math.max(0, Math.min(1, texture));
   return { octaves: 1 + 5 * t, roughness: 0.3 + 0.45 * t };
+}
+
+// Cloud water lost per tick where the forcing has gone: persistence 0 → 0.04 (a full cloud
+// gone in about 25 ticks), 1 → about 0.0013 (about 800 ticks); default 0.6 → 0.005.
+export function dissipation(persistence = defaults.persistence) {
+  return 0.04 * Math.pow(10, -1.5 * Math.max(0, Math.min(1, persistence)));
 }
 
 // Fixed slope of the capacity curve, as in the convection study: cold air holds
@@ -137,17 +156,28 @@ export function createWeather({ width = 128, height = 96, seed = 1 } = {}) {
   const zeros = () => new Array(size).fill(0);
   const simulation = { width, height, seed: seed >>> 0, tick: 0,
     humidity: zeros(), temperature: zeros(), pressure: zeros(),
-    relative: zeros(), cloud: zeros(), charge: zeros(), rain: zeros(),
+    // potential: the cloud the noise forces this tick; cloud: the stored cloud water.
+    relative: zeros(), potential: zeros(), cloud: zeros(), charge: zeros(), rain: zeros(), made: zeros(),
     puddle: new Array(width).fill(0), rained: 0, evaporated: 0,
-    // Accumulated wind scroll and field time, so slider changes never jump the view.
-    scroll: 0, time: 0, band: new Array(height).fill(1) };
+    // Accumulated wind scroll and field time, so slider changes never jump the view;
+    // `shifted` is how many whole pixels the stored cloud fields have been carried.
+    scroll: 0, shifted: 0, time: 0, band: new Array(height).fill(1) };
   sampleFields(simulation, defaults);
+  startCloud(simulation);
+  return simulation;
+}
+
+// Start (or restart) with cloud water equal to the current potential, so a run opens on a
+// sky that already has its clouds.
+export function startCloud(simulation) {
+  for (let i = 0; i < simulation.cloud.length; i++) simulation.cloud[i] = simulation.potential[i];
   return simulation;
 }
 
 export const altitudeOf = (i, width, height) => 1 - Math.floor(i / width) / (height - 1);
 
-// Fill the fields, relative humidity and cloud for the current state. Each field is a 2D
+// Fill the fields, relative humidity and cloud potential for the current state (stored
+// cloud water only changes in step). Each field is a 2D
 // slice at the current time through its own 3D noise, shifted right by the wind scroll.
 export function sampleFields(simulation, options = {}) {
   const rules = { ...defaults, ...options };
@@ -170,7 +200,29 @@ export function sampleFields(simulation, options = {}) {
     const capacity = saturation(simulation.temperature[i], simulation.pressure[i]);
     simulation.relative[i] = Math.max(0, simulation.humidity[i]) / capacity;
     const forming = simulation.relative[i] * simulation.band[Math.floor(i / width)];
-    simulation.cloud[i] = Math.max(0, Math.min(1, (forming - RULES.cloudThreshold) * RULES.cloudGain));
+    simulation.potential[i] = Math.max(0, Math.min(1, (forming - RULES.cloudThreshold) * RULES.cloudGain));
+  }
+}
+
+// Carry a stored field with the wind in whole pixels (wrapping), so it never blurs and
+// stays within a pixel of the noise scroll.
+function shiftColumns(values, width, height, by) {
+  const shift = ((by % width) + width) % width;
+  if (!shift) return;
+  for (let y = 0; y < height; y++) {
+    const row = values.slice(y * width, (y + 1) * width);
+    for (let x = 0; x < width; x++) values[y * width + (x + shift) % width] = row[x];
+  }
+}
+
+// Cloud water follows its potential up fast and down slowly.
+export function condense(simulation, options = {}) {
+  const rules = { ...defaults, ...options };
+  const { cloud, potential } = simulation, loss = dissipation(rules.persistence);
+  for (let i = 0; i < cloud.length; i++) {
+    if (potential[i] > cloud[i]) cloud[i] += RULES.condensation * (potential[i] - cloud[i]);
+    else cloud[i] = Math.max(potential[i], cloud[i] - loss);
+    if (cloud[i] < 1e-3) cloud[i] = 0;
   }
 }
 
@@ -194,8 +246,9 @@ function advect(values, width, height, dx, dy, spill) {
   for (let i = 0; i < values.length; i++) values[i] = next[i];
 }
 
-// One tick: advance time and the wind scroll, resample the fields, charge lingering cloud,
-// then move rain.
+// One tick: advance time and the wind scroll, carry the stored cloud with it, resample the
+// forcing, condense or evaporate cloud water, turn dense lasting cloud into rain, then move
+// rain.
 export function step(simulation, options = {}) {
   const rules = { ...defaults, ...options };
   const { width, height, cloud, charge, rain, puddle } = simulation;
@@ -203,10 +256,13 @@ export function step(simulation, options = {}) {
   simulation.time += rules.changeSpeed;
   simulation.scroll += rules.wind;
   const fall = Math.max(0, Math.min(1, rules.fallSpeed));
-  // Charge belongs to the drifting cloud, so it moves with the wind.
-  if (rules.wind) advect(charge, width, height, rules.wind, 0);
+  // Cloud water and its charge drift with the wind, whole pixels at a time.
+  const shift = Math.round(simulation.scroll) - simulation.shifted;
+  if (shift) { shiftColumns(cloud, width, height, shift); shiftColumns(charge, width, height, shift); simulation.shifted += shift; }
   sampleFields(simulation, rules);
-  formRain(simulation, rules);
+  condense(simulation, rules);
+  // Kept for the views and tests: rain made at each pixel this tick.
+  simulation.made = formRain(simulation, rules);
   // Rain outside cloud dries: slowly in a shaft under cloud, fast once no cloud is left
   // anywhere above it in its column, so rain never hangs in clear sky.
   for (let x = 0; x < width; x++) {
@@ -228,17 +284,21 @@ export function step(simulation, options = {}) {
   return simulation;
 }
 
-// Cloud that stays together charges up; clear air lets the charge drain away. Charged
-// cloud rains `rainAmount × density` per tick, so rain is only ever made inside cloud.
-// Returns the amount made at each pixel this tick.
+// Cloud water that stays dense charges up; anywhere thinner the charge drains fast. Charged
+// dense cloud rains up to `rainAmount` per tick (more the denser it is above denseWater),
+// and pays for it in cloud water, so rain is only made in dense cloud cores and stops once
+// a cloud without forcing has rained itself thin. Returns the amount made at each pixel.
+export const raining = (simulation, i) => simulation.cloud[i] >= RULES.denseWater && simulation.charge[i] >= RULES.rainThreshold;
 export function formRain(simulation, options = {}) {
   const rules = { ...defaults, ...options };
   const { cloud, charge, rain } = simulation, made = new Array(cloud.length).fill(0);
   for (let i = 0; i < cloud.length; i++) {
-    if (cloud[i] > 0) charge[i] = Math.min(1, charge[i] + RULES.charge * cloud[i]);
+    if (cloud[i] >= RULES.denseWater) charge[i] = Math.min(1, charge[i] + RULES.charge);
     else charge[i] *= 1 - RULES.discharge;
-    if (cloud[i] > 0 && charge[i] >= RULES.rainThreshold) {
-      made[i] = rules.rainAmount * cloud[i];
+    if (raining(simulation, i)) {
+      const excess = Math.min(1, (cloud[i] - RULES.denseWater) / (1 - RULES.denseWater));
+      made[i] = rules.rainAmount * (0.25 + 0.75 * excess);
+      cloud[i] = Math.max(0, cloud[i] - RULES.rainDrain * made[i]);
       rain[i] += made[i]; simulation.rained += made[i];
     }
   }
@@ -251,7 +311,8 @@ export const pooledRain = simulation => simulation.puddle.reduce((sum, value) =>
 
 // ---- Rain streaks (display only) ----------------------------------------------------------
 // The Sunset view draws rain as thin, soft streaks. Each is born just under the base of a
-// raining cloud (the lowest cloud pixel in its column, with rain falling out of it), at a
+// raining cloud (the lowest cloud pixel in a column that holds a raining dense core, with
+// rain falling out of it), at a
 // random sub-pixel x and a random tick; birth is likelier where rain is heavier and where a
 // slow, wind-carried clumping noise is high, so streaks gather into uneven shafts. Lengths
 // are heavy-tailed (truncated power law, 3 to 30 px: mostly short, a few long), and each
@@ -306,9 +367,12 @@ export function updateRainLayer(layer, simulation, options = {}) {
     if (!covered) streak.fade = (streak.fade ?? 1) * STREAK.orphanFade;
   }
   layer.streaks = layer.streaks.filter(streak => streak.age < streak.life && streak.y - streak.length < height && (streak.fade ?? 1) > 0.05);
+  // Columns with a raining dense core: streaks start only under those.
+  const source = new Array(width).fill(false);
+  for (let i = 0; i < width * height; i++) if (raining(simulation, i)) source[i % width] = true;
   for (let k = 0; k < STREAK.spawnTries && layer.streaks.length < STREAK.max; k++) {
     const x = random() * width, column = Math.floor(x), base = bases[column];
-    if (base < 0) continue;
+    if (base < 0 || !source[column]) continue;
     // Rain falling out of the base: the base pixel and the two below it.
     let falling = 0;
     for (let row = base; row <= Math.min(height - 1, base + 2); row++) falling += rain[row * width + column];
@@ -393,12 +457,12 @@ export function renderWeather(simulation, view = "sunset", options = {}, layer =
     else if (view === "temperature") rgb = diverging(temperature[i], [70, 120, 255], [255, 90, 60]);
     else if (view === "pressure") rgb = diverging(0.5 + 0.5 * pressure[i], [170, 80, 220], [240, 210, 90]);
     else if (view === "relative") {
-      // Cloud-forming strength: relative humidity × the layer band; orange where it forms.
+      // Forcing: relative humidity × the layer band; orange where it forms cloud.
       const forming = relative[i] * band[y];
       rgb = forming >= RULES.cloudThreshold ? [255, 150, 60] : mix([10, 14, 30], [200, 220, 240], clip01(forming / RULES.cloudThreshold));
     } else if (view === "water") {
       rgb = mix([12, 14, 24], [230, 232, 240], cloud[i]);
-      if (simulation.charge[i] >= RULES.rainThreshold && cloud[i] > 0) rgb = mix(rgb, [255, 220, 120], 0.35);
+      if (raining(simulation, i)) rgb = mix(rgb, [255, 220, 120], 0.35);
       rgb = mix(rgb, RAIN, clip01(rain[i] / RAIN_SCALE));
     } else {
       // Sunset: banded sky, cloud in four shades (lit where the cloud thins toward the low

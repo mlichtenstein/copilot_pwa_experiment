@@ -4,7 +4,7 @@
  * Dependencies: noise-model.js, page element IDs, Canvas 2D and service worker APIs.
  */
 import { defaults, createWeather, step, sampleFields, renderWeather, airborneRain, pooledRain,
-  createRainLayer, updateRainLayer } from "./noise-model.js";
+  createRainLayer, updateRainLayer, startCloud } from "./noise-model.js";
 
 const element = id => document.getElementById(id);
 const canvas = element("sky");
@@ -15,8 +15,8 @@ const liveRules = Object.keys(defaults).filter(id => element(id));
 const TICKS_PER_SECOND = 20;
 const legends = {
   sunset: "Sunset: clouds lit peach toward the low sun at lower right and grey-violet where thick; soft grey streaks = rain falling from cloud bases; blue floor = puddles.",
-  water: "Cloud and rain: white = cloud, gold tint = cloud mature enough to rain, pale blue = rain in the air.",
-  relative: "Cloud forming: relative humidity × the cloud-layer band; brighter = closer to forming, orange = cloud forms.",
+  water: "Cloud and rain: white = stored cloud water, gold tint = dense, lasting cloud that is raining, pale blue = rain in the air.",
+  relative: "Cloud forcing: relative humidity × the cloud-layer band; brighter = closer to forming, orange = cloud condenses here now.",
   humidity: "Humidity: dark = dry, blue = moist.",
   temperature: "Temperature: blue = cold, red = warm.",
   pressure: "Pressure: purple = low (more cloud), yellow = high (clearer)."
@@ -53,6 +53,7 @@ function reset() {
   simulation = createWeather({ width: canvas.width, height: canvas.height, seed });
   rain = createRainLayer(seed);
   sampleFields(simulation, rules());
+  startCloud(simulation);
   elapsed = 0;
   render();
 }
@@ -62,8 +63,10 @@ for (const id of liveRules) {
   update();
   element(id).addEventListener("input", () => {
     update();
-    // Slider changes show at once, even while paused.
+    // Slider changes show at once: the forcing always, and while paused the cloud is reset
+    // to it (playing, the stored cloud follows at its own pace).
     sampleFields(simulation, rules());
+    if (!running) startCloud(simulation);
     render();
   });
 }
