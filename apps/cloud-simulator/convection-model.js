@@ -1,6 +1,7 @@
 /*
  * Purpose: Browser-independent convection experiment: heated floor, cooled lid,
- *   buoyant overturning, cloud, falling rain, evaporation and a closed water cycle.
+ *   buoyant overturning, cloud, falling rain, evaporation, a closed water cycle and an
+ *   optional warm inversion that caps the convection; plus the views that draw it.
  * Consumers: convection.js and convection-model.test.js.
  * Dependencies: none; values are dimensionless experimental units, not a weather model.
  */
@@ -11,7 +12,12 @@ export const defaults = {
   diffusion: 0.01, saturation: 1, latentHeat: 0.35, condensation: 0.25,
   evaporation: 0.08, expansion: 0.5, surfaceEvaporation: 0.2, surfaceHumidity: 0.4,
   rainThreshold: 0.005, autoconversion: 0.3, rainEvaporation: 0.03, fallSpeed: 1,
-  loading: 0.4, flicker: 0.6, maxSpeed: 0.24
+  loading: 0.4, flicker: 0.6, maxSpeed: 0.24,
+  // Inversion: a warm, stable layer (see step 1b).
+  inversion: true, inversionHeight: 0.6, inversionDepth: 0.1, inversionBase: 0.4, inversionStrength: 0.35,
+  inversionRate: 0.02,
+  // Drawing only (Sunset view): "cumulus" shaped cloud or "raw" cloud water, and frayed edges.
+  cloudStyle: "cumulus", feather: true
 };
 
 // Fixed slope of the saturation curve: cold air holds about e^-3 ≈ 5% of hot air.
@@ -62,6 +68,14 @@ export function createConvection({ width = 128, height = 96, seed = 42, water = 
   for (let i = 0; i < size; i++) simulation.vapor[i] *= scale;
   simulation.pool.fill(Math.max(0, water * size - airborne * scale) / width);
   return simulation;
+}
+
+// Environmental temperature the inversion holds above `inversionHeight`; undefined below,
+// where only the floor and lid set the temperature.
+export function inversionTarget(altitude, rules = defaults) {
+  if (altitude < rules.inversionHeight) return undefined;
+  const t = Math.min(1, (altitude - rules.inversionHeight) / rules.inversionDepth);
+  return rules.inversionBase + rules.inversionStrength * t * t * (3 - 2 * t);
 }
 
 export function totalWater(simulation) {
@@ -122,6 +136,25 @@ export function step(simulation, options = {}) {
     const deficit = rules.surfaceHumidity * rules.saturation - vapor[floor];
     const lift = Math.min(simulation.pool[x], Math.max(0, rules.surfaceEvaporation * deficit));
     simulation.pool[x] -= lift; vapor[floor] += lift; temperature[floor] -= rules.latentHeat * lift;
+  }
+
+  // 1b. Inversion. Sinking air in the real atmosphere warms as it is compressed, so the
+  //     air aloft can be warmer than the air under it (a subsidence or trade-wind
+  //     inversion). Above `inversionHeight` the air is relaxed at `inversionRate` per tick
+  //     toward a sounding that warms by `inversionStrength` over `inversionDepth`, then
+  //     stays warm up to the lid. A plume from the mixed layer below arrives cooler than
+  //     the air beside it, so it stops rising and spreads sideways under the layer. The
+  //     sounding starts at `inversionBase`, cooler than the mixed layer, which stands in
+  //     for the cloud-top cooling that keeps a real capped layer overturning.
+  if (rules.inversion) {
+    for (let y = 1; y < height - 1; y++) {
+      const target = inversionTarget(1 - y / (height - 1), rules);
+      if (target === undefined) continue;
+      for (let x = 0; x < width; x++) {
+        const i = y * width + x;
+        temperature[i] += rules.inversionRate * (target - temperature[i]);
+      }
+    }
   }
 
   // 2. Phase changes. Supersaturated vapor condenses into cloud (`liquid`) and warms the
@@ -227,10 +260,22 @@ const RAIN_COLOR = [175, 235, 255];
 // - That puff field is blurred by CLOUD_BLUR pixels, so filaments thinner than that fade
 //   and masses round off, and a soft threshold (smoothstep over CLOUD_EDGE) makes it an
 //   opaque body with a defined edge a pixel or two wide.
+// - Cloud water pressed under warmer air (CAP_SCALE warmer, CAP_REACH pixels above) is
+//   also solid: a flat layer spread under the inversion, as stratocumulus are.
 // - A fixed smooth pattern scallops the edge into rounded lobes (see `billows`).
+// - Feathered edges: a wider blur of the same puff field, frayed by fractal noise (see
+//   `fray`), adds a translucent fringe that fades out over several pixels around the
+//   solid core. Shading and shadows use the core alone.
+// - The "raw" style skips all of this and draws the cloud water itself as smoke.
 export const CLOUD_DEPTH_SCALE = 0.004, WARM_SCALE = 0.06, CLOUD_BLUR = 3, CLOUD_EDGE = [0.25, 0.42], BILLOW = 0.45;
+// Capped cloud: CAP_SCALE warmer air CAP_REACH pixels above makes cloud water solid.
+export const CAP_SCALE = 0.1, CAP_REACH = 4;
+// Feathered edges: fringe threshold range, noise strength and fringe opacity.
+export const FEATHER_EDGE = [0.04, 0.4], FEATHER = 1.4, FEATHER_OPACITY = 0.75, FEATHER_BLUR = 4.5;
 // Air near saturation adds a faint haze from 90% relative humidity (at most HAZE_OPACITY).
 export const HAZE_START = 0.9, HAZE_OPACITY = 0.12, VEIL = 0.12;
+// Raw cloud water style: haze optical depth at saturation, and shadowing per unit depth.
+const RAW_HAZE_DEPTH = 0.15, RAW_SHADOWING = 0.1;
 const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const clip01 = value => Math.max(0, Math.min(1, value));
 const smoothstep = (low, high, value) => { const t = clip01((value - low) / (high - low)); return t * t * (3 - 2 * t); };
@@ -259,33 +304,64 @@ export function blur(field, width, height, radius) {
   return pass(pass(field, width, height, 1, width), height, width, width, 1);
 }
 // Cloud cover 0..1 per pixel. `cloud` is cloud water; `buoyancy` is temperature minus
-// its row average. Puff strength is cloud water toward CLOUD_DEPTH_SCALE times warmth
-// toward WARM_SCALE; lobes scale it by up to ±BILLOW before the threshold.
-export function cloudCover(cloud, buoyancy, width, height) {
-  const puff = cloud.map((water, i) => clip01(water / CLOUD_DEPTH_SCALE) * clip01(buoyancy[i] / WARM_SCALE));
+// its row average; `capping` (optional) is how much warmer the air just above is.
+// Puff strength is cloud water toward CLOUD_DEPTH_SCALE times the larger of warmth
+// toward WARM_SCALE (a rising cumulus) and capping toward CAP_SCALE (cloud pressed
+// flat under warmer air, as stratocumulus are under an inversion). Lobes scale it by
+// up to ±BILLOW before the threshold. With `feather`, the edge frays instead: fractal
+// noise pushes the threshold down to FEATHER_EDGE[0] in places and up in others, so
+// wisps reach out and fade over several pixels while the core stays solid.
+// Returns the solid `core` (used for shading) and the drawn `cover` (core plus fringe).
+export function cloudLayers(cloud, buoyancy, width, height, { capping, feather = false } = {}) {
+  const puff = cloud.map((water, i) => clip01(water / CLOUD_DEPTH_SCALE)
+    * Math.max(clip01(buoyancy[i] / WARM_SCALE), capping ? clip01(capping[i] / CAP_SCALE) : 0));
   const lobes = billows(width, height);
-  return blur(puff, width, height, CLOUD_BLUR).map((value, i) => smoothstep(CLOUD_EDGE[0], CLOUD_EDGE[1], value * (1 + BILLOW * lobes[i])));
+  const core = blur(puff, width, height, CLOUD_BLUR).map((value, i) => smoothstep(CLOUD_EDGE[0], CLOUD_EDGE[1], value * (1 + BILLOW * lobes[i])));
+  if (!feather) return { core, cover: core };
+  // The fringe comes from a wider blur, so it reaches FEATHER_BLUR pixels out, and is
+  // thinned by the noise into wisps that fade in gently (squared) toward the core.
+  const wisps = fray(width, height);
+  const cover = blur(puff, width, height, FEATHER_BLUR).map((value, i) => Math.max(core[i],
+    FEATHER_OPACITY * smoothstep(FEATHER_EDGE[0], FEATHER_EDGE[1], value * (1 + FEATHER * wisps[i])) ** 2));
+  return { core, cover };
+}
+// The drawn cover alone.
+export const cloudCover = (cloud, buoyancy, width, height, options) => cloudLayers(cloud, buoyancy, width, height, options).cover;
+// How much warmer the air CAP_REACH pixels above is than each pixel (0 if colder).
+export function capping(temperature, width, height) {
+  const out = new Float64Array(temperature.length);
+  for (let y = CAP_REACH; y < height; y++) for (let x = 0; x < width; x++) {
+    const i = y * width + x;
+    out[i] = Math.max(0, temperature[i - CAP_REACH * width] - temperature[i]);
+  }
+  return out;
 }
 // Smooth value noise, -1..1, in lobes about 6 and 3 pixels across. It depends only on
 // position, never on the seed, and is computed once per size. Cloud edges drifting
 // through it bulge and pinch like churning cumulus tops.
-const billowCache = new Map();
-export function billows(width, height) {
-  const key = `${width}x${height}`;
-  if (billowCache.has(key)) return billowCache.get(key);
-  const hash = (x, y) => { let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
-  const ease = t => t * t * (3 - 2 * t);
-  const octave = (x, y, size) => {
-    const fx = x / size, fy = y / size, ix = Math.floor(fx), iy = Math.floor(fy), tx = ease(fx - ix), ty = ease(fy - iy);
-    const top = hash(ix, iy) + (hash(ix + 1, iy) - hash(ix, iy)) * tx;
-    const bottom = hash(ix, iy + 1) + (hash(ix + 1, iy + 1) - hash(ix, iy + 1)) * tx;
-    return 2 * (top + (bottom - top) * ty) - 1;
-  };
+const noiseCache = new Map();
+const hash = (x, y) => { let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+const ease = t => t * t * (3 - 2 * t);
+function octave(x, y, size) {
+  const fx = x / size, fy = y / size, ix = Math.floor(fx), iy = Math.floor(fy), tx = ease(fx - ix), ty = ease(fy - iy);
+  const top = hash(ix, iy) + (hash(ix + 1, iy) - hash(ix, iy)) * tx;
+  const bottom = hash(ix, iy + 1) + (hash(ix + 1, iy + 1) - hash(ix, iy + 1)) * tx;
+  return 2 * (top + (bottom - top) * ty) - 1;
+}
+function noise(width, height, name, octaves) {
+  const key = `${name}:${width}x${height}`;
+  if (noiseCache.has(key)) return noiseCache.get(key);
   const field = new Float64Array(width * height);
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) field[y * width + x] = 0.75 * octave(x, y, 6) + 0.25 * octave(x + 17, y + 31, 3);
-  billowCache.set(key, field);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    field[y * width + x] = octaves.reduce((sum, [weight, size, shift]) => sum + weight * octave(x + shift, y + 2 * shift, size), 0);
+  }
+  noiseCache.set(key, field);
   return field;
 }
+export const billows = (width, height) => noise(width, height, "billows", [[0.75, 6, 0], [0.25, 3, 17]]);
+// Fractal noise, -1..1, from 8-pixel lobes down to 2-pixel wisps, halving the weight
+// at each finer scale, for frayed edges.
+export const fray = (width, height) => noise(width, height, "fray", [[0.57, 8, 5], [0.29, 4, 23], [0.14, 2, 41]]);
 export const haze = relativeHumidity => HAZE_OPACITY * clip01((relativeHumidity - HAZE_START) / (1 - HAZE_START)) ** 2;
 // Rain curtains (virga) stay see-through: at most 50% opaque.
 export const rainOpacity = rain => 0.5 * clip01(rain / RAIN_SCALE);
@@ -318,6 +394,19 @@ export function facing(dx, dy) {
   return AMBIENT + (1 - AMBIENT) * light;
 }
 
+// Amount of `field` between pixel i (half of its own) and the sun.
+function sunPath(field, i, width, height) {
+  const x = i % width, y = Math.floor(i / width);
+  let path = field[i] / 2;
+  for (let k = 1; k <= SUN_STEPS; k++) {
+    // The right wall repeats its edge column, so the wall does not glow.
+    const sx = Math.min(width - 1, x + k), sy = Math.round(y + k * SUN_RISE);
+    if (sy >= height) break;
+    path += field[sy * width + sx];
+  }
+  return path;
+}
+
 export function renderConvection(simulation, view = "sunset", options = {}) {
   const rules = { ...defaults, ...options };
   const { width, height, temperature, vapor, liquid, rain } = simulation;
@@ -330,16 +419,29 @@ export function renderConvection(simulation, view = "sunset", options = {}) {
   }
   const clip = value => Math.max(0, Math.min(1, value));
   // Sunset: cloud cover, a dome-shaped thickness for shading, and sunlight reaching each pixel.
-  let coverOf, reachOf, slopeOf;
-  if (view === "sunset") {
+  let coverOf, coreOf, reachOf, slopeOf, depthOf;
+  const raw = rules.cloudStyle === "raw";
+  if (view === "sunset" && raw) {
+    // Raw cloud water (the first sunset mapping): each pixel's own optical depth,
+    // shadowed by the depth crossed toward the sun. Reads as smoke; kept to compare.
+    const size = temperature.length;
+    depthOf = new Float64Array(size); reachOf = new Float64Array(size);
+    for (let i = 0; i < size; i++) {
+      const relative = vapor[i] / saturation(temperature[i], altitudeOf(i, width, height), rules.saturation, rules.expansion);
+      const near = clip((relative - HAZE_START) / (1 - HAZE_START));
+      depthOf[i] = Math.max(0, liquid[i]) / CLOUD_DEPTH_SCALE + RAW_HAZE_DEPTH * near * near;
+    }
+    for (let i = 0; i < size; i++) reachOf[i] = Math.exp(-RAW_SHADOWING * sunPath(depthOf, i, width, height));
+  } else if (view === "sunset") {
     const size = temperature.length;
     const buoyancy = temperature.map((t, i) => t - rowMeans[Math.floor(i / width)]);
-    coverOf = cloudCover(liquid, buoyancy, width, height);
+    const layers = cloudLayers(liquid, buoyancy, width, height, { capping: capping(temperature, width, height), feather: rules.feather });
+    coverOf = layers.cover; coreOf = layers.core;
     // Thickness: cover blurred wide (DOME_BLUR) plus tight (BILLOW_BLUR, nudged by the
     // lobes), so it is highest deep inside a mass and falls toward its edges, like
     // rounded puffs seen from the side. Its slope gives a surface facing toward or
     // away from the sun; `reach` is the sunlight left after the cover in between.
-    const wide = blur(coverOf, width, height, DOME_BLUR), tight = blur(coverOf, width, height, BILLOW_BLUR);
+    const wide = blur(layers.core, width, height, DOME_BLUR), tight = blur(layers.core, width, height, BILLOW_BLUR);
     const lobes = billows(width, height);
     const thickness = wide.map((value, i) => value + tight[i] * (1 + LOBE_RELIEF * lobes[i]));
     reachOf = new Float64Array(size); slopeOf = new Float64Array(size);
@@ -348,14 +450,7 @@ export function renderConvection(simulation, view = "sunset", options = {}) {
       const dx = thickness[y * width + Math.min(width - 1, x + 1)] - thickness[y * width + Math.max(0, x - 1)];
       const dy = thickness[Math.min(height - 1, y + 1) * width + x] - thickness[Math.max(0, y - 1) * width + x];
       slopeOf[i] = facing(dx / 2, dy / 2);
-      let path = coverOf[i] / 2;
-      for (let k = 1; k <= SUN_STEPS; k++) {
-        // The right wall repeats its edge column, so the wall does not glow.
-        const sx = Math.min(width - 1, x + k), sy = Math.round(y + k * SUN_RISE);
-        if (sy >= height) break;
-        path += coverOf[sy * width + sx];
-      }
-      reachOf[i] = Math.exp(-SHADOWING * path);
+      reachOf[i] = Math.exp(-SHADOWING * sunPath(coreOf, i, width, height));
     }
   }
   for (let i = 0; i < temperature.length; i++) {
@@ -364,7 +459,13 @@ export function renderConvection(simulation, view = "sunset", options = {}) {
     const shower = clip((rain[i] - LAMP_RAIN_FLOOR) / (RAIN_SCALE * 0.75));
     const wet = (rgb, amount) => rgb.map((channel, c) => channel + (RAIN_COLOR[c] - channel) * amount);
     let rgb;
-    if (view === "sunset") {
+    if (view === "sunset" && raw) {
+      const altitude = altitudeOf(i, width, height);
+      const sky = sunsetSky(altitude, (temperature[i] - rowMeans[Math.floor(i / width)]) / 0.15);
+      const light = cloudColor(reachOf[i], altitude);
+      rgb = mix(sky, light, 1 - Math.exp(-depthOf[i]));
+      rgb = mix(rgb, mix(light, sky, 0.35), rainOpacity(rain[i]));
+    } else if (view === "sunset") {
       const altitude = altitudeOf(i, width, height);
       const warmth = (temperature[i] - rowMeans[Math.floor(i / width)]) / 0.15;
       const relative = vapor[i] / saturation(temperature[i], altitude, rules.saturation, rules.expansion);
@@ -373,7 +474,9 @@ export function renderConvection(simulation, view = "sunset", options = {}) {
       // Sky, lit haze near saturation, a thin veil of still cloud water, then the puffs.
       rgb = mix(sky, cloudColor(1, altitude), haze(relative));
       rgb = mix(rgb, cloudColor(0.5, altitude), VEIL * clip(liquid[i] / CLOUD_DEPTH_SCALE));
-      rgb = mix(rgb, light, coverOf[i]);
+      // Feathered fringe: thin, so sunlit through (lit by `reach` alone), under the core.
+      if (coreOf !== coverOf) rgb = mix(rgb, cloudColor(0.3 + 0.9 * reachOf[i], altitude), coverOf[i]);
+      rgb = mix(rgb, light, coreOf[i]);
       // Rain takes the cloud's light, softened toward the sky behind it.
       rgb = mix(rgb, mix(light, sky, 0.35), rainOpacity(rain[i]));
     } else if (view === "temperature") rgb = [40 + 205 * t, 95 + 40 * t, 220 - 150 * t];

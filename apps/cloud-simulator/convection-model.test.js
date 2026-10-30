@@ -1,9 +1,11 @@
-/* Purpose: Check the convection study's water budget, repeatability, sustained motion and rain.
+/* Purpose: Check the convection study's water budget, repeatability, sustained motion, rain,
+ *   the inversion layer and the Sunset view's cloud shapes, with each option on and off.
  * Consumers: Node's test runner. Dependencies: node:test, node:assert and convection-model.js. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createConvection, step, totalWater, saturation, renderConvection, RAIN_SCALE,
-  cloudCover, billows, haze, facing, HAZE_OPACITY, rainOpacity, sunsetSky, cloudColor } from "./convection-model.js";
+  cloudCover, cloudLayers, capping, billows, fray, haze, facing, HAZE_OPACITY, rainOpacity, sunsetSky, cloudColor,
+  inversionTarget, defaults } from "./convection-model.js";
 
 const allFinite = simulation => ["temperature", "vapor", "liquid", "rain", "vorticity"]
   .every(name => simulation[name].every(Number.isFinite));
@@ -36,16 +38,18 @@ test("the same seed repeats exactly; another seed differs", () => {
 });
 
 // Mean |ΔT| per tick in the interior rows, away from the flickering floor and the lid,
-// so the score measures air moving rather than boundary noise.
-function interiorActivity(simulation, ticks, options) {
-  const { width, height } = simulation;
+// so the score measures air moving rather than boundary noise. With the inversion on,
+// only the convecting layer under it counts: the warm layer is stable, so quiet by design.
+function interiorActivity(simulation, ticks, options = {}) {
+  const { width, height } = simulation, rules = { ...defaults, ...options };
+  const top = rules.inversion ? Math.max(2, Math.round((1 - rules.inversionHeight) * (height - 1)) + 1) : 2;
   let activity = 0;
   for (let tick = 0; tick < ticks; tick++) {
     const before = simulation.temperature.slice();
     step(simulation, options);
     let change = 0;
-    for (let i = 2 * width; i < (height - 2) * width; i++) change += Math.abs(simulation.temperature[i] - before[i]);
-    activity += change / ((height - 4) * width) / ticks;
+    for (let i = top * width; i < (height - 2) * width; i++) change += Math.abs(simulation.temperature[i] - before[i]);
+    activity += change / ((height - 2 - top) * width) / ticks;
   }
   return activity;
 }
@@ -58,9 +62,11 @@ const randomSeeds = process.env.CONVECTION_SEEDS
   ? process.env.CONVECTION_SEEDS.split(",").map(Number)
   : [...crypto.getRandomValues(new Uint32Array(4))];
 
+// The inversion (on by default) runs on every seed; without it, on half of them.
+const seedRuns = [...randomSeeds.map(seed => [seed, true]), ...randomSeeds.slice(0, 2).map(seed => [seed, false])];
 test(`blobs keep rising and falling and rain keeps falling on random seeds ${randomSeeds.join(", ")}`, () => {
-  for (const seed of randomSeeds) {
-    const simulation = createConvection({ seed });
+  for (const [seed, inversion] of seedRuns) {
+    const simulation = createConvection({ seed }), options = { inversion };
     const start = totalWater(simulation);
     // Rain comes in showers, so count how often a visible shaft (20+ pixels at half the
     // fixed rain color scale) is falling, sampled every 100 ticks after the spin-up.
@@ -68,21 +74,55 @@ test(`blobs keep rising and falling and rain keeps falling on random seeds ${ran
     for (let window = 0; window < 8; window++) {
       let activity = 0;
       for (let part = 0; part < 5; part++) {
-        activity += interiorActivity(simulation, 100) / 5;
+        activity += interiorActivity(simulation, 100, options) / 5;
         if (window > 0) { samples++; if (simulation.rain.filter(value => value > RAIN_SCALE / 2).length > 20) rainy++; }
       }
-      assert.ok(activity > ACTIVITY_FLOOR, `seed ${seed}, ticks ${window * 500}-${window * 500 + 499}: mean |ΔT| ${activity}`);
+      assert.ok(activity > ACTIVITY_FLOOR, `seed ${seed}, inversion ${inversion}, ticks ${window * 500}-${window * 500 + 499}: mean |ΔT| ${activity}`);
     }
-    assert.ok(rainy >= samples / 2, `seed ${seed}: rain shafts visible in ${rainy} of ${samples} samples`);
+    assert.ok(rainy >= samples / 2, `seed ${seed}, inversion ${inversion}: rain shafts visible in ${rainy} of ${samples} samples`);
     assert.ok(nonNegative(simulation) && allFinite(simulation), `seed ${seed} stays finite and non-negative`);
     assert.ok(Math.abs(totalWater(simulation) - start) / start < 1e-9, `seed ${seed} conserves water`);
   }
+});
+
+test("the inversion sounding: none below its height, warming by its strength across its depth", () => {
+  const rules = { ...defaults, inversionHeight: 0.6, inversionDepth: 0.1 };
+  assert.equal(inversionTarget(0.59, rules), undefined);
+  assert.equal(inversionTarget(0.6, rules), rules.inversionBase);
+  assert.ok(Math.abs(inversionTarget(0.7, rules) - rules.inversionBase - rules.inversionStrength) < 1e-12);
+  assert.equal(inversionTarget(0.95, rules), inversionTarget(0.7, rules));
+});
+
+// Mean cloud water per row over ticks 2000-4000, and the altitude of the cloudiest
+// interior row (the lid row, where the lid's cold always condenses some, is skipped).
+function cloudiestAltitude(options) {
+  const simulation = createConvection({ seed: 42 });
+  const { width, height } = simulation, rows = new Float64Array(height), start = totalWater(simulation);
+  for (let tick = 0; tick < 4000; tick++) {
+    step(simulation, options);
+    if (tick >= 2000 && tick % 20 === 0) for (let i = 0; i < width * height; i++) rows[Math.floor(i / width)] += simulation.liquid[i];
+  }
+  assert.ok(Math.abs(totalWater(simulation) - start) / start < 1e-9, "conserves water");
+  let best = 1;
+  for (let y = 2; y < height; y++) if (rows[y] > rows[best]) best = y;
+  return 1 - best / (height - 1);
+}
+test("the inversion caps the cloud: it piles up just under the warm layer and follows its height", () => {
+  const off = cloudiestAltitude({ inversion: false });
+  const high = cloudiestAltitude({ inversion: true, inversionHeight: 0.6 });
+  const low = cloudiestAltitude({ inversion: true, inversionHeight: 0.45 });
+  assert.ok(off > 0.75, `without it the cloud is thickest near the lid (${off})`);
+  assert.ok(high > 0.45 && high < 0.66, `capped under 0.6 (${high})`);
+  assert.ok(low > 0.3 && low < 0.51 && low < high, `capped under 0.45 (${low})`);
 });
 
 test("without buoyancy the air settles below the activity floor", () => {
   const simulation = createConvection({ seed: 42 });
   interiorActivity(simulation, 1500, { buoyancy: 0 });
   assert.ok(interiorActivity(simulation, 500, { buoyancy: 0 }) < ACTIVITY_FLOOR);
+  const capped = createConvection({ seed: 42 });
+  interiorActivity(capped, 1500, { buoyancy: 0, inversion: true });
+  assert.ok(interiorActivity(capped, 500, { buoyancy: 0, inversion: true }) < ACTIVITY_FLOOR, "under the inversion too");
 });
 
 test("every view renders opaque pixels without changing the state", () => {
@@ -111,6 +151,49 @@ test("sunset cloud: buoyant cloudy masses turn solid, thin streamers and still c
   assert.ok(Math.min(...lobes) >= -1 && Math.max(...lobes) <= 1 && lobes === billows(width, height));
   // A surface sloping toward the low sun at the lower right is brighter than one facing away.
   assert.ok(facing(-0.1, -0.05) > facing(0, 0) && facing(0, 0) > facing(0.1, 0.05));
+});
+
+test("sunset cloud: still cloud pressed under warmer air turns solid, as a capped layer", () => {
+  const width = 64, height = 48, size = width * height;
+  // A cloudy slab (rows 20-29) under air 0.2 warmer (rows above 20); no buoyancy anywhere.
+  const temperature = Float64Array.from({ length: size }, (_, i) => (Math.floor(i / width) < 20 ? 0.7 : 0.5));
+  const slab = Float64Array.from({ length: size }, (_, i) => (Math.floor(i / width) >= 20 && Math.floor(i / width) < 30 ? 0.005 : 0));
+  const still = new Float64Array(size);
+  assert.equal(Math.max(...cloudCover(slab, still, width, height)), 0, "uncapped, it stays a veil");
+  const capped = cloudCover(slab, still, width, height, { capping: capping(temperature, width, height) });
+  assert.ok(capped[22 * width + 32] > 0.9, "capped, its top is solid");
+});
+
+test("feathered edges: the same solid core, with a fringe that fades out over several pixels", () => {
+  const width = 128, height = 96, size = width * height;
+  const disc = Float64Array.from({ length: size }, (_, i) => ((i % width - 64) ** 2 + (Math.floor(i / width) - 48) ** 2 <= 225 ? 0.005 : 0));
+  const warm = new Float64Array(size).fill(0.1);
+  const hard = cloudLayers(disc, warm, width, height), soft = cloudLayers(disc, warm, width, height, { feather: true });
+  assert.deepEqual(soft.core, hard.core, "the core is unchanged");
+  assert.ok(soft.cover.every((value, i) => value >= soft.core[i] && value <= 1));
+  assert.ok(soft.cover[48 * width + 64] > 0.99, "solid inside");
+  // Along rays out of the disc, count pixels that are partly but not fully cloud.
+  let partialHard = 0, partialSoft = 0;
+  for (let angle = 0; angle < 2 * Math.PI; angle += Math.PI / 16) for (let r = 8; r < 30; r++) {
+    const i = Math.round(48 + r * Math.sin(angle)) * width + Math.round(64 + r * Math.cos(angle));
+    if (hard.cover[i] > 0.02 && hard.cover[i] < 0.9) partialHard++;
+    if (soft.cover[i] > 0.02 && soft.cover[i] < 0.9) partialSoft++;
+  }
+  assert.ok(partialSoft > 2 * partialHard, `wider fringe (${partialSoft} vs ${partialHard} partial pixels)`);
+  const wisps = fray(width, height);
+  assert.ok(Math.min(...wisps) >= -1 && Math.max(...wisps) <= 1 && wisps === fray(width, height));
+});
+
+test("sunset options: raw cloud water and feathering change only the drawing", () => {
+  const simulation = createConvection({ seed: 5 });
+  for (let tick = 0; tick < 1500; tick++) step(simulation);
+  const snapshot = structuredClone(simulation);
+  const draw = options => renderConvection(simulation, "sunset", options);
+  const cumulus = draw({}), raw = draw({ cloudStyle: "raw" }), hard = draw({ feather: false });
+  const differs = (a, b) => a.some((value, i) => value !== b[i]);
+  assert.ok(differs(cumulus, raw) && differs(cumulus, hard));
+  assert.deepEqual(draw({ cloudStyle: "raw", feather: false }), raw, "feathering does not apply to raw cloud water");
+  assert.deepEqual(simulation, snapshot);
 });
 
 test("sunset colors: haze near saturation only, see-through rain, gold floor, indigo lid", () => {
