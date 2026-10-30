@@ -2,28 +2,14 @@
  *   builds the controls from the schema, Play runs the shared clock and moves the sun along
  *   the path, a manual sun position pauses it, Reset sun returns it, and getParams/applyParams
  *   round-trip (the contract the rating bar and ?p= links use).
- * Consumers: Node test runner. Dependencies: node:test, node:assert, host.js, sun-path.js and
+ * Consumers: Node test runner. Dependencies: node:test, node:assert, host.js, sun-path.js, fake-dom.js and
  *   ../sunset-experiment.js. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mountExperiment, DEFAULT_SUN_PHASE } from "./host.js";
 import { DEFAULT_SUN_SHAPE, SUN_PATH, SUN_PATH_KEYS, sunAt, sunAtPhase, timeForPhase } from "./sun-path.js";
 import { sunset } from "../sunset-experiment.js";
-
-// Just enough of the DOM for host.js: elements with ids, children, listeners and values.
-function fakeDocument(ids) {
-  const byId = new Map();
-  const node = tag => ({
-    tagName: tag.toUpperCase(), children: [], parentNode: null, listeners: {}, attributes: {}, textContent: "", value: "",
-    append(...items) { for (const item of items) if (typeof item === "object") { item.parentNode = this; this.children.push(item); if (item.id) byId.set(item.id, item); for (const child of item.children) if (child.id) byId.set(child.id, child); } },
-    addEventListener(name, fn) { (this.listeners[name] ??= []).push(fn); },
-    fire(name) { for (const fn of this.listeners[name] ?? []) fn({ isTrusted: true }); },
-    setAttribute(name, value) { this.attributes[name] = value; }
-  });
-  const doc = { hidden: false, createElement: node, addEventListener() {}, getElementById: id => byId.get(id) ?? null };
-  for (const id of ids) { const element = node("div"); element.id = id; byId.set(id, element); }
-  return doc;
-}
+import { fakeDocument } from "./fake-dom.js";
 
 test("Sunset on the host: generated controls, shared sun playback, pause, reset and params round-trip", () => {
   const doc = fakeDocument(["sky", "playback", "controls", "stats", "status"]);
