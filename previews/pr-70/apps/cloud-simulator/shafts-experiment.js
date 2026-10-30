@@ -14,9 +14,12 @@ const all = { ...defaults, ...visibilityDefaults };
 const slider = (key, min, max, step, help, more = {}) => ({ key, kind: "range", min, max, step, default: all[key], help, ...more });
 const polygons = params => params.strategy !== "geometric";
 const now = () => globalThis.performance?.now() ?? Date.now();
-// The scene's own sun limits: these models assume a sun above the horizon and inside the
-// view's sideways reach, so the shared sun is held at 1–35° up and ±40° across.
-export const SUN_LIMITS = { elevation: [1, 35], azimuth: [-40, 40] };
+// The scene follows the shared sun's full elevation range: below the horizon the disc is
+// hidden and sunlight() fades the shafts out by about −4.6°; high suns sit above the view and
+// cast short, downward shafts. Elevation is only guarded short of straight up or down, where
+// the extrusion depth (cos elevation · cos azimuth) would reach 0; the path never gets there
+// (−45..60°). Azimuth stays within ±40°, the view's sideways reach, for the same reason.
+export const SUN_LIMITS = { elevation: [-85, 85], azimuth: [-40, 40] };
 const clamp = (value, [low, high]) => Math.min(high, Math.max(low, value));
 export const sceneSun = sun => ({ sunElevation: clamp(sun.elevation, SUN_LIMITS.elevation), sunAzimuth: clamp(sun.azimuth, SUN_LIMITS.azimuth) });
 const modeName = params => params.strategy === "layered" ? "layered visibility" : params.strategy === "visibility" ? "visibility polygons" : "geometric shadows";

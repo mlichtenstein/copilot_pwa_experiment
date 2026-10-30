@@ -36,7 +36,7 @@ test("sun movement changes lighting without mutating clouds; patterns can change
 });
 test("control extremes produce finite nonnegative air colors and opaque display pixels", () => {
   const scene = createScene();
-  for (const sunElevation of [1, 35]) for (const sunAzimuth of [-40, 40]) {
+  for (const sunElevation of [-45, -5, 0, 1, 35, 60, 85]) for (const sunAzimuth of [-40, 40]) {
     const maps = buildLightMaps(scene, { sunElevation, sunAzimuth, haze: 1, cloudOpacity: 3 });
     assert.ok(maps.gaps.every(gap => gap.pixels.every(v => Number.isFinite(v) && v >= 0)));
     const pixels = renderShafts(scene, maps, 32, 20);
@@ -83,4 +83,22 @@ test("partial shadow length gives partial air light rather than a midpoint on/of
   assert.ok(partial > 0 && partial < full);
   const scene = createScene();
   assert.equal(cloudPrisms(scene, { ...defaults, cloudOpacity: 0 }, 22).length, 0);
+});
+
+test("the sun sets smoothly: disc hidden below the horizon, light faded out by about -4.6 degrees", () => {
+  const scene = createScene();
+  const mean = pixels => pixels.reduce((sum, v, i) => i % 4 === 3 ? sum : sum + v, 0) / (pixels.length * 0.75);
+  const render = sunElevation => renderShafts(scene, buildLightMaps(scene, { sunElevation, sunAzimuth: 0 }), 64, 40);
+  // A clear, haze-free sky shows the disc (bright red pixels) only while the sun is above the horizon.
+  const clear = { layers: scene.layers.map(layer => ({ ...layer, density: new Float64Array(layer.density.length) })) };
+  const disc = sunElevation => renderShafts(clear, buildLightMaps(clear, { sunElevation, sunAzimuth: 0, haze: 0 })).filter((v, i) => i % 4 === 0 && v > 200).length;
+  assert.ok(disc(3) > 0 && disc(1) > 0, "disc visible above the horizon");
+  assert.equal(disc(-1), 0, "disc hidden below the horizon");
+  let previous = mean(render(4));
+  for (let e = 3.5; e >= -6; e -= 0.5) {
+    const next = mean(render(e));
+    assert.ok(Math.abs(next - previous) < 8, `no snap at ${e}°`);
+    previous = next;
+  }
+  assert.deepEqual(render(-6), render(-30), "fully set: shadow geometry no longer shows");
 });

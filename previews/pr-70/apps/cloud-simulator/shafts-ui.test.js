@@ -44,10 +44,12 @@ test("Light shafts: strategies, patterns, reset keeps the strategy, the shared s
   assert.equal(Number($("haze").value), 0.35); assert.equal($("strategy-geometric").checked, true, "reset keeps the strategy");
   strategy("layered"); assert.deepEqual(canvas.pixels(), first);
 
-  // The shared sun moves; the scene holds it above its horizon and inside its reach.
+  // The shared sun moves; the scene follows its elevation and holds it inside its sideways reach.
   $("play").fire("click"); for (let i = 0; i < 20; i++) frame(200);
   assert.ok(page.clock.time > 0); assert.notDeepEqual(canvas.pixels(), first);
-  assert.deepEqual(sceneSun({ elevation: -5, azimuth: 60 }), { sunElevation: SUN_LIMITS.elevation[0], sunAzimuth: SUN_LIMITS.azimuth[1] });
+  assert.deepEqual(sceneSun({ elevation: -5, azimuth: 60 }), { sunElevation: -5, sunAzimuth: SUN_LIMITS.azimuth[1] });
+  assert.deepEqual(sceneSun({ elevation: 60, azimuth: -10 }), { sunElevation: 60, sunAzimuth: -10 });
+  assert.ok(SUN_LIMITS.elevation[0] <= -45 && SUN_LIMITS.elevation[1] >= 60, "the whole slider-reachable path is followed");
 
   // Old links: the fixed sun angles go to the nearest point on the path; sunSpeed is dropped;
   // the strategy and lighting come back.
