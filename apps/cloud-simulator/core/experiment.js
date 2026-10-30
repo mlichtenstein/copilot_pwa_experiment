@@ -49,9 +49,10 @@
 // range:  { min, max, step, default, drift? }        a slider; drifts unless drift: false
 // select: { label, options: [[value, label], …], default, display?: "menu" | "radio", wide? }
 // toggle: { default: true | false }                  a checkbox
-// seed:   { default, newLabel, newTitle, random?, next?(value) }
+// seed:   { default, newLabel, newTitle, random?, next?(value), buttonsIn? }
 //         integer 0 … 2³² − 1 with a "new" button: random (or next(value)); random: true also
-//         starts each page load on a random seed
+//         starts each page load on a random seed; buttonsIn names the element (by id) the
+//         "new" button goes in instead of the playback row
 // size:   { key: "resolution", options: [["WxH", label], …], default }   grid size radios;
 //         switching rebuilds the instance at that size
 export const PARAM_KINDS = ["range", "select", "toggle", "seed", "size"];

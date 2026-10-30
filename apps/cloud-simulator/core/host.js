@@ -242,7 +242,10 @@ export function mountExperiment(experiment, {
     if (param.kind === "seed") {
       const button = make(doc, "button", { id: "new-" + param.key, type: "button", textContent: param.newLabel ?? "New seed", title: param.newTitle ?? "Pick a random seed" });
       button.addEventListener("click", () => commit(param.next ? param.next(params[param.key]) >>> 0 : randomSeed()));
-      lockable.push(button); seedButtons.push(button);
+      lockable.push(button);
+      // The button joins the playback row, or the container the param names (buttonsIn).
+      const target = param.buttonsIn ? element(param.buttonsIn) : null;
+      if (target) target.append(button); else seedButtons.push(button);
     }
   }
   playback.append(...seedButtons);
