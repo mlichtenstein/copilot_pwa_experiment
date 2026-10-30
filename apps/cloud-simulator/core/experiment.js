@@ -23,7 +23,8 @@
  *   render(frame)    return RGBA pixels (Uint8ClampedArray of width × height × 4)
  *   dispose()        release anything held
  * frame is { time, sun } where time is the shared clock in seconds and sun is
- * sunAt(time) = { phase, azimuth, elevation } (degrees).
+ * sunAt(time, shape) = { phase, azimuth, elevation } (degrees) on the shared vertical
+ * figure-eight, sized and placed by the host-owned sunPath* settings.
  */
 
 // range:  { key, help, min, max, step, default, drift? }  a slider; drifts unless drift: false
@@ -31,6 +32,9 @@
 // seed:   { key, help, default, newLabel, newTitle }       integer 0 … 2³² − 1 with a "new" button
 export const PARAM_KINDS = ["range", "select", "seed"];
 export const SEED_MAX = 4294967295;
+// Saved by the host itself: the sun's place on the shared path and the path's four shape
+// settings (core/sun-path.js), and the grid size.
+export const RESERVED_KEYS = ["sunPhase", "sunPathWidth", "sunPathHeight", "sunPathX", "sunPathY", "resolution"];
 
 const INSTANCE_METHODS = ["update", "step", "render", "dispose"];
 
@@ -46,7 +50,7 @@ export function validateExperiment(experiment) {
     const name = param?.key ?? "?";
     if (typeof param?.key !== "string" || !param.key) problems.push("every param needs a key");
     else if (keys.has(param.key)) problems.push(`duplicate param ${name}`);
-    else if (["sunPhase", "resolution"].includes(param.key)) problems.push(`param ${name} is reserved for the host`);
+    else if (RESERVED_KEYS.includes(param.key)) problems.push(`param ${name} is reserved for the host`);
     keys.add(param?.key);
     if (!PARAM_KINDS.includes(param?.kind)) problems.push(`param ${name} has unknown kind ${param?.kind}`);
     if (param?.kind === "range") {

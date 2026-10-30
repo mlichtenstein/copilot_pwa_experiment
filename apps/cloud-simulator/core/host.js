@@ -11,11 +11,11 @@
  */
 import { validateExperiment, validateInstance, cleanParams, cleanParam, defaultParams } from "./experiment.js";
 import { createClock, startLoop } from "./clock.js";
-import { sunAt, sunPhase, timeForPhase } from "./sun-path.js";
+import { DEFAULT_SUN_SHAPE, SUN_PATH_PARAMS, nearestPhase, sunAt, sunPhase, timeForPhase } from "./sun-path.js";
 import { mountPresetBar } from "../../shared/presets-panel.js";
 
-// Where the sun starts and where Reset sun puts it: a quarter into the first lobe, high and
-// to the right (about 28° across and 25° up), close to the studies' old default sun.
+// Where the sun starts and where Reset sun puts it: an eighth of the way round, in the top
+// lobe, high and to the right (15° across and about 20° up with the default path shape).
 export const DEFAULT_SUN_PHASE = 0.125;
 
 const make = (doc, tag, props = {}, ...children) => {
@@ -57,7 +57,10 @@ export function mountExperiment(experiment, {
   const clock = createClock({ time: timeForPhase(DEFAULT_SUN_PHASE), playing });
   let dirty = true, sinceRender = Infinity;
 
-  const frameInfo = () => ({ time: clock.time, sun: sunAt(clock.time) });
+  // The shared sun path's shape (sunPathWidth, sunPathHeight, sunPathX, sunPathY): host-owned
+  // settings every sun-bearing experiment shows and saves the same way.
+  let sunShape = { ...DEFAULT_SUN_SHAPE };
+  const frameInfo = () => ({ time: clock.time, sun: sunAt(clock.time, sunShape) });
   const controls = new Map();
 
   function render() {
@@ -80,7 +83,7 @@ export function mountExperiment(experiment, {
 
   // Playback: Play/Pause runs the shared clock (the sun, and any simulation); Reset sun.
   const playback = element("playback");
-  const play = make(doc, "button", { id: "play", type: "button", title: "Start or stop the shared clock that moves the sun along its figure-eight path" });
+  const play = make(doc, "button", { id: "play", type: "button", title: "Start or stop the shared clock that moves the sun along its vertical figure-eight path" });
   const reset = make(doc, "button", { id: "reset", type: "button", textContent: "Reset sun", title: "Stop the sun and put it back at its starting point on the path" });
   function setPlaying(value) {
     clock.play(value);
@@ -95,13 +98,21 @@ export function mountExperiment(experiment, {
   // position goes just before its first slider, where each study used to keep its own sun slider.
   const panel = element("controls");
   const sunControl = experiment.sun ? buildControl(doc, { key: "sunPhase", kind: "range", min: 0, max: 1, step: 0.001,
-    help: "Sun position on the shared figure-eight path (0 to 1), the same in every experiment with a sun. Moving it stops the sun." }, sunPhase(clock.time)) : null;
+    help: "Sun position on the shared vertical figure-eight path (0 to 1), the same in every experiment with a sun. Moving it stops the sun." }, sunPhase(clock.time)) : null;
   if (sunControl) {
     sunControl.input.step = "any";
     sunControl.input.addEventListener("input", () => { setPlaying(false); clock.set(timeForPhase(Number(sunControl.input.value))); dirty = true; });
   }
+  // The path's size and position follow the sun slider; they do not stop the sun.
+  const sunShapeControls = experiment.sun ? SUN_PATH_PARAMS.map(param => {
+    const control = buildControl(doc, param, sunShape[param.key]);
+    control.input.addEventListener("input", () => { sunShape = { ...sunShape, [param.key]: cleanParam(param, control.input.value) }; dirty = true; });
+    controls.set(param.key, control);
+    return control;
+  }) : [];
+  const placeSun = () => panel.append(sunControl.label, ...sunShapeControls.map(control => control.label));
   for (const param of experiment.params) {
-    if (sunControl && param.kind === "range" && !sunControl.label.parentNode) panel.append(sunControl.label);
+    if (sunControl && param.kind === "range" && !sunControl.label.parentNode) placeSun();
     const control = buildControl(doc, param, params[param.key]);
     controls.set(param.key, control);
     panel.append(control.label);
@@ -122,7 +133,7 @@ export function mountExperiment(experiment, {
       playback.append(button);
     }
   }
-  if (sunControl && !sunControl.label.parentNode) panel.append(sunControl.label);
+  if (sunControl && !sunControl.label.parentNode) placeSun();
   setPlaying(playing);
 
   const stop = startLoop(dt => {
@@ -132,13 +143,22 @@ export function mountExperiment(experiment, {
     if (dirty || (advanced && sinceRender >= (experiment.frameInterval ?? 0))) render();
   }, { raf, doc });
 
-  // Ratings and links: every param, the sun's place on the path and the grid size.
-  const getParams = () => ({ ...params, ...(experiment.sun ? { sunPhase: sunPhase(clock.time) } : {}), resolution: `${canvas.width}x${canvas.height}` });
+  // Ratings and links: every param, the sun's place on the path and the path's shape, and
+  // the grid size.
+  const getParams = () => ({ ...params, ...(experiment.sun ? { sunPhase: sunPhase(clock.time), ...sunShape } : {}), resolution: `${canvas.width}x${canvas.height}` });
   function applyParams(raw) {
     setPlaying(false);
     const next = cleanParams(experiment, raw, defaultParams(experiment));
-    for (const [key, control] of controls) control.input.value = String(next[key]);
-    if (experiment.sun && typeof raw?.sunPhase === "number" && Number.isFinite(raw.sunPhase)) clock.set(timeForPhase(raw.sunPhase));
+    if (experiment.sun) {
+      // Saved before the path had settings: the default shape. Saved with a fixed sun
+      // (sunAzimuth/sunElevation sliders): the nearest point on the path. Other old keys,
+      // such as sunSpeed, are dropped by cleanParams.
+      sunShape = Object.fromEntries(SUN_PATH_PARAMS.map(param => [param.key, cleanParam(param, raw?.[param.key])]));
+      const finite = value => typeof value === "number" && Number.isFinite(value);
+      if (finite(raw?.sunPhase)) clock.set(timeForPhase(raw.sunPhase));
+      else if (finite(raw?.sunAzimuth) && finite(raw?.sunElevation)) clock.set(timeForPhase(nearestPhase(raw.sunAzimuth, raw.sunElevation, sunShape)));
+    }
+    for (const [key, control] of controls) control.input.value = String(key in next ? next[key] : sunShape[key]);
     setParams(next);
   }
   if (presets) mountPresetBar(element("presets"), { app: experiment.app, getParams, applyParams, canvas });
