@@ -8,7 +8,7 @@ import { defaults, createConvection, step, totalWater, renderConvection } from "
 const element = id => document.getElementById(id);
 const canvas = element("sky");
 const context = canvas.getContext("2d");
-const image = context.createImageData(canvas.width, canvas.height);
+let image;
 // Sliders whose id matches a model rule; the remaining rules keep their defaults.
 const liveRules = ["inversionHeight", "lclHeight", "buoyancy", "viscosity", "heating", "cooling", "latentHeat", "expansion", "evaporation", "autoconversion", "fallSpeed", "flicker"];
 const legends = {
@@ -37,7 +37,8 @@ const rules = () => ({
   layering: document.querySelector("input[name=layering]:checked").value,
   cloudStyle: document.querySelector("input[name=cloudStyle]:checked").value,
   feather: element("feather").checked,
-  pixelArt: element("pixelArt").checked
+  pixelArt: element("pixelArt").checked,
+  resolution: document.querySelector("input[name=resolution]:checked").value
 });
 
 function render() {
@@ -54,7 +55,18 @@ function setRunning(next) {
   element("play").setAttribute("aria-pressed", String(running));
 }
 
+// Grid size from the resolution toggle ("64x48" pixel art or "128x96" detailed). The model
+// scales its pixel-counted lengths and speeds to the grid (gridScale), so both behave alike.
+function sizeCanvas() {
+  const [width, height] = rules().resolution.split("x").map(Number);
+  if (canvas.width !== width || canvas.height !== height || !image) {
+    canvas.width = width; canvas.height = height;
+    image = context.createImageData(width, height);
+  }
+}
+
 function reset() {
+  sizeCanvas();
   simulation = createConvection({ width: canvas.width, height: canvas.height, seed, water: Number(element("water").value) });
   elapsed = 0;
   render();
@@ -90,6 +102,11 @@ const syncOptions = () => {
   element("feather").disabled = cloudStyle === "raw"; element("pixelArt").disabled = cloudStyle === "raw";
 };
 element("view").addEventListener("change", () => { showLegend(); render(); });
+// Switching resolution restarts the same seed and parameters at the new size; the
+// pixel-art style follows it (on for 64×48, off for 128×96) and can still be changed.
+for (const input of document.querySelectorAll("input[name=resolution]")) {
+  input.addEventListener("change", () => { element("pixelArt").checked = input.value === "64x48"; reset(); });
+}
 for (const input of element("options").querySelectorAll("input[type=checkbox], input[type=radio]")) {
   input.addEventListener("change", () => { syncOptions(); showLegend(); render(); });
 }
