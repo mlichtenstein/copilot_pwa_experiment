@@ -1,4 +1,4 @@
-/* Purpose: Sample a single photographic sky crop or rasterize stable varied cloud-brush stamps.
+/* Purpose: Sample a seamlessly edge-blended photographic sky strip or rasterize stable varied cloud-brush stamps.
  * Consumers: valley-model.js and valley-model.test.js. Dependencies: none; scalar texture fields. */
 const clamp = v => Math.max(0, Math.min(1, v));
 function random(x, y, seed, channel) {
@@ -15,9 +15,19 @@ function texel(texture, u, v) {
 export function photoCoordinates(x, y, time, options, aspect = 1.6, viewAspect = 1.6) {
   const zoom = Math.max(1, options.textureScale), cropU = Math.min(1, viewAspect / aspect) / zoom;
   const cropV = Math.min(1, aspect / viewAspect) / zoom;
-  // A finite pan, never ping-pong, tiled or mirrored. Non-panoramas stop at their edge.
-  const pan = clamp(0.5 + time * options.wind / 1920);
-  return { u: cropU * (x + 1) / 2 + (1 - cropU) * pan, v: cropV * y + (1 - cropV) / 2 };
+  // Back-plane wind rate matches brush layer 0; source coordinates keep moving forever.
+  return { u: cropU * (x + 1) / 2 + (1 - cropU) / 2 - time * options.wind / 192 * 0.5 * cropU,
+    v: cropV * y + (1 - cropV) / 2 };
+}
+export function wrappedPhotoTexel(texture, u, v) {
+  if (v < 0 || v > 1) return { alpha: 0, shade: 0 };
+  // Interpolate premultiplied fields across the last/first pixel as well as ordinary pixels.
+  const x = (((u % 1) + 1) % 1) * texture.width - 0.5, left = Math.floor(x), t = x - left;
+  const row = Math.min(texture.height - 1, Math.floor(v * texture.height)) * texture.width;
+  const a = row + ((left % texture.width) + texture.width) % texture.width, b = row + (left + 1 + texture.width) % texture.width;
+  const alphaA = texture.pixels[a], alphaB = texture.pixels[b], alpha = alphaA * (1 - t) + alphaB * t;
+  const shadeA = texture.shading?.[a] ?? 1 - alphaA, shadeB = texture.shading?.[b] ?? 1 - alphaB;
+  return { alpha, shade: alpha > 0 ? (shadeA * alphaA * (1 - t) + shadeB * alphaB * t) / alpha : 0 };
 }
 export function brushStamps(time, options, layer, salt = 0) {
   const scale = options.textureScale, cw = 0.8 / scale, ch = 0.42 / scale;
@@ -40,7 +50,7 @@ export function cloudSampler(texture, time, options, layer, width, height) {
     if (layer !== 0) return () => ({ alpha: 0, shade: 0 });
     return (px, py) => {
       const uv = photoCoordinates(2 * (px + 0.5) / width - 1, (py + 0.5) / height, time, options, texture.width / texture.height, width / height);
-      return texel(texture, uv.u, uv.v);
+      return wrappedPhotoTexel(texture, uv.u, uv.v);
     };
   }
   const alpha = new Float32Array(width * height), premultiplied = new Float32Array(width * height);
