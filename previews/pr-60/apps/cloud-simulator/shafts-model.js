@@ -1,7 +1,8 @@
 /* Purpose: Three cloud pictures and two coarse illuminated-air pictures, with no volume grid.
  * Consumers: shafts.js and shafts-model.test.js. Dependencies: sunset-model.js; no browser APIs. */
 import { createDensity, sunlight } from "./sunset-model.js";
-export const defaults = { sunElevation: 8, sunAzimuth: -18, cloudOpacity: 1.2, haze: 0.35 };
+export const defaults = { sunElevation: 8, sunAzimuth: -18, cloudOpacity: 1.2, haze: 0.35,
+  cloudSharpness: 1, shadowSmoothing: true };
 export const layerNames = ["near", "middle", "far"];
 export function createLayer(index, seed) {
   const width = [32, 64, 96][index], height = [20, 40, 60][index];
@@ -14,11 +15,16 @@ export function createLayer(index, seed) {
 export function createScene(seed = 42) {
   return { seed, layers: layerNames.map((_, i) => createLayer(i, (seed + i * 997) >>> 0)) };
 }
-export function sampleCloud(layer, x, y) {
+// Contrast around a fixed density edge; 1 preserves the original cloud mask.
+export function sharpenDensity(density, cloudSharpness) {
+  return Math.max(0, Math.min(2, (density - 0.35) * cloudSharpness + 0.35));
+}
+export function sampleCloud(layer, x, y, smoothing = true) {
   const u = x / layer.cellSize + layer.width / 2 - 0.5;
   const v = layer.height / 2 - y / layer.cellSize - 0.5;
   const ix = Math.floor(u), iy = Math.floor(v), fx = u - ix, fy = v - iy;
   const at = (a, b) => a < 0 || b < 0 || a >= layer.width || b >= layer.height ? 0 : layer.density[b * layer.width + a];
+  if (!smoothing) return at(Math.floor(u + 0.5), Math.floor(v + 0.5));
   return at(ix, iy) * (1 - fx) * (1 - fy) + at(ix + 1, iy) * fx * (1 - fy)
     + at(ix, iy + 1) * (1 - fx) * fy + at(ix + 1, iy + 1) * fx * fy;
 }
@@ -32,7 +38,8 @@ export function lightAt(scene, x, y, depth, settings) {
   let transmission = 1;
   for (const layer of scene.layers) if (layer.depth > depth) {
     const distance = (layer.depth - depth) / direction[2];
-    const density = sampleCloud(layer, x + direction[0] * distance, y + direction[1] * distance);
+    const density = sharpenDensity(sampleCloud(layer, x + direction[0] * distance, y + direction[1] * distance,
+      settings.shadowSmoothing), settings.cloudSharpness);
     transmission *= Math.exp(-settings.cloudOpacity * density / direction[2]);
   }
   return transmission;

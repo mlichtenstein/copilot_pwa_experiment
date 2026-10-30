@@ -2,7 +2,7 @@
  * Consumers: Node test runner. Dependencies: node:test, node:assert and shafts-model.js. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { defaults, createScene, createLayer, buildLightMaps, renderShafts, lightAt } from "./shafts-model.js";
+import { defaults, createScene, createLayer, buildLightMaps, renderShafts, lightAt, sampleCloud, sharpenDensity } from "./shafts-model.js";
 test("three repeatable pictures grow with distance and produce only two air maps", () => {
   const scene = createScene();
   assert.deepEqual(scene, createScene());
@@ -43,4 +43,20 @@ test("control extremes produce finite nonnegative air colors and opaque display 
     assert.equal(pixels.length, 2560);
     assert.ok(pixels.every((v, i) => i % 4 !== 3 || v === 255));
   }
+});
+
+test("shadow smoothing blends cells while nearest sampling preserves a hard boundary", () => {
+  const layer = { width: 2, height: 1, cellSize: 1, density: Float64Array.of(0, 1) };
+  assert.equal(sampleCloud(layer, -0.25, 0, true), 0.25);
+  assert.equal(sampleCloud(layer, -0.25, 0, false), 0);
+  assert.equal(sampleCloud(layer, 0.25, 0, false), 1);
+  assert.equal(sharpenDensity(0.2, 1), 0.2);
+  assert.equal(sharpenDensity(0.2, 8), 0);
+  assert.ok(sharpenDensity(0.5, 8) > sharpenDensity(0.5, 1));
+});
+test("sharper unsmoothed shadows change the light maps without changing cloud fields", () => {
+  const scene = createScene(), copy = scene.layers.map(l => l.density.slice());
+  const original = buildLightMaps(scene), sharp = buildLightMaps(scene, { cloudSharpness: 8, shadowSmoothing: false });
+  assert.notDeepEqual(original.gaps[0].pixels, sharp.gaps[0].pixels);
+  scene.layers.forEach((layer, i) => assert.deepEqual(layer.density, copy[i]));
 });

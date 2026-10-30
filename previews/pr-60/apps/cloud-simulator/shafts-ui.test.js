@@ -8,7 +8,7 @@ test("sun slider redraws; pattern buttons change one layer; reset restores the o
   let callback, pixels;
   const elements = new Map();
   const get = id => {
-    if (!elements.has(id)) elements.set(id, { value: String(defaults[id] ?? ""),
+    if (!elements.has(id)) elements.set(id, { value: String(defaults[id] ?? ""), checked: defaults[id] === true,
       textContent: "", listeners: {}, addEventListener(name, handler) { this.listeners[name] = handler; }, setAttribute() {} });
     return elements.get(id);
   };
@@ -25,7 +25,13 @@ test("sun slider redraws; pattern buttons change one layer; reset restores the o
     assert.notDeepEqual(pixels, first);
     get("pattern-0").listeners.click(); callback(32);
     assert.equal(get("patterns").textContent, "near: 43 · middle: 1039 · far: 2036");
+    get("cloudSharpness").value = "8"; get("cloudSharpness").listeners.input(); callback(40);
+    const smooth = pixels.slice();
+    get("shadowSmoothing").checked = false; get("shadowSmoothing").listeners.input(); callback(44);
+    assert.notDeepEqual(pixels, smooth);
     get("reset").listeners.click(); callback(48);
+    assert.equal(get("shadowSmoothing").checked, true);
+    assert.equal(Number(get("cloudSharpness").value), 1);
     assert.equal(get("patterns").textContent, originalPatterns);
     assert.deepEqual(pixels, first);
     assert.ok(!elements.has("slice"));
