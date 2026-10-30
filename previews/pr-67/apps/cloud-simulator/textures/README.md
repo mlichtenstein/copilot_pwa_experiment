@@ -59,4 +59,4 @@ The same WickedInsignia pack supplies three more unchanged JPEGs: `FX_CloudAlpha
 
 - `FX_CloudAlpha09.jpg` SHA-256: `1c3c4640462a520b8153ba0e766a25e3742664ed9fd90527714e90158cf0dbfc`
 
-Photo masks are sampled as one finite region, not as brushes or seamless tiles. The current source crops have no verified horizontal seam and are never wrapped/mirrored. Original brush JPEGs are sampled with stable seeded stamp transforms (jitter, scale, flips, rotation and opacity); their image edges are transparent. See valley-sampling.js for the distinct paths.
+Photo masks stay on one sky plane. Their original JPEG crops are unchanged; runtime preprocessing creates a wrapping strip by softly overlapping 18% of the left/right edges in alpha and premultiplied grayscale shading. The strip wraps continuously under wind with bilinear seam sampling, without mirroring. Its overall pattern repeats periodically. Original brush JPEGs are sampled with stable seeded stamp transforms (jitter, scale, flips, rotation and opacity); their image edges are transparent. See valley-sampling.js for the distinct paths.

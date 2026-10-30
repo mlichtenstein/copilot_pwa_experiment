@@ -4,8 +4,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { defaults, revealFields, mountainRidge, terrainProfile, mixCloudSamples, renderValley, textureOptions } from "./valley-model.js";
-import { photoCoordinates, brushStamps, cloudSampler } from "./valley-sampling.js";
-import { decodeCloudTexture } from "./valley-textures.js";
+import { photoCoordinates, wrappedPhotoTexel, brushStamps, cloudSampler } from "./valley-sampling.js";
+import { decodeCloudTexture, makeWrappingPhoto } from "./valley-textures.js";
 function texture(seed) {
   let state = seed;
   return { width: 32, height: 32, pixels: Float32Array.from({ length: 1024 }, () => {
@@ -120,20 +120,32 @@ test("two-cloud blend preserves endpoints, opacity and shading without transpare
   assert.deepEqual(draw(a, 0.5, a), draw(a, 0, a));
 });
 
-test("photographs use one monotone bounded crop on one plane, with no wrap, mirroring or brush reseeding", () => {
-  const options = { ...defaults, wind: 4 }, photo = { ...texture(42), kind: "photo" };
-  for (const time of [-10000, 0, 20, 10000]) {
-    let previous = -1;
-    for (let i = 0; i <= 20; i++) {
-      const uv = photoCoordinates(-1 + i / 10, i / 20, time, options, 2.5);
-      assert.ok(uv.u >= previous && uv.u >= 0 && uv.u <= 1 && uv.v >= 0 && uv.v <= 1); previous = uv.u;
-    }
-  }
-  assert.deepEqual(photoCoordinates(0, .5, 10000, options), photoCoordinates(0, .5, 20000, options));
+test("photos advect continuously with wind at zoom 1, wrap in either direction and remain on one plane", () => {
+  const options = { ...defaults, textureScale: 1, wind: 4 }, photo = makeWrappingPhoto({ ...texture(42), kind: "photo" });
+  assert.notDeepEqual(photoCoordinates(0,.5,10000,options),photoCoordinates(0,.5,20000,options));
+  assert.ok(photoCoordinates(0,.5,20,options).u < photoCoordinates(0,.5,0,options).u);
+  assert.ok(photoCoordinates(0,.5,20,{...options,wind:-4}).u > photoCoordinates(0,.5,0,options).u);
   for (const layer of [1,2]) assert.equal(cloudSampler(photo,0,options,layer,32,20)(16,10).alpha, 0);
   assert.deepEqual(cloudSampler(photo,0,{...options,brushSeed:1},0,32,20)(16,10),cloudSampler(photo,0,{...options,brushSeed:99},0,32,20)(16,10));
-  const full = photoCoordinates(-1,0,0,{...options,textureScale:1},1.6);
-  assert.deepEqual(full,{u:0,v:0});
+  const still = {...options,wind:0};
+  assert.deepEqual(cloudSampler(photo,0,still,0,32,20)(16,10),cloudSampler(photo,10000,still,0,32,20)(16,10));
+  assert.notDeepEqual(cloudSampler(photo,0,options,0,32,20)(16,10),cloudSampler(photo,20,options,0,32,20)(16,10));
+  const u = -.37;
+  for (const offset of [-2,-1,1,2]) {
+    const a=wrappedPhotoTexel(photo,u,.5),b=wrappedPhotoTexel(photo,u+offset,.5);
+    assert.ok(Math.abs(a.alpha-b.alpha)<1e-10); assert.ok(Math.abs(a.shade-b.shade)<1e-10);
+  }
+});
+test("photo edge overlap preserves premultiplied shading, source data and a continuous wrap seam", () => {
+  const image = {width:64,height:2,pixels:new Float32Array(128).fill(1),shading:Float32Array.from({length:128},(_,i)=>(i%64)/63),kind:"photo"};
+  const before=image.shading.slice(), wrapped=makeWrappingPhoto(image);
+  assert.ok(wrapped.width < image.width); assert.deepEqual(image.shading,before);
+  for (const y of [.1,.9]) {
+    const a=wrappedPhotoTexel(wrapped,-1e-7,y),b=wrappedPhotoTexel(wrapped,1e-7,y);
+    assert.ok(Math.abs(a.shade-b.shade)<1e-5); assert.equal(a.alpha,1); assert.equal(b.alpha,1);
+  }
+  const transparent={...image,pixels:new Float32Array(128),shading:new Float32Array(128).fill(1)};
+  assert.equal(wrappedPhotoTexel(makeWrappingPhoto(transparent),0,.5).alpha,0);
 });
 test("brush transforms are seeded, varied and advect continuously without frame-wise jitter", () => {
   const options = { ...defaults, brushSeed: 1 }, a = brushStamps(0,options,0), b = brushStamps(0.1,options,0);

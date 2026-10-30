@@ -1,7 +1,7 @@
 /* Purpose: Load sourced bitmaps and connect valley texture controls to a simulation clock.
  * Consumers: valley.html. Dependencies: valley-model.js, DOM IDs, valley-textures.js, Image/Canvas and service worker APIs. */
 import { defaults, textureOptions, renderValley } from "./valley-model.js";
-import { decodeCloudTexture } from "./valley-textures.js";
+import { decodeCloudTexture, makeWrappingPhoto } from "./valley-textures.js";
 const element = id => document.getElementById(id), canvas = element("sky"), context = canvas.getContext("2d");
 let textures, brushSeed = 1, time = 0, playing = false, previous, elapsed = 0, dirty = true;
 function selectedTexture(slot) { return textureOptions.find(option => option.id === element("texture-" + slot).value) ?? textureOptions[0]; }
@@ -53,7 +53,8 @@ async function loadTexture(option) {
   const scratch = document.createElement("canvas"); scratch.width = 512; scratch.height = Math.max(1, Math.round(512 * (image.naturalHeight || 512) / (image.naturalWidth || 512)));
   const ctx = scratch.getContext("2d", { willReadFrequently: true }); ctx.drawImage(image, 0, 0, scratch.width, scratch.height);
   const rgba = ctx.getImageData(0, 0, scratch.width, scratch.height).data;
-  const texture = decodeCloudTexture(rgba, scratch.width, scratch.height, option.profile);
+  let texture = decodeCloudTexture(rgba, scratch.width, scratch.height, option.profile);
+  if (option.profile) texture = makeWrappingPhoto(texture);
   texture.seed = textureOptions.indexOf(option) * 101;
   return [option.id, texture];
 }
