@@ -30,13 +30,13 @@ The session's `getParams`/`applyParams` powers the existing shared rating bar an
 
 ## Lightning: first pressure test
 
-A seeded direction score grows a main channel through a fixed noisy field. Short side branches attach to existing nodes. When the head reaches the same terrain boundary used by rendering, ancestor links identify a connected bright path. The flash decays, followed by a quiet interval and another strike. Starts paused at the actual flash peak. Next shape chooses a fresh setup at peak; Before strike chooses a fresh setup in the ready phase. Both remain paused. Step from peak only ages/fades the same channel; Step from ready starts the leader. Starting modes are scene metadata, not host conditionals. Cloud texture remains fixed for one seed.
+A seeded direction score grows a main channel through a fixed noisy field. Short side branches attach to existing nodes. When the head reaches the same terrain boundary used by rendering, ancestor links identify a connected bright path. The flash decays, followed by a quiet interval and another strike. Starts paused at the actual flash peak. Next shape chooses a fresh setup at peak; Before strike chooses a fresh setup in the ready phase. Both remain paused. Step from peak only ages/fades the same channel; Step from ready starts the leader. Starting modes are scene metadata, not host conditionals. Cloud texture remains fixed for one seed. The scene now contains three far-to-near layer records, each owning cloud density, channel graph, random-generator state and flash clock. Each layer advances independently with the same parameter schema. Rendering composites each cloud/channel/opaque-terrain pass in depth order, so nearer terrain occludes farther strikes. On contact, only that layer’s terrain gets a small radial light pool, using the flash’s exponential decay. No cross-layer terrain light is applied.
 
 This is an artistic growth rule, not an electrostatic solver. No charge conservation, polarity, upward streamers, thunder, physical distance units or volumetric shadow transport are claimed. The scene has internal components (cloud field, channel graph, flash state); a generic scene graph/ECS/layer manager is deliberately not introduced yet. Subsequent effects should reveal which shared concepts are actually useful.
 
 ## Open limits to test next
 
-- Multiple simultaneous effects and explicit render ordering.
+- Shared composition across different effect modules; Lightning currently owns its three internal depth passes.
 - State migrations/versioning beyond parameter preset version 1.
 - A richer parameter schema (enums, vectors, multiple resolutions) when a second real effect needs it.
 - Shared lighting inputs and stable composition with the older Horizon/Shafts studies.
