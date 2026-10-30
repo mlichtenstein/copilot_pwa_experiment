@@ -33,7 +33,7 @@ Both derivatives are CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/
 | sunset-rose.jpg | Colorful Sunset Clouds / Free Nature Stock | https://commons.wikimedia.org/wiki/File:Colorful_Sunset_Clouds.jpg (original source: https://isorepublic.com/photo/colorful-sunset-clouds/) | Original 3648×5472; crop (0,1200)–(3648,3480), resize to 768×480, JPEG quality 91. |
 | sunset-embers.jpg | Sun behind the clouds during beautiful sunset / George Becker | https://commons.wikimedia.org/wiki/File:Sun_behind_the_clouds_during_beautiful_sunset.jpg (original: https://www.pexels.com/photo/silhouette-photo-of-clouds-113570/) | Original 5456×3632; crop (400,0)–(5456,2400) excludes sun disc and ground; resize to 768×365, JPEG quality 91. Commons explicitly records the pre-2018 CC0 release, not the current Pexels license. |
 
-Downloaded and license pages checked 2026-10-30. Coordinates are source-image pixels. Runtime briefly decodes a 512×512 RGBA buffer, then discards it after extracting scalar fields, and remaps normalized coordinates to the viewport, so aspect can be artistically stretched. No synthesized image content or recoloring is baked into these derivatives.
+Downloaded and license pages checked 2026-10-30. Coordinates are source-image pixels. Runtime briefly decodes a 512-pixel-wide, aspect-preserving RGBA buffer, then discards it after extracting scalar fields, and preserves image aspect for the single-region photo crop. No synthesized image content or recoloring is baked into these derivatives.
 
 SHA-256 records:
 
@@ -58,3 +58,5 @@ The same WickedInsignia pack supplies three more unchanged JPEGs: `FX_CloudAlpha
 - `FX_CloudAlpha05.jpg` SHA-256: `d46ee3f9b852158944b38cbb924579f79c986aa7c9d565d2ff5013d954682555`
 
 - `FX_CloudAlpha09.jpg` SHA-256: `1c3c4640462a520b8153ba0e766a25e3742664ed9fd90527714e90158cf0dbfc`
+
+Photo masks are sampled as one finite region, not as brushes or seamless tiles. The current source crops have no verified horizontal seam and are never wrapped/mirrored. Original brush JPEGs are sampled with stable seeded stamp transforms (jitter, scale, flips, rotation and opacity); their image edges are transparent. See valley-sampling.js for the distinct paths.

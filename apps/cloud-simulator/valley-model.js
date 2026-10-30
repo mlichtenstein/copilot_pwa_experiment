@@ -1,5 +1,6 @@
 /* Purpose: Animate fixed cloud texture sampling and soft reveal fields over a valley.
- * Consumers: valley.js and valley-model.test.js. Dependencies: valley-noise.js; no DOM or image decoding. */
+ * Consumers: valley.js and valley-model.test.js. Dependencies: valley-noise.js, valley-sampling.js; no DOM or image decoding. */
+import { cloudSampler } from "./valley-sampling.js";
 import { perlin3 } from "./valley-noise.js";
 export const defaults = { wind: 4, formationSpeed: 0.3, cloudY: 0.46,
   bandWidth: 0.32, coverage: 0.55, maskSoftness: 0.16, windwardClearance: 0.025, leewardClearance: 0.09, textureScale: 1.1, opacity: 1.4, textureBlend: 0, noiseScale: 3, noiseDrift: 0.2 };
@@ -24,13 +25,6 @@ export function mountainRidge(x, layer, horizon = "valley") {
   const width = [0.58, 0.48, 0.4][layer];
   return [0.36, 0.31, 0.27][layer] + [0.45, 0.57, 0.7][layer] * Math.exp(-((x / width) ** 2))
     + 0.025 * Math.sin(x * 11 + layer * 2) + 0.012 * Math.sin(x * 27 - layer);
-}
-export function sampleTexture(texture, u, v, pixels = texture.pixels) {
-  if (v < 0 || v > 1) return 0;
-  u = ((u % 1) + 1) % 1;
-  const x = Math.min(texture.width - 1, Math.floor(u * texture.width));
-  const y = Math.min(texture.height - 1, Math.floor(v * texture.height));
-  return pixels[y * texture.width + x];
 }
 function visibleRidge(x, horizon) {
   return Math.min(...[0, 1, 2].map(layer => mountainRidge(x, layer, horizon)));
@@ -90,18 +84,12 @@ export function mixCloudSamples(a, b, amount) {
   const t = clamp(amount), alpha = a.alpha * (1 - t) + b.alpha * t;
   return { alpha, shade: alpha > 0 ? (a.shade * a.alpha * (1 - t) + b.shade * b.alpha * t) / alpha : 0 };
 }
-function sampleCloud(texture, x, y, time, s, layer) {
-  let u = (x + 1) * 0.5 * s.textureScale - time * s.wind / 192 * [0.5, 0.75, 1][layer] + layer * 0.27;
-  const center = layerCenter(s, layer);
-  const v = texture.mirrored ? clamp((y - 0.5) * s.textureScale + 0.5) : (y - center) / ((s.placement === "full" ? 1.5 : 0.55) / s.textureScale) + 0.5;
-  if (texture.mirrored) { u = ((u % 2) + 2) % 2; if (u > 1) u = 2 - u; }
-  const alpha = sampleTexture(texture, u, v);
-  return { alpha, shade: texture.shading ? sampleTexture(texture, u, v, texture.shading) : 1 - alpha };
-}
 export function renderValley(texture, time = 0, options = {}, shape = "combined", width = 192, height = 120, textureB = texture) {
   const s = { ...defaults, ...options }, pixels = new Uint8ClampedArray(width * height * 4);
   const grids = shape === "noise" ? [0, 1, 2].map(layer => noiseGrid(time, s, layer)) : [];
   const terrain = Array.from({ length: width }, (_, px) => terrainProfile(2 * (px + 0.5) / width - 1, s));
+  const samplersA = [0, 1, 2].map(layer => cloudSampler(texture, time, s, layer, width, height));
+  const samplersB = s.textureBlend > 0 && textureB !== texture ? [0, 1, 2].map(layer => cloudSampler(textureB, time, s, layer, width, height)) : samplersA;
   for (let py = 0; py < height; py++) for (let px = 0; px < width; px++) {
     const x = 2 * (px + 0.5) / width - 1, y = (py + 0.5) / height;
     const horizon = Math.pow(y, 1.8);
@@ -111,8 +99,8 @@ export function renderValley(texture, time = 0, options = {}, shape = "combined"
     for (let layer = 0; layer < 3; layer++) {
       const fields = revealFields(x, y, time, s, shape, layer, grids[layer]?.(x, y), terrain[px]);
       if (fields.mask < 0.001) continue;
-      const a = sampleCloud(texture, x, y, time, s, layer);
-      const mixed = s.textureBlend <= 0 || textureB === texture ? a : mixCloudSamples(a, sampleCloud(textureB, x, y, time, s, layer), s.textureBlend);
+      const a = samplersA[layer](px, py);
+      const mixed = s.textureBlend <= 0 || textureB === texture ? a : mixCloudSamples(a, samplersB[layer](px, py), s.textureBlend);
       const alpha = clamp(mixed.alpha * s.opacity * fields.mask), shade = mixed.shade;
       // Existing renderer palette owns color; photographs supply only scalar shading/opacity.
       const tint = [0.64 + shade * 0.28, 0.5 + shade * 0.3, 0.5 + shade * 0.22];

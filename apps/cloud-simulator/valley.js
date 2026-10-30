@@ -3,7 +3,7 @@
 import { defaults, textureOptions, renderValley } from "./valley-model.js";
 import { decodeCloudTexture } from "./valley-textures.js";
 const element = id => document.getElementById(id), canvas = element("sky"), context = canvas.getContext("2d");
-let textures, time = 0, playing = false, previous, elapsed = 0, dirty = true;
+let textures, brushSeed = 1, time = 0, playing = false, previous, elapsed = 0, dirty = true;
 function selectedTexture(slot) { return textureOptions.find(option => option.id === element("texture-" + slot).value) ?? textureOptions[0]; }
 function preview(slot) {
   const selected = selectedTexture(slot), texture = textures[selected.id], target = element("preview-" + slot), ctx = target.getContext("2d");
@@ -18,12 +18,13 @@ function preview(slot) {
 function render() {
   const start = performance.now(), options = Object.fromEntries(Object.keys(defaults).map(key => [key, Number(element(key).value)]));
   options.horizon = ["valley", "hills", "open"].find(id => element("horizon-" + id).checked) ?? "hills";
+  options.brushSeed = brushSeed;
   options.placement = element("placement").value;
   const a = selectedTexture("a"), b = selectedTexture("b"), image = context.createImageData(canvas.width, canvas.height);
   image.data.set(renderValley(textures[a.id], time, options, element("shape").value, canvas.width, canvas.height, textures[b.id]));
   context.putImageData(image, 0, 0);
   for (const key of Object.keys(defaults)) element(key + "-value").textContent = element(key).value;
-  element("stats").textContent = `${a.name} → ${b.name} · ${Math.round(options.textureBlend * 100)}% B · t ${time.toFixed(1)} s · ${(performance.now() - start).toFixed(0)} ms/frame`;
+  element("stats").textContent = `${a.name} → ${b.name} · ${Math.round(options.textureBlend * 100)}% B · layout ${brushSeed} · t ${time.toFixed(1)} s · ${(performance.now() - start).toFixed(0)} ms/frame`;
   dirty = false;
 }
 function setPlaying(value) {
@@ -38,8 +39,9 @@ element("placement").addEventListener("change", () => { dirty = true; });
 element("shape").addEventListener("change", () => { dirty = true; });
 element("play").addEventListener("click", () => setPlaying(!playing));
 element("step").addEventListener("click", () => { setPlaying(false); time += 1; dirty = true; });
+element("shuffle").addEventListener("click", () => { brushSeed += 1; dirty = true; });
 element("reset").addEventListener("click", () => {
-  setPlaying(false); time = 0;
+  setPlaying(false); time = 0; brushSeed = 1;
   for (const [key, value] of Object.entries(defaults)) element(key).value = value;
   element("texture-a").value = "rose"; element("texture-b").value = "billow";
   if (textures) { preview("a"); preview("b"); }
@@ -48,14 +50,16 @@ element("reset").addEventListener("click", () => {
 });
 async function loadTexture(option) {
   const image = new Image(); image.src = option.file; await image.decode();
-  const scratch = document.createElement("canvas"); scratch.width = scratch.height = 512;
-  const ctx = scratch.getContext("2d", { willReadFrequently: true }); ctx.drawImage(image, 0, 0, 512, 512);
-  const rgba = ctx.getImageData(0, 0, 512, 512).data;
-  return [option.id, decodeCloudTexture(rgba, 512, 512, option.profile)];
+  const scratch = document.createElement("canvas"); scratch.width = 512; scratch.height = Math.max(1, Math.round(512 * (image.naturalHeight || 512) / (image.naturalWidth || 512)));
+  const ctx = scratch.getContext("2d", { willReadFrequently: true }); ctx.drawImage(image, 0, 0, scratch.width, scratch.height);
+  const rgba = ctx.getImageData(0, 0, scratch.width, scratch.height).data;
+  const texture = decodeCloudTexture(rgba, scratch.width, scratch.height, option.profile);
+  texture.seed = textureOptions.indexOf(option) * 101;
+  return [option.id, texture];
 }
 export const ready = Promise.all(textureOptions.map(loadTexture)).then(entries => {
   textures = Object.fromEntries(entries); preview("a"); preview("b");
-  for (const id of ["play", "step", "reset"]) element(id).disabled = false;
+  for (const id of ["play", "step", "reset", "shuffle"]) element(id).disabled = false;
 }).catch(error => {
   console.error("Valley texture load failed", error); element("status").textContent = "Cloud textures could not load. Reload online to try again.";
   element("stats").textContent = "Texture loading failed.";

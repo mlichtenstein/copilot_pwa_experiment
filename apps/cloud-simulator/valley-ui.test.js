@@ -32,7 +32,7 @@ test("textures load; switching keeps time; step pauses, reset restores defaults"
     get("texture-a").value = "bank"; get("texture-a").handlers.change(); frame();
     get("texture-b").value = "veil"; get("texture-b").handlers.change();
     get("textureBlend").value = "0.5"; get("textureBlend").handlers.input(); frame();
-    assert.ok(get("stats").textContent.includes("Soft bank → Thin veil · 50% B · t 1.0 s"));
+    assert.ok(get("stats").textContent.includes("Soft bank → Thin veil · 50% B · layout 1 · t 1.0 s"));
     get("play").handlers.click(); frame(); frame(100);
     assert.ok(get("stats").textContent.includes("t 1.1 s"));
     globalThis.document.hidden = true; listeners.visibilitychange(); frame(5000);
@@ -40,7 +40,11 @@ test("textures load; switching keeps time; step pauses, reset restores defaults"
     assert.ok(get("stats").textContent.includes("t 1.1 s"));
     get("windwardClearance").value = "0.2"; get("windwardClearance").handlers.input(); frame();
     get("leewardClearance").value = "0"; get("leewardClearance").handlers.input(); frame();
+    get("shuffle").handlers.click(); frame();
+    assert.ok(get("stats").textContent.includes("layout 2"));
+    assert.ok(get("stats").textContent.includes("t 1.1 s"));
     get("reset").handlers.click(); frame();
+    assert.ok(get("stats").textContent.includes("layout 1"));
     assert.equal(Number(get("windwardClearance").value), defaults.windwardClearance);
     assert.equal(Number(get("leewardClearance").value), defaults.leewardClearance);
     assert.equal(get("play").textContent, "Play wind"); assert.equal(get("texture-a").value, "rose"); assert.equal(get("texture-b").value, "billow"); assert.equal(Number(get("textureBlend").value), 0);

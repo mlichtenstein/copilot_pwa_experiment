@@ -17,5 +17,5 @@ export function decodeCloudTexture(rgba, width, height, profile) {
     if (shading) shading[i] = gray;
   }
   // RGB is deliberately not retained: only scalar opacity and grayscale shading reach the renderer.
-  return { width, height, pixels, shading, mirrored: Boolean(profile) };
+  return { width, height, pixels, shading, kind: profile ? "photo" : "brush" };
 }

@@ -11,8 +11,7 @@
 const SCOPE_PATH = new URL(self.registration.scope).pathname.replace(/\/+$/, "") || "/";
 const CACHE_PREFIX = "cloud-simulator::" + SCOPE_PATH + "::";
 const CACHE = CACHE_PREFIX + "v1";
-const FILES = ["./", "index.html", "manifest.json", "icon.svg", "style.css", "app.js", "simulation.js", "sunset.html", "sunset.js", "sunset-model.js", "convection.html", "convection.js", "convection-model.js", "horizon.html", "horizon.js", "horizon-model.js", "atmosphere-model.js", "horizon-bitmaps.js",
-  "valley.html", "valley.js", "valley-model.js", "valley-noise.js", "valley-textures.js", "textures/FX_CloudAlpha01.jpg", "textures/FX_CloudAlpha06.jpg", "textures/FX_CloudAlpha08.jpg", "textures/FX_CloudAlpha03.jpg", "textures/FX_CloudAlpha05.jpg", "textures/FX_CloudAlpha09.jpg", "textures/sunset-rose.jpg", "textures/sunset-embers.jpg", "../shared/presets.js", "../shared/presets-panel.js", "../shared/presets.css"];
+const FILES = ["./", "index.html", "manifest.json", "icon.svg", "style.css", "app.js", "simulation.js", "sunset.html", "sunset.js", "sunset-model.js", "convection.html", "convection.js", "convection-model.js", "horizon.html", "horizon.js", "horizon-model.js", "atmosphere-model.js", "horizon-bitmaps.js", "shafts.html", "shafts.js", "shafts-model.js", "visibility-model.js", "../shared/presets.js", "../shared/presets-panel.js", "../shared/presets.css", "valley.html", "valley.js", "valley-model.js", "valley-sampling.js", "valley-noise.js", "valley-textures.js", "textures/FX_CloudAlpha01.jpg", "textures/FX_CloudAlpha06.jpg", "textures/FX_CloudAlpha08.jpg", "textures/FX_CloudAlpha03.jpg", "textures/FX_CloudAlpha05.jpg", "textures/FX_CloudAlpha09.jpg", "textures/sunset-rose.jpg", "textures/sunset-embers.jpg"];
 
 function precache() {
   return caches.open(CACHE).then(cache => Promise.all(FILES.map(path => {

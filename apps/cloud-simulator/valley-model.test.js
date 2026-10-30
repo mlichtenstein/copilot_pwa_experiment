@@ -3,7 +3,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { defaults, sampleTexture, revealFields, mountainRidge, terrainProfile, mixCloudSamples, renderValley, textureOptions } from "./valley-model.js";
+import { defaults, revealFields, mountainRidge, terrainProfile, mixCloudSamples, renderValley, textureOptions } from "./valley-model.js";
+import { photoCoordinates, brushStamps, cloudSampler } from "./valley-sampling.js";
 import { decodeCloudTexture } from "./valley-textures.js";
 function texture(seed) {
   let state = seed;
@@ -11,13 +12,6 @@ function texture(seed) {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 4294967296;
   }) };
 }
-test("texture sampling wraps horizontally in either direction and is empty outside its height", () => {
-  const image = texture(123);
-  assert.equal(sampleTexture(image, -0.75, 0.5), sampleTexture(image, 0.25, 0.5));
-  assert.equal(sampleTexture(image, 1.25, 0.5), sampleTexture(image, 0.25, 0.5));
-  assert.equal(sampleTexture(image, 0.5, -0.01), 0);
-  assert.equal(sampleTexture(image, 0.5, 1.01), 0);
-});
 test("visible slopes swap with wind, stay attached and let zero-clearance clouds reach terrain", () => {
   let active = 0, untouched = 0;
   for (let i = 0; i < 100; i++) {
@@ -90,7 +84,7 @@ test("photo processing removes sky, retains cloud shading and never passes RGB t
   const opts = { horizon: "open", placement: "full", coverage: 1 };
   assert.deepEqual(renderValley(empty, 0, opts, "noise", 32, 20), renderValley(texture(8), 0, { ...opts, opacity: 0 }, "noise", 32, 20));
   // Different source hues with identical grayscale + alpha have identical rendered output.
-  const a = { width: 1, height: 1, pixels: new Float32Array([1]), shading: new Float32Array([0.4]), mirrored: true };
+  const a = { width: 1, height: 1, pixels: new Float32Array([1]), shading: new Float32Array([0.4]), kind: "photo" };
   assert.deepEqual(renderValley({ ...a, rgb: new Uint8Array([255,0,0]) }, 0, opts, "noise", 32, 20), renderValley({ ...a, rgb: new Uint8Array([0,0,255]) }, 0, opts, "noise", 32, 20));
 });
 
@@ -124,4 +118,31 @@ test("two-cloud blend preserves endpoints, opacity and shading without transpare
   assert.deepEqual(draw(a, 1, b), draw(b, 0, b));
   assert.notDeepEqual(draw(a, 0.5, b), draw(a, 0, b));
   assert.deepEqual(draw(a, 0.5, a), draw(a, 0, a));
+});
+
+test("photographs use one monotone bounded crop on one plane, with no wrap, mirroring or brush reseeding", () => {
+  const options = { ...defaults, wind: 4 }, photo = { ...texture(42), kind: "photo" };
+  for (const time of [-10000, 0, 20, 10000]) {
+    let previous = -1;
+    for (let i = 0; i <= 20; i++) {
+      const uv = photoCoordinates(-1 + i / 10, i / 20, time, options, 2.5);
+      assert.ok(uv.u >= previous && uv.u >= 0 && uv.u <= 1 && uv.v >= 0 && uv.v <= 1); previous = uv.u;
+    }
+  }
+  assert.deepEqual(photoCoordinates(0, .5, 10000, options), photoCoordinates(0, .5, 20000, options));
+  for (const layer of [1,2]) assert.equal(cloudSampler(photo,0,options,layer,32,20)(16,10).alpha, 0);
+  assert.deepEqual(cloudSampler(photo,0,{...options,brushSeed:1},0,32,20)(16,10),cloudSampler(photo,0,{...options,brushSeed:99},0,32,20)(16,10));
+  const full = photoCoordinates(-1,0,0,{...options,textureScale:1},1.6);
+  assert.deepEqual(full,{u:0,v:0});
+});
+test("brush transforms are seeded, varied and advect continuously without frame-wise jitter", () => {
+  const options = { ...defaults, brushSeed: 1 }, a = brushStamps(0,options,0), b = brushStamps(0.1,options,0);
+  assert.deepEqual(a,brushStamps(0,options,0)); assert.notDeepEqual(a,brushStamps(0,{...options,brushSeed:2},0));
+  assert.equal(new Set(a.map(s=>s.flipX)).size,2); assert.equal(new Set(a.map(s=>s.flipY)).size,2);
+  assert.ok(new Set(a.map(s=>s.width)).size > 5); assert.ok(new Set(a.map(s=>s.angle)).size > 5);
+  for (const stamp of a) {
+    const moved = b.find(s=>s.id===stamp.id); if (!moved) continue;
+    assert.ok(Math.abs(moved.x-stamp.x-0.1*options.wind/96*0.5)<1e-10);
+    assert.equal(moved.y,stamp.y); assert.equal(moved.angle,stamp.angle); assert.equal(moved.width,stamp.width);
+  }
 });
