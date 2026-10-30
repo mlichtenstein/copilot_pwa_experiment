@@ -1,9 +1,11 @@
 /*
  * Purpose: Convection study playback, parameter controls and pixel canvas presentation.
  * Consumers: convection.html.
- * Dependencies: convection-model.js, page element IDs, Canvas 2D and service worker APIs.
+ * Dependencies: convection-model.js, ../shared/presets-panel.js (emoji rating bar and ?p= links),
+ *   page element IDs, Canvas 2D and service worker APIs.
  */
 import { defaults, createConvection, step, totalWater, renderConvection } from "./convection-model.js";
+import { mountPresetBar } from "../shared/presets-panel.js";
 
 const element = id => document.getElementById(id);
 const canvas = element("sky");
@@ -117,6 +119,25 @@ showLegend();
 document.addEventListener("visibilitychange", () => { previousTime = undefined; elapsed = 0; });
 reset();
 setRunning(running);
+
+// Ratings and links: a run is its rules plus the seed, starting water and view.
+const getParams = () => ({ ...rules(), seed, water: Number(element("water").value), view: element("view").value });
+function applyParams(params) {
+  for (const id of [...liveRules, "water"]) {
+    if (typeof params[id] !== "number") continue;
+    element(id).value = params[id];
+    element(id + "-value").textContent = element(id).value;
+  }
+  for (const name of ["layering", "cloudStyle", "resolution"]) {
+    const input = document.querySelector(`input[name=${name}][value="${CSS.escape(String(params[name]))}"]`);
+    if (input) input.checked = true;
+  }
+  for (const id of ["feather", "pixelArt"]) if (typeof params[id] === "boolean") element(id).checked = params[id];
+  if ([...element("view").options].some(option => option.value === params.view)) element("view").value = params.view;
+  if (Number.isInteger(params.seed) && params.seed >= 0 && params.seed < 2 ** 32) seed = params.seed;
+  syncOptions(); showLegend(); reset();
+}
+mountPresetBar(element("presets"), { app: "cloud-simulator/convection", getParams, applyParams, canvas });
 function frame(time) {
   if (running && !document.hidden && previousTime !== undefined) {
     elapsed += Math.min(time - previousTime, 250);
