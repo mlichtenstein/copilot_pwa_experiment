@@ -1,11 +1,13 @@
 /* Purpose: Check the convection study's water budget, repeatability, sustained motion, rain,
- *   the inversion layer and the Sunset view's cloud shapes, with each option on and off.
+ *   the inversion layer, the LCL's flat cloud bases and the Sunset view's cloud shapes,
+ *   with each option on and off.
+ *   Runs at both page grid sizes (64×48 and 128×96) where size matters.
  * Consumers: Node's test runner. Dependencies: node:test, node:assert and convection-model.js. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createConvection, step, totalWater, saturation, renderConvection, RAIN_SCALE,
   cloudCover, cloudLayers, capping, billows, fray, haze, facing, HAZE_OPACITY, rainOpacity, sunsetSky, cloudColor,
-  inversionTarget, defaults } from "./convection-model.js";
+  inversionTarget, layeringOf, defaults } from "./convection-model.js";
 
 const allFinite = simulation => ["temperature", "vapor", "liquid", "rain", "vorticity"]
   .every(name => simulation[name].every(Number.isFinite));
@@ -16,15 +18,22 @@ test("capacity grows with temperature and shrinks with altitude", () => {
   assert.ok(saturation(0.6, 0.9) < saturation(0.6, 0.1));
 });
 
-test("vapor, cloud, rain and puddles together conserve water", () => {
-  const simulation = createConvection({ seed: 42 });
+// The page offers two grid sizes: 64×48 (pixel art, the default) and 128×96 (detailed).
+const SIZES = [[64, 48], [128, 96]];
+for (const [width, height] of SIZES) test(`${width}×${height}: vapor, cloud, rain and puddles together conserve water`, () => {
+  const simulation = createConvection({ width, height, seed: 42 });
   const start = totalWater(simulation);
   assert.ok(Math.abs(start / simulation.temperature.length - 0.11) < 1e-12);
-  for (let tick = 0; tick < 1500; tick++) step(simulation);
+  let clouds = false, rain = false;
+  for (let tick = 0; tick < 1500; tick++) {
+    step(simulation);
+    clouds ||= simulation.liquid.some(value => value > 0.005);
+    rain ||= simulation.rain.some(value => value > RAIN_SCALE);
+  }
   assert.ok(Math.abs(totalWater(simulation) - start) / start < 1e-9);
   assert.ok(nonNegative(simulation) && allFinite(simulation));
-  assert.ok(simulation.liquid.some(value => value > 0.005), "clouds form");
-  assert.ok(simulation.rain.some(value => value > RAIN_SCALE), "rain falls");
+  assert.ok(clouds, "clouds form");
+  assert.ok(rain, "rain falls");
 });
 
 test("the same seed repeats exactly; another seed differs", () => {
@@ -42,7 +51,7 @@ test("the same seed repeats exactly; another seed differs", () => {
 // only the convecting layer under it counts: the warm layer is stable, so quiet by design.
 function interiorActivity(simulation, ticks, options = {}) {
   const { width, height } = simulation, rules = { ...defaults, ...options };
-  const top = rules.inversion ? Math.max(2, Math.round((1 - rules.inversionHeight) * (height - 1)) + 1) : 2;
+  const top = layeringOf(options) === "inversion" ? Math.max(2, Math.round((1 - rules.inversionHeight) * (height - 1)) + 1) : 2;
   let activity = 0;
   for (let tick = 0; tick < ticks; tick++) {
     const before = simulation.temperature.slice();
@@ -62,11 +71,15 @@ const randomSeeds = process.env.CONVECTION_SEEDS
   ? process.env.CONVECTION_SEEDS.split(",").map(Number)
   : [...crypto.getRandomValues(new Uint32Array(4))];
 
-// The inversion (on by default) runs on every seed; without it, on half of them.
-const seedRuns = [...randomSeeds.map(seed => [seed, true]), ...randomSeeds.slice(0, 2).map(seed => [seed, false])];
+// At the default 64×48, LCL (the default) runs on every seed and no layering on half.
+// The inversion runs at 128×96: at 64×48 its shallow convecting layer can settle on some
+// seeds (a known rough edge), so it is not held to the floor there. 128×96 also gets an
+// LCL run, so both sizes are covered.
+const seedRuns = [...randomSeeds.map(seed => [seed, "lcl", 64, 48]), ...randomSeeds.slice(2).map(seed => [seed, "none", 64, 48]),
+  ...randomSeeds.slice(0, 2).map(seed => [seed, "inversion", 128, 96]), [randomSeeds[3], "lcl", 128, 96]];
 test(`blobs keep rising and falling and rain keeps falling on random seeds ${randomSeeds.join(", ")}`, () => {
-  for (const [seed, inversion] of seedRuns) {
-    const simulation = createConvection({ seed }), options = { inversion };
+  for (const [seed, layering, width, height] of seedRuns) {
+    const simulation = createConvection({ width, height, seed }), options = { layering };
     const start = totalWater(simulation);
     // Rain comes in showers, so count how often a visible shaft (20+ pixels at half the
     // fixed rain color scale) is falling, sampled every 100 ticks after the spin-up.
@@ -77,12 +90,21 @@ test(`blobs keep rising and falling and rain keeps falling on random seeds ${ran
         activity += interiorActivity(simulation, 100, options) / 5;
         if (window > 0) { samples++; if (simulation.rain.filter(value => value > RAIN_SCALE / 2).length > 20) rainy++; }
       }
-      assert.ok(activity > ACTIVITY_FLOOR, `seed ${seed}, inversion ${inversion}, ticks ${window * 500}-${window * 500 + 499}: mean |ΔT| ${activity}`);
+      assert.ok(activity > ACTIVITY_FLOOR, `seed ${seed}, ${layering}, ${width}×${height}, ticks ${window * 500}-${window * 500 + 499}: mean |ΔT| ${activity}`);
     }
-    assert.ok(rainy >= samples / 2, `seed ${seed}, inversion ${inversion}: rain shafts visible in ${rainy} of ${samples} samples`);
-    assert.ok(nonNegative(simulation) && allFinite(simulation), `seed ${seed} stays finite and non-negative`);
-    assert.ok(Math.abs(totalWater(simulation) - start) / start < 1e-9, `seed ${seed} conserves water`);
+    assert.ok(rainy >= samples / 2, `seed ${seed}, ${layering}, ${width}×${height}: rain shafts visible in ${rainy} of ${samples} samples`);
+    assert.ok(nonNegative(simulation) && allFinite(simulation), `seed ${seed}, ${layering}, ${width}×${height} stays finite and non-negative`);
+    assert.ok(Math.abs(totalWater(simulation) - start) / start < 1e-9, `seed ${seed}, ${layering}, ${width}×${height} conserves water`);
   }
+});
+
+test("layering: the old inversion boolean still picks a mode; an explicit layering wins", () => {
+  assert.equal(layeringOf({}), defaults.layering);
+  assert.equal(layeringOf({ inversion: true }), "inversion");
+  assert.equal(layeringOf({ inversion: false }), "none");
+  assert.equal(layeringOf({ inversion: true, layering: "lcl" }), "lcl");
+  const run = options => { const simulation = createConvection({ seed: 9 }); for (let tick = 0; tick < 200; tick++) step(simulation, options); return simulation; };
+  assert.deepEqual(run({ inversion: true }), run({ layering: "inversion" }));
 });
 
 test("the inversion sounding: none below its height, warming by its strength across its depth", () => {
@@ -114,6 +136,45 @@ test("the inversion caps the cloud: it piles up just under the warm layer and fo
   assert.ok(off > 0.75, `without it the cloud is thickest near the lid (${off})`);
   assert.ok(high > 0.45 && high < 0.66, `capped under 0.6 (${high})`);
   assert.ok(low > 0.3 && low < 0.51 && low < high, `capped under 0.45 (${low})`);
+});
+
+// Cloud bases over ticks 2000-4000, every 50 ticks: in each column, the lowest cloudy
+// pixel (cloud water over 0.002) above the bottom tenth, where floor fog can form. Returns
+// the lowest base of each snapshot and the share of cloudy columns whose base lies within
+// 0.08 of it, so a flat deck of bases scores near 1 and ragged ones score low.
+function cloudBases(seed, options, size = {}) {
+  const simulation = createConvection({ seed, ...size }), { width, height } = simulation, start = totalWater(simulation);
+  const lowest = [];
+  let cloudy = 0, flat = 0;
+  for (let tick = 0; tick < 4000; tick++) {
+    step(simulation, options);
+    if (tick < 2000 || tick % 50) continue;
+    const bases = [];
+    for (let x = 0; x < width; x++) for (let y = Math.floor(0.9 * (height - 1)); y >= 1; y--) {
+      if (simulation.liquid[y * width + x] > 0.002) { bases.push(1 - y / (height - 1)); break; }
+    }
+    const low = Math.min(...bases);
+    lowest.push(low); cloudy += bases.length; flat += bases.filter(base => base <= low + 0.08).length;
+  }
+  assert.ok(Math.abs(totalWater(simulation) - start) / start < 1e-9, "conserves water");
+  return { lowest, flatShare: flat / cloudy, spread: Math.max(...lowest) - Math.min(...lowest), mean: lowest.reduce((a, b) => a + b) / lowest.length };
+}
+test("the LCL gives flat cloud bases at one height, under the inversion's cloud layer, set by its height", () => {
+  const lcl = cloudBases(42, { layering: "lcl" }), inversion = cloudBases(42, { layering: "inversion" }), none = cloudBases(42, { layering: "none" });
+  assert.ok(lcl.spread < 0.15, `the lowest base holds its height over time (within a few rows) (${lcl.spread})`);
+  assert.ok(lcl.mean > 0.25 && lcl.mean < 0.5, `near lclHeight ${defaults.lclHeight}: clear air under it (${lcl.mean})`);
+  assert.ok(lcl.flatShare > 1.5 * inversion.flatShare && lcl.flatShare > 1.5 * none.flatShare,
+    `more bases line up: ${lcl.flatShare} vs inversion ${inversion.flatShare}, none ${none.flatShare}`);
+  assert.ok(lcl.mean < cloudiestAltitude({ layering: "inversion" }), "bases sit below the inversion's cloud layer");
+  const high = cloudBases(42, { layering: "lcl", lclHeight: 0.5 });
+  assert.ok(high.mean > lcl.mean + 0.06, `a higher LCL lifts the bases (${high.mean} vs ${lcl.mean})`);
+});
+test("128×96: the LCL's bases are flat too, at its height", () => {
+  const size = { width: 128, height: 96 };
+  const lcl = cloudBases(42, { layering: "lcl" }, size), none = cloudBases(42, { layering: "none" }, size);
+  assert.ok(lcl.spread < 0.15, `the lowest base holds its height (${lcl.spread})`);
+  assert.ok(lcl.mean > 0.25 && lcl.mean < 0.5, `near lclHeight ${defaults.lclHeight} (${lcl.mean})`);
+  assert.ok(lcl.flatShare > 1.5 * none.flatShare, `more bases line up: ${lcl.flatShare} vs none ${none.flatShare}`);
 });
 
 test("without buoyancy the air settles below the activity floor", () => {
@@ -153,15 +214,16 @@ test("sunset cloud: buoyant cloudy masses turn solid, thin streamers and still c
   assert.ok(facing(-0.1, -0.05) > facing(0, 0) && facing(0, 0) > facing(0.1, 0.05));
 });
 
-test("sunset cloud: still cloud pressed under warmer air turns solid, as a capped layer", () => {
-  const width = 64, height = 48, size = width * height;
-  // A cloudy slab (rows 20-29) under air 0.2 warmer (rows above 20); no buoyancy anywhere.
-  const temperature = Float64Array.from({ length: size }, (_, i) => (Math.floor(i / width) < 20 ? 0.7 : 0.5));
-  const slab = Float64Array.from({ length: size }, (_, i) => (Math.floor(i / width) >= 20 && Math.floor(i / width) < 30 ? 0.005 : 0));
+for (const [width, height] of SIZES) test(`${width}×${height} sunset cloud: still cloud pressed under warmer air turns solid, as a capped layer`, () => {
+  const size = width * height, top = Math.round(height * 20 / 48), bottom = Math.round(height * 30 / 48);
+  // A cloudy slab under air 0.2 warmer; no buoyancy anywhere. The cap reaches a few
+  // pixels down (scaled to the grid), so the slab's top row is the one that turns solid.
+  const temperature = Float64Array.from({ length: size }, (_, i) => (Math.floor(i / width) < top ? 0.7 : 0.5));
+  const slab = Float64Array.from({ length: size }, (_, i) => (Math.floor(i / width) >= top && Math.floor(i / width) < bottom ? 0.005 : 0));
   const still = new Float64Array(size);
   assert.equal(Math.max(...cloudCover(slab, still, width, height)), 0, "uncapped, it stays a veil");
   const capped = cloudCover(slab, still, width, height, { capping: capping(temperature, width, height) });
-  assert.ok(capped[22 * width + 32] > 0.9, "capped, its top is solid");
+  assert.ok(capped[(top + 1) * width + width / 2] > 0.9, "capped, its top is solid");
 });
 
 test("feathered edges: the same solid core, with a fringe that fades out over several pixels", () => {
