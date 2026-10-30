@@ -1,11 +1,13 @@
 /*
  * Purpose: Noise weather playback, parameter controls and pixel canvas presentation.
  * Consumers: noise.html.
- * Dependencies: noise-model.js, ../shared/presets-panel.js (emoji rating bar and ?p= links), page element IDs, Canvas 2D and service worker APIs.
+ * Dependencies: noise-model.js, ../shared/presets-panel.js (emoji rating bar and ?p= links),
+ *   ../shared/drift.js (Drift: sliders wander on their own), page element IDs, Canvas 2D and service worker APIs.
  */
 import { defaults, createWeather, step, sampleFields, renderWeather, airborneRain, pooledRain,
   createRainLayer, updateRainLayer, startCloud } from "./noise-model.js";
 import { mountPresetBar } from "../shared/presets-panel.js";
+import { bindDrift } from "../shared/drift.js";
 
 const element = id => document.getElementById(id);
 const canvas = element("sky");
@@ -59,8 +61,9 @@ function reset() {
   render();
 }
 
+const showValue = id => { element(id + "-value").textContent = element(id).value; };
 for (const id of liveRules) {
-  const update = () => { element(id + "-value").textContent = element(id).value; };
+  const update = () => showValue(id);
   update();
   element(id).addEventListener("input", () => {
     update();
@@ -71,6 +74,11 @@ for (const id of liveRules) {
     render();
   });
 }
+// Drift: while playing, every slider wanders on its own slow random walk (own random
+// numbers, so the weather seed is untouched). Dragging a slider takes it over; it wanders on
+// from where it is left.
+const drift = bindDrift(liveRules.map(element), { seed: crypto.getRandomValues(new Uint32Array(1))[0], onChange: slider => showValue(slider.id) });
+element("drift").addEventListener("change", () => drift.sync());
 element("play").addEventListener("click", () => setRunning(!running));
 element("step").addEventListener("click", () => { setRunning(false); advance(rules()); render(); });
 element("reset").addEventListener("click", reset);
@@ -87,7 +95,7 @@ reset();
 setRunning(running);
 
 // Ratings and links: a run is its rules plus the seed and view.
-const getParams = () => ({ ...Object.fromEntries(liveRules.map(id => [id, Number(element(id).value)])), seed, view: element("view").value });
+const getParams = () => ({ ...Object.fromEntries(liveRules.map(id => [id, Number(element(id).value)])), seed, view: element("view").value, drift: element("drift").checked });
 function applyParams(params) {
   for (const id of liveRules) {
     if (typeof params[id] !== "number") continue;
@@ -95,6 +103,8 @@ function applyParams(params) {
     element(id + "-value").textContent = element(id).value;
   }
   if ([...element("view").options].some(option => option.value === params.view)) element("view").value = params.view;
+  if (typeof params.drift === "boolean") element("drift").checked = params.drift;
+  drift.sync();
   if (Number.isInteger(params.seed) && params.seed >= 0 && params.seed < 2 ** 32) seed = params.seed;
   showLegend(); reset();
 }
@@ -102,7 +112,10 @@ mountPresetBar(element("presets"), { app: "cloud-simulator/noise", getParams, ap
 function frame(time) {
   if (running && !document.hidden && previousTime !== undefined) {
     elapsed += Math.min(time - previousTime, 250);
-    const interval = 1000 / TICKS_PER_SECOND, current = rules();
+    const interval = 1000 / TICKS_PER_SECOND, ticks = Math.floor(elapsed / interval);
+    // Drift moves the sliders by the sim time that passes, so it stops when paused.
+    if (ticks && element("drift").checked) drift.step(ticks / TICKS_PER_SECOND);
+    const current = rules();
     let changed = false;
     while (elapsed >= interval) { advance(current); elapsed -= interval; changed = true; }
     if (changed) render();

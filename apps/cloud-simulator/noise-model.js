@@ -3,10 +3,11 @@
  *   are slices of seeded 3D gradient noise moving through time and scrolling with one global
  *   wind; the noise only forces the weather: where relative humidity, weighted by a
  *   cloud-layer band of height, crosses a threshold, stored cloud water condenses fast, and
- *   it evaporates slowly, from the edges in, once the forcing is gone; dense, lasting cloud water turns into real
- *   rain (draining the cloud) that falls slowly, drifts with the wind, evaporates (fast once
- *   no cloud is left above it) and collects; plus the views and the display-only rain
- *   curtains and streaks that draw rain falling out of raining clouds.
+ *   it evaporates slowly, from the edges in, once the forcing is gone; dense, lasting cloud
+ *   water turns into real rain (draining the cloud) that falls slowly, drifts with the wind,
+ *   spreads sideways only a little and never evaporates in the air, so every shaft reaches
+ *   the floor and collects; plus the views and the display-only rain curtains and streaks
+ *   drawn from that rain.
  * Consumers: noise.js and noise-model.test.js.
  * Dependencies: none; values are dimensionless experimental units, not a weather model.
  */
@@ -34,9 +35,9 @@ export const defaults = {
   // `layerHeight`, `layerThickness` across. `layerAsymmetry` > 0 puts more of the band above
   // the centre (a sharper bottom). Its edge shape is fixed (RULES.layerSharpness).
   layerHeight: 0.45, layerThickness: 0.3, layerAsymmetry: 0.35,
-  // Persistence: 0 = cloud vanishes about as fast as the noise moves on, 1 = it lingers for
-  // tens of seconds (see dissipation).
-  persistence: 0.6,
+  // Persistence (slider 0.5 to 1.5): 0.5 = cloud fades within several seconds of the noise
+  // moving on, 1 = it lingers for tens of seconds, 1.5 = about a minute (see dissipation).
+  persistence: 1,
   // Rain: rain made per tick by charged cloud (× density), and fall speed in pixels per tick.
   rainAmount: 0.003, fallSpeed: 0.25
 };
@@ -58,9 +59,10 @@ export const RULES = {
   // Each unit of rain made takes `rainDrain` units of cloud water, so a cloud cut off from
   // its forcing rains itself back below denseWater and stops, while the cloud remains.
   denseWater: 0.8, charge: 0.012, discharge: 0.1, rainThreshold: 0.6, rainDrain: 2,
-  // Rain dries 1.5% per tick outside cloud while cloud is still overhead (a falling shaft),
-  // and 10% per tick once its column has no cloud above (the cloud it fell from is gone).
-  rainEvaporation: 0.015, orphanEvaporation: 0.1, puddleEvaporation: 0.002
+  // Rain never dries in the air: it falls until it leaves the floor. Each tick it spreads
+  // sideways by `rainSpread` to each neighbor (a shaft widens by about 1.5 px over the
+  // whole fall at the default speed). Puddles on the floor dry at `puddleEvaporation`.
+  rainSpread: 0.003, puddleEvaporation: 0.002
 };
 
 // Texture → fractal shape: octaves 1 to 6 (fractional, so the slider is smooth) and
@@ -71,9 +73,10 @@ export function textureShape(texture = defaults.texture) {
 }
 
 // Cloud water lost per tick where the forcing has gone: persistence 0 → 0.04 (a full cloud
-// gone in about 25 ticks), 1 → about 0.0013 (about 800 ticks); default 0.6 → 0.005.
+// gone in about 25 ticks), 0.5 → 0.0071, 1 (default) → 0.0013 (about 800 ticks), 1.5 →
+// 0.00022. The slider covers 0.5 to 1.5; values from 0 to 2 are accepted.
 export function dissipation(persistence = defaults.persistence) {
-  return 0.04 * Math.pow(10, -1.5 * Math.max(0, Math.min(1, persistence)));
+  return 0.04 * Math.pow(10, -1.5 * Math.max(0, Math.min(2, persistence)));
 }
 
 // Fixed slope of the capacity curve, as in the convection study: cold air holds
@@ -163,7 +166,8 @@ export function createWeather({ width = 128, height = 96, seed = 1 } = {}) {
     humidity: zeros(), temperature: zeros(), pressure: zeros(),
     // potential: the cloud the noise forces this tick; cloud: the stored cloud water.
     relative: zeros(), potential: zeros(), cloud: zeros(), charge: zeros(), rain: zeros(), made: zeros(),
-    puddle: new Array(width).fill(0), rained: 0, evaporated: 0,
+    // rained = rain in the air + fallen (left the floor, all time); fallen = puddles + evaporated.
+    puddle: new Array(width).fill(0), rained: 0, fallen: 0, evaporated: 0,
     // Accumulated wind scroll and field time, so slider changes never jump the view;
     // `shifted` is how many whole pixels the stored cloud fields have been carried.
     scroll: 0, shifted: 0, time: 0, band: new Array(height).fill(1) };
@@ -268,9 +272,20 @@ function advect(values, width, height, dx, dy, spill) {
   for (let i = 0; i < values.length; i++) values[i] = next[i];
 }
 
-// One tick: advance time and the wind scroll, carry the stored cloud with it, resample the
-// forcing, condense or evaporate cloud water, turn dense lasting cloud into rain, then move
-// rain.
+// Spread rain sideways: each pixel passes `rainSpread` of itself to each side neighbor
+// (wrapping), so the total is unchanged.
+export function spreadRain(rain, width, height, spread = RULES.rainSpread) {
+  for (let y = 0; y < height; y++) {
+    const row = rain.slice(y * width, (y + 1) * width);
+    for (let x = 0; x < width; x++) {
+      rain[y * width + x] = (1 - 2 * spread) * row[x] + spread * (row[(x + width - 1) % width] + row[(x + 1) % width]);
+    }
+  }
+}
+
+// One tick: advance time and the wind scroll, carry the stored cloud and the rain with it,
+// resample the forcing, condense or evaporate cloud water, turn dense lasting cloud into
+// rain, then let rain fall.
 export function step(simulation, options = {}) {
   const rules = { ...defaults, ...options };
   const { width, height, cloud, charge, rain, puddle } = simulation;
@@ -280,25 +295,20 @@ export function step(simulation, options = {}) {
   const fall = Math.max(0, Math.min(1, rules.fallSpeed));
   // Cloud water and its charge drift with the wind, whole pixels at a time.
   const shift = Math.round(simulation.scroll) - simulation.shifted;
-  if (shift) { shiftColumns(cloud, width, height, shift); shiftColumns(charge, width, height, shift); simulation.shifted += shift; }
+  // Rain moves with them, so the wind pushes it uniformly and a shaft stays under its cloud
+  // without blurring sideways.
+  if (shift) {
+    for (const field of [cloud, charge, rain]) shiftColumns(field, width, height, shift);
+    simulation.shifted += shift;
+  }
   sampleFields(simulation, rules);
   condense(simulation, rules);
   // Kept for the views and tests: rain made at each pixel this tick.
   simulation.made = formRain(simulation, rules);
-  // Rain outside cloud dries: slowly in a shaft under cloud, fast once no cloud is left
-  // anywhere above it in its column, so rain never hangs in clear sky.
-  for (let x = 0; x < width; x++) {
-    let cloudAbove = false;
-    for (let y = 0; y < height; y++) {
-      const i = y * width + x;
-      if (cloud[i] > 0) { cloudAbove = true; continue; }
-      if (rain[i] <= 0) continue;
-      const loss = rain[i] * (cloudAbove ? RULES.rainEvaporation : RULES.orphanEvaporation);
-      rain[i] -= loss; simulation.evaporated += loss;
-    }
-  }
-  // Fall and drift: all rain moves `fallSpeed` down and `wind` sideways, sub-pixel.
-  advect(rain, width, height, rules.wind, fall, (x, amount) => { puddle[x] += amount; });
+  // Rain never dries in the air: it spreads sideways a little and falls `fallSpeed` down,
+  // sub-pixel, until it leaves the floor into that column's puddle.
+  spreadRain(rain, width, height);
+  advect(rain, width, height, 0, fall, (x, amount) => { puddle[x] += amount; simulation.fallen += amount; });
   for (let x = 0; x < width; x++) {
     const loss = puddle[x] * RULES.puddleEvaporation;
     puddle[x] -= loss; simulation.evaporated += loss;
@@ -332,28 +342,24 @@ export const airborneRain = simulation => simulation.rain.reduce((sum, value) =>
 export const pooledRain = simulation => simulation.puddle.reduce((sum, value) => sum + value, 0);
 
 // ---- Rain streaks and curtains (display only) ---------------------------------------------
-// The Sunset view draws rain two ways, neither of which changes the simulation.
-// Curtain: under each column with a raining dense core, the cloud's lower part smooths into
-// a soft grey sheet that starts at the top of the raining core, inside the cloud, and
-// stretches below the base, descending at `fallSpeed` as rain starts (up to CURTAIN.length
-// px) and fading toward its foot, so the fluffy top turns into a smooth curtain with no gap
-// or line at the base. It thins out once the core stops raining and vanishes within a few
-// ticks once its column has no cloud.
-// Streaks: thin streaks born inside a raining cloud (between the top of its raining core
-// and just under its base), at a random sub-pixel x and a random tick; birth is likelier
-// where rain is heavier and where a slow, wind-carried clumping noise is high, so streaks
-// gather into uneven shafts. Lengths are heavy-tailed (truncated power law, 3 to 30 px:
-// mostly short, a few long), and each streak gets its own speed (±20%), strength and,
-// sometimes, a second pixel of width. A streak never reaches above the row it was born on,
-// is mostly hidden while still inside cloud, and fades out within a few ticks once no cloud
-// is left above it.
+// The Sunset view draws the simulated rain two ways, neither of which changes the simulation.
+// Both follow the rain field itself, which never dries in the air, so a shaft can be traced
+// from the floor up to the cloud that made it.
+// Curtain: a soft grey sheet wherever rain is falling, its opacity rising with how much
+// rain there is (blurred over ±2 columns so its sides are soft). It starts inside the
+// raining cloud, where the rain is made, smooths the cloud's lower part, and runs down to
+// the floor with no fade at its foot; once a cloud stops raining the sheet's top lets go and
+// falls away.
+// Streaks: thin streaks born anywhere there is rain, at a random sub-pixel x and a random
+// tick; birth is likelier where rain is heavier and where a slow, wind-carried clumping noise
+// is high, so streaks gather into uneven shafts. Lengths are heavy-tailed (truncated power
+// law, 3 to 30 px: mostly short, a few long), and each streak gets its own speed (±20%),
+// strength and, sometimes, a second pixel of width. A streak fades in and out over its life,
+// never reaches above the row it was born on, and dims where the rain around it thins.
 export const STREAK = { length: [3, 30], lengthPower: 0.7, life: [40, 170], speed: [0.8, 1.2],
-  alpha: 0.6, wide: 0.15, spawnTries: 40, max: 300, scale: 0.12, below: 1.5, clumpSize: 9,
-  orphanFade: 0.8 };
-// Curtain: strength rises and falls per tick toward the column's raining share; `length` is
-// its longest reach below the base; `smooth` is how far above the base (px) the cloud is
-// smoothed into it.
-export const CURTAIN = { rise: 0.05, fall: 0.03, orphanFade: 0.6, length: 26, alpha: 0.55, smooth: 6 };
+  alpha: 0.6, wide: 0.15, spawnTries: 80, max: 300, scale: 0.03, clumpSize: 9, follow: 0.2 };
+// Curtain: opacity CURTAIN.alpha × clamp(rain / scale)^power.
+export const CURTAIN = { alpha: 0.5, scale: 0.06, power: 0.7 };
 export function createRainLayer(seed = 1) {
   let state = (seed ^ 0x5bd1e995) >>> 0;
   const random = () => (state = (Math.imul(1664525, state) + 1013904223) >>> 0) / 4294967296;
@@ -367,29 +373,16 @@ export function cloudBases(simulation) {
   return bases;
 }
 
-// Highest cloud row in each column (−1 if the column is clear).
-export function cloudTops(simulation) {
-  const { width, height, cloud } = simulation, tops = new Array(width).fill(-1);
-  for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) if (cloud[y * width + x] > 0) { tops[x] = y; break; }
-  return tops;
-}
-
-// Per column: the highest raining row (−1 if none) and how many pixels rain.
-export function rainingCores(simulation) {
-  const { width, height } = simulation, top = new Array(width).fill(-1), count = new Array(width).fill(0);
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (raining(simulation, y * width + x)) {
-    if (top[x] < 0) top[x] = y;
-    count[x]++;
+// Rain around a point, in streak units (1 = plenty): the mean over the pixel's row and the
+// rows just above and below.
+function rainNear(simulation, x, y) {
+  const { width, height, rain } = simulation, column = ((Math.floor(x) % width) + width) % width;
+  let total = 0, rows = 0;
+  for (let row = Math.floor(y) - 1; row <= Math.floor(y) + 1; row++) {
+    if (row < 0 || row >= height) continue;
+    total += rain[row * width + column]; rows++;
   }
-  return { top, count };
-}
-
-// The curtain for each column: strength 0–1 and length below the base in px. Columns carry
-// with the stored cloud as the wind shifts it.
-function curtainOf(layer, width) {
-  if (!layer.curtain || layer.curtain.strength.length !== width)
-    layer.curtain = { strength: new Array(width).fill(0), length: new Array(width).fill(0), shifted: null };
-  return layer.curtain;
+  return rows ? total / rows / STREAK.scale : 0;
 }
 
 // Truncated power law on [shortest, longest]: inverse-CDF sample of p(L) ∝ L^−(1 + power).
@@ -401,88 +394,39 @@ function streakLength(u) {
 
 export function updateRainLayer(layer, simulation, options = {}) {
   const rules = { ...defaults, ...options };
-  const { width, height, rain } = simulation, random = layer.random;
-  const bases = cloudBases(simulation), tops = cloudTops(simulation), clump = layer.clump ?? (() => 0);
-  const cores = rainingCores(simulation), curtain = curtainOf(layer, width);
-  // Curtains move with the cloud (whole pixels), then ease toward how hard each column rains.
-  const shifted = simulation.shifted ?? 0;
-  if (curtain.shifted !== null && shifted !== curtain.shifted) {
-    const by = ((shifted - curtain.shifted) % width + width) % width;
-    for (const key of ["strength", "length"]) {
-      const old = curtain[key].slice();
-      for (let x = 0; x < width; x++) curtain[key][(x + by) % width] = old[x];
-    }
-  }
-  curtain.shifted = shifted;
-  for (let x = 0; x < width; x++) {
-    if (bases[x] < 0) { curtain.strength[x] *= CURTAIN.orphanFade; }
-    else {
-      const target = cores.count[x] ? Math.min(1, 0.5 + 0.15 * cores.count[x]) : 0, now = curtain.strength[x];
-      curtain.strength[x] = now + (target - now) * (target > now ? CURTAIN.rise : CURTAIN.fall);
-    }
-    // It descends while the column rains and keeps its reach while it thins.
-    if (curtain.strength[x] < 0.02) { curtain.strength[x] = 0; curtain.length[x] = 0; }
-    else if (cores.count[x]) curtain.length[x] = Math.min(CURTAIN.length, curtain.length[x] + rules.fallSpeed);
-  }
+  const { width, height } = simulation, random = layer.random, clump = layer.clump ?? (() => 0);
   for (const streak of layer.streaks) {
     streak.age++; streak.y += rules.fallSpeed * streak.speed; streak.x += rules.wind;
-    // Once no cloud is left above it (within a pixel either side), a streak fades out fast,
-    // so rain from a dissolved cloud does not hang in clear sky.
-    const column = Math.floor(streak.x);
-    let covered = false;
-    for (let dx = -1; dx <= 1; dx++) {
-      const top = tops[(((column + dx) % width) + width) % width];
-      if (top >= 0 && top <= streak.y) covered = true;
-    }
-    if (!covered) streak.fade = (streak.fade ?? 1) * STREAK.orphanFade;
+    // Its brightness eases toward the rain around its head, so it never shows in dry air.
+    const target = Math.min(1, rainNear(simulation, streak.x, streak.y));
+    streak.fade = (streak.fade ?? target) + (target - (streak.fade ?? target)) * STREAK.follow;
   }
-  layer.streaks = layer.streaks.filter(streak => streak.age < streak.life && streak.y - streak.length < height && (streak.fade ?? 1) > 0.05);
+  layer.streaks = layer.streaks.filter(streak => streak.age < streak.life && streak.y - streak.length < height && (streak.age < 5 || (streak.fade ?? 1) > 0.02));
   for (let k = 0; k < STREAK.spawnTries && layer.streaks.length < STREAK.max; k++) {
-    const x = random() * width, column = Math.floor(x), base = bases[column], core = cores.top[column];
-    // Only under columns with a raining dense core.
-    if (base < 0 || core < 0) continue;
-    // Rain inside the lower cloud and just under it.
-    let falling = 0;
-    for (let row = core; row <= Math.min(height - 1, base + 2); row++) falling += rain[row * width + column];
-    const amount = falling / (Math.min(height - 1, base + 2) - core + 1) / STREAK.scale;
+    const x = random() * width, y = random() * height, amount = rainNear(simulation, x, y);
+    if (amount <= 0.01) continue;
     // Clumping: slow noise carried by the wind; squared so gaps open between shafts.
     const gather = Math.max(0, Math.min(1, 0.5 + 1.2 * clump((x - simulation.scroll) / STREAK.clumpSize, 0.5, simulation.tick * 0.015)));
-    // Squared, so heavy rain under active cloud gets most streaks and fading rain few.
-    if (random() >= Math.min(1, amount * amount) * (0.15 + 1.6 * gather * gather)) continue;
-    // Born anywhere from the top of the raining core to just under the base.
-    const y = core + 0.5 + random() * (base - core + STREAK.below), [briefest, longestLife] = STREAK.life, [slow, fast] = STREAK.speed;
+    // Squared, so heavy rain gets most streaks and thin rain few.
+    if (random() >= Math.min(1, amount * amount) * (0.1 + 1.2 * gather * gather)) continue;
+    const [briefest, longestLife] = STREAK.life, [slow, fast] = STREAK.speed;
     layer.streaks.push({ x, y, top: y, age: 0, length: streakLength(random()),
       life: briefest + random() * (longestLife - briefest), speed: slow + random() * (fast - slow),
-      strength: (0.45 + 0.55 * random()) * (0.6 + 0.4 * Math.min(1, amount)), wide: random() < STREAK.wide });
+      strength: (0.45 + 0.55 * random()) * (0.6 + 0.4 * Math.min(1, amount)), wide: random() < STREAK.wide,
+      fade: Math.min(1, amount) });
   }
   return layer;
 }
 
-// Curtain opacity per pixel (0 where there is none): full from the top of the raining core
-// down to the base, then fading over its length to 0 at the foot; columns are blurred over
-// ±2 so the curtain's sides are soft.
+// Curtain opacity per pixel (0 where there is no rain): CURTAIN.alpha × clamp(rain /
+// CURTAIN.scale)^CURTAIN.power, with the rain blurred over ±2 columns. `layer` is unused
+// (kept so callers can pass the rain layer alongside).
 export function curtainAlpha(layer, simulation) {
-  const { width, height } = simulation, alpha = new Float32Array(width * height);
-  const curtain = layer?.curtain;
-  if (!curtain || curtain.strength.length !== width) return alpha;
-  const bases = cloudBases(simulation), tops = cloudTops(simulation), kernel = [1, 2, 3, 2, 1];
-  for (let x = 0; x < width; x++) {
-    let strength = 0, length = 0;
-    kernel.forEach((weight, k) => {
-      const column = (x + k - 2 + width) % width;
-      strength += weight * curtain.strength[column] / 9; length = Math.max(length, curtain.length[column]);
-    });
-    const base = bases[x];
-    if (strength < 0.01 || base < 0) continue;
-    const top = Math.max(tops[x], base - CURTAIN.smooth);
-    for (let y = top; y < height; y++) {
-      const below = y - base;
-      if (below > length) break;
-      // Smoothly in from the upper cloud, then a long fade to the foot.
-      const fadeIn = below >= 0 ? 1 : 1 - (-below / (CURTAIN.smooth + 1)) ** 2;
-      const fadeOut = below <= 0 ? 1 : (1 - below / (length + 1)) ** 1.4;
-      alpha[y * width + x] = CURTAIN.alpha * strength * fadeIn * fadeOut;
-    }
+  const { width, height, rain } = simulation, alpha = new Float32Array(width * height), kernel = [1, 2, 3, 2, 1];
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    let amount = 0;
+    kernel.forEach((weight, k) => { amount += weight * rain[y * width + (x + k - 2 + width) % width] / 9; });
+    if (amount > 1e-5) alpha[y * width + x] = CURTAIN.alpha * Math.min(1, amount / CURTAIN.scale) ** CURTAIN.power;
   }
   return alpha;
 }
