@@ -9,7 +9,7 @@ function render() {
   const maps = buildLightMaps(scene, options), image = context.createImageData(canvas.width, canvas.height);
   image.data.set(renderShafts(scene, maps, canvas.width, canvas.height)); context.putImageData(image, 0, 0);
   for (const key of Object.keys(defaults)) if (typeof defaults[key] !== "boolean") element(key + "-value").textContent = element(key).value;
-  element("stats").textContent = `3 cloud pictures + 2 air pictures · ${(performance.now() - start).toFixed(0)} ms/frame`;
+  element("stats").textContent = `3 cloud layers · geometric shadows · ${(performance.now() - start).toFixed(0)} ms/frame`;
   element("patterns").textContent = scene.layers.map(layer => `${layer.name}: ${layer.seed}`).join(" · ");
   dirty = false;
 }

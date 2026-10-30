@@ -1,4 +1,4 @@
-/* Purpose: Three cloud pictures and two coarse illuminated-air pictures, with no volume grid.
+/* Purpose: Cloud silhouette extrusions and analytic illuminated-air lengths, with no volume grid.
  * Consumers: shafts.js and shafts-model.test.js. Dependencies: sunset-model.js; no browser APIs. */
 import { createDensity, sunlight } from "./sunset-model.js";
 export const defaults = { sunElevation: 8, sunAzimuth: -18, cloudOpacity: 1.2, haze: 0.35,
@@ -49,19 +49,93 @@ function screenPosition(x, y, width, height, depth) {
   return [(2 * (x + 0.5) / width - 1) * scale * width / height * distance,
     (1 - 2 * (y + 0.5) / height) * scale * distance];
 }
+// Intersect a camera ray with one rectangular cloud cell extruded away from the sun.
+// Coordinates use z as the ray parameter; no samples along depth are needed.
+export function shadowInterval(prism, rx, ry, direction, nearDepth, farDepth) {
+  let enter = nearDepth, exit = Math.min(farDepth, prism.depth);
+  for (const [r, slope, low, high] of [[rx, direction[0] / direction[2], prism.x0, prism.x1],
+    [ry, direction[1] / direction[2], prism.y0, prism.y1]]) {
+    const a = r - slope, b = 12 * r + slope * prism.depth;
+    if (Math.abs(a) < 1e-10) { if (b < low || b > high) return null; }
+    else {
+      const first = (low - b) / a, last = (high - b) / a;
+      enter = Math.max(enter, Math.min(first, last)); exit = Math.min(exit, Math.max(first, last));
+    }
+  }
+  return exit > enter ? [enter, exit] : null;
+}
+export function mergeIntervals(intervals) {
+  intervals.sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  for (const interval of intervals) {
+    const previous = merged[merged.length - 1];
+    if (previous && interval[0] <= previous[1]) previous[1] = Math.max(previous[1], interval[1]);
+    else merged.push(interval.slice());
+  }
+  return merged;
+}
+// Integrate illuminated haze analytically between the geometric shadow intervals.
+export function illuminatedAir(intervals, nearDepth, farDepth, haze) {
+  const rate = haze * 0.04;
+  if (rate === 0) return 0;
+  const contribution = (a, b) => Math.exp(-rate * (a - nearDepth)) - Math.exp(-rate * (b - nearDepth));
+  let cursor = nearDepth, light = 0;
+  for (const [enter, exit] of mergeIntervals(intervals)) {
+    if (enter > cursor) light += contribution(cursor, enter);
+    cursor = Math.max(cursor, exit);
+  }
+  if (cursor < farDepth) light += contribution(cursor, farDepth);
+  return light;
+}
+export function cloudPrisms(scene, settings, nearDepth) {
+  const prisms = [];
+  for (const layer of scene.layers) if (layer.depth > nearDepth) {
+    for (let y = 0; y < layer.height; y++) for (let x = 0; x < layer.width; x++) {
+      if (settings.cloudOpacity * sharpenDensity(layer.density[y * layer.width + x], settings.cloudSharpness) < 0.5) continue;
+      const x0 = (x - layer.width / 2) * layer.cellSize;
+      const y1 = (layer.height / 2 - y) * layer.cellSize;
+      prisms.push({ x0, x1: x0 + layer.cellSize, y0: y1 - layer.cellSize, y1, depth: layer.depth });
+    }
+  }
+  return prisms;
+}
 export function buildLightMaps(scene, options = {}) {
   const settings = { ...defaults, ...options }, width = 64, height = 40;
-  const color = sunlight(settings.sunElevation, 0.12);
+  const color = sunlight(settings.sunElevation, 0.12), direction = sunDirection(settings);
+  const scale = Math.tan(58 * Math.PI / 360);
   const gaps = [0, 1].map(i => {
-    const depth = (scene.layers[i].depth + scene.layers[i + 1].depth) / 2;
-    const airT = Math.exp(-settings.haze * (scene.layers[i + 1].depth - scene.layers[i].depth) * 0.04);
+    const nearDepth = scene.layers[i].depth, farDepth = scene.layers[i + 1].depth;
+    const airT = Math.exp(-settings.haze * (farDepth - nearDepth) * 0.04);
     const pixels = new Float32Array(width * height * 3);
-    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-      const [px, py] = screenPosition(x, y, width, height, depth);
-      const illumination = lightAt(scene, px, py, depth, settings);
-      for (let c = 0; c < 3; c++) pixels[(y * width + x) * 3 + c] = (1 - airT) * illumination * color[c];
+    const prisms = cloudPrisms(scene, settings, nearDepth);
+    // Bin projected extrusions by screen pixel, rather than testing all cells for every ray.
+    const bins = Array.from({ length: width * height }, () => []);
+    for (const prism of prisms) {
+      let minX = width, maxX = -1, minY = height, maxY = -1;
+      for (const z of [nearDepth, farDepth]) for (const x of [prism.x0, prism.x1]) for (const y of [prism.y0, prism.y1]) {
+        const distance = (prism.depth - z) / direction[2];
+        const sx = ((x - direction[0] * distance) / (z + 12) / (scale * width / height) + 1) * width / 2;
+        const sy = (1 - (y - direction[1] * distance) / (z + 12) / scale) * height / 2;
+        minX = Math.min(minX, sx); maxX = Math.max(maxX, sx); minY = Math.min(minY, sy); maxY = Math.max(maxY, sy);
+      }
+      for (let y = Math.max(0, Math.floor(minY)); y <= Math.min(height - 1, Math.floor(maxY)); y++)
+        for (let x = Math.max(0, Math.floor(minX)); x <= Math.min(width - 1, Math.floor(maxX)); x++) bins[y * width + x].push(prism);
     }
-    return { depth, airT, pixels };
+    const offsets = settings.shadowSmoothing ? [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]] : [[0, 0]];
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      let illumination = 0;
+      for (const [ox, oy] of offsets) {
+        const [rx, ry] = screenPosition(x + ox, y + oy, width, height, -11);
+        const intervals = [];
+        for (const prism of bins[y * width + x]) {
+          const interval = shadowInterval(prism, rx, ry, direction, nearDepth, farDepth);
+          if (interval) intervals.push(interval);
+        }
+        illumination += illuminatedAir(intervals, nearDepth, farDepth, settings.haze) / offsets.length;
+      }
+      for (let c = 0; c < 3; c++) pixels[(y * width + x) * 3 + c] = illumination * color[c];
+    }
+    return { nearDepth, farDepth, airT, pixels, prismCount: prisms.length };
   });
   return { settings, width, height, color, gaps };
 }
