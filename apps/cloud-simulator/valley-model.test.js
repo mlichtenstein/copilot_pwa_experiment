@@ -48,3 +48,29 @@ test("all extreme masks stay bounded and selected JPEG sources exist", () => {
     assert.equal(bytes[0], 255); assert.equal(bytes[1], 216);
   }
 });
+
+test("Perlin product evolves smoothly, freezes with formationSpeed=0, and reveals all heights", () => {
+  const options = { horizon: "open", placement: "full", coverage: 0.5 };
+  for (const y of [0.05, 0.3, 0.6, 0.85]) {
+    const a = revealFields(0.24, y, 1, options, "noise");
+    const b = revealFields(0.24, y, 1.001, options, "noise");
+    assert.equal(a.band, 1); assert.ok(a.formation > 0);
+    assert.ok(Math.abs(a.formation - b.formation) < 0.01);
+    assert.deepEqual(revealFields(0.24, y, 1, { ...options, formationSpeed: 0 }, "noise"), revealFields(0.24, y, 20, { ...options, formationSpeed: 0 }, "noise"));
+  }
+  assert.notEqual(revealFields(0.24, 0.3, 1, options, "noise").formation, revealFields(0.24, 0.3, 20, options, "noise").formation);
+  const image = texture(7);
+  for (const horizon of ["valley", "hills", "open"]) for (const placement of ["full", "spread", "high", "low", "band"]) {
+    const pixels = renderValley(image, 2, { ...options, horizon, placement }, "noise", 32, 20);
+    assert.equal(pixels.length, 32 * 20 * 4);
+  }
+  assert.ok(mountainRidge(1, 2, "hills") > mountainRidge(1, 2, "valley"));
+  assert.ok(revealFields(0, 0.2, 0, { placement: "high" }).band > revealFields(0, 0.2, 0, { placement: "low" }).band);
+});
+test("photograph colors survive the mask, including dark clouds, without changing RGB sources", () => {
+  const image = { width: 2, height: 2, pixels: new Float32Array(4).fill(0.2), rgb: new Uint8Array([255, 10, 0, 255, 10, 0, 255, 10, 0, 255, 10, 0]) };
+  const before = image.rgb.slice(), opts = { horizon: "open", placement: "full", coverage: 1, opacity: 2, wind: 0 };
+  const pixels = renderValley(image, 0, opts, "noise", 32, 20);
+  assert.ok(pixels[0] > pixels[1] * 2); assert.deepEqual(image.rgb, before);
+  assert.deepEqual(renderValley(image, 0, { ...opts, opacity: 0 }, "noise", 32, 20), renderValley(texture(8), 0, { ...opts, opacity: 0 }, "noise", 32, 20));
+});

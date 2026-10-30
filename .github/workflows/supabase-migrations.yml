@@ -1,0 +1,50 @@
+# Purpose: Apply new supabase/migrations/*.sql files to the production Supabase project after they merge.
+# Consumers: GitHub Actions runs this on pushes to main that change supabase/migrations/**, and on manual dispatch.
+# Dependencies: actions/checkout, actions/setup-node, supabase/apply-migrations.mjs, the Supabase Management API,
+#   and the repository secret SUPABASE_ACCESS_TOKEN (a Supabase personal access token).
+#
+# How it works: supabase/apply-migrations.mjs reads supabase_migrations.schema_migrations (the history
+# table the Supabase CLI uses), runs each migration file not listed there in filename order, and records
+# it in the same transaction. Already-applied files are skipped, so re-running is harmless. It uses the
+# Management API, so no database password is needed. It never touches gh-pages, the Deploy workflow, or
+# pull request previews; pull requests do not trigger it.
+name: Supabase migrations
+
+# When to run
+on:
+  push:
+    branches: [main]
+    paths: ["supabase/migrations/**"]
+  workflow_dispatch:
+
+# Read-only: the workflow only checks out the repository
+permissions:
+  contents: read
+
+# Apply migrations one run at a time, in push order
+concurrency:
+  group: supabase-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_PROJECT_REF: uluovxbitpyaijrzwzyp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check the access token secret
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::error::Add the SUPABASE_ACCESS_TOKEN repository secret (see supabase/README.md)."
+            exit 1
+          fi
+      - name: Apply pending migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node supabase/apply-migrations.mjs

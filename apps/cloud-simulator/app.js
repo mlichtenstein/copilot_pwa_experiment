@@ -1,9 +1,11 @@
 /*
  * Purpose: Render experimental fields and connect playback and parameter controls.
  * Consumers: index.html.
- * Dependencies: simulation.js, page element IDs, Canvas 2D and service worker APIs.
+ * Dependencies: simulation.js, ../shared/presets-panel.js (emoji rating bar and ?p= links),
+ *   page element IDs, Canvas 2D and service worker APIs.
  */
 import { createSimulation, step, threshold } from "./simulation.js";
+import { mountPresetBar } from "../shared/presets-panel.js";
 
 const element = id => document.getElementById(id);
 const canvas = element("sky");
@@ -86,6 +88,25 @@ element("view").addEventListener("change", () => {
 document.addEventListener("visibilitychange", () => { previousTime = undefined; elapsed = 0; });
 reset();
 setRunning(running);
+
+// Ratings and links: every slider, the seed, the view and the grid size.
+const sliders = ["transfer", "threshold", "speed", "moisture", "noise", "patch"];
+const getParams = () => ({ ...Object.fromEntries(sliders.map(id => [id, value(id)])), seed: value("seed"),
+  view: element("view").value, resolution: `${canvas.width}x${canvas.height}` });
+function applyParams(params) {
+  for (const id of sliders) {
+    if (typeof params[id] !== "number") continue;
+    element(id).value = params[id];
+    element(id + "-value").textContent = element(id).value;
+  }
+  if (Number.isInteger(params.seed) && params.seed >= 0 && params.seed < 2 ** 32) element("seed").value = params.seed;
+  if ([...element("view").options].some(option => option.value === params.view)) {
+    element("view").value = params.view;
+    element("view").dispatchEvent(new Event("change"));
+  }
+  reset();
+}
+mountPresetBar(element("presets"), { app: "cloud-simulator/rain", getParams, applyParams, canvas });
 function frame(time) {
   if (running && !document.hidden && previousTime !== undefined) {
     elapsed += Math.min(time - previousTime, 250);

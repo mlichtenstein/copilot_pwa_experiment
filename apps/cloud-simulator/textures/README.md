@@ -23,3 +23,24 @@ SHA-256 of the unmodified JPEGs:
 - `FX_CloudAlpha01.jpg`: `7710223cbf249bbeca86669e43e299b66798c8470aec71df6c7b794816425ab6`
 - `FX_CloudAlpha06.jpg`: `8f159c7d7cb0134d52287ddd92a6814d1647a7b8b650887f7ff42189f05452c4`
 - `FX_CloudAlpha08.jpg`: `c2ca4cbbc3490fd60e7dd6efa44d232ef6bef0c9f5e5fe74c90c11d104a13e3d`
+
+## Real sunset photographs
+
+Both derivatives are CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/), locally hosted; no external image requests at runtime. RGB color is preserved. These are sky patches, not extracted cloud alpha masks. The originals are not bundled.
+
+| Derivative | Original / photographer | Source | Preparation |
+| --- | --- | --- | --- |
+| sunset-rose.jpg | Colorful Sunset Clouds / Free Nature Stock | https://commons.wikimedia.org/wiki/File:Colorful_Sunset_Clouds.jpg (original source: https://isorepublic.com/photo/colorful-sunset-clouds/) | Original 3648×5472; crop (0,1200)–(3648,3480), resize to 768×480, JPEG quality 91. |
+| sunset-embers.jpg | Sun behind the clouds during beautiful sunset / George Becker | https://commons.wikimedia.org/wiki/File:Sun_behind_the_clouds_during_beautiful_sunset.jpg (original: https://www.pexels.com/photo/silhouette-photo-of-clouds-113570/) | Original 5456×3632; crop (400,0)–(5456,2400) excludes sun disc and ground; resize to 768×365, JPEG quality 91. Commons explicitly records the pre-2018 CC0 release, not the current Pexels license. |
+
+Downloaded and license pages checked 2026-10-30. Coordinates are source-image pixels. Runtime resamples to a 512×512 RGB buffer and remaps normalized coordinates to the viewport, so aspect can be artistically stretched. No synthesized image content or recoloring is baked into these derivatives.
+
+SHA-256 records:
+
+- `sunset-rose.jpg`: `28686a3c5305823d032e32c1d6f5b1d55614da05a670a600d3b0b1e06e78fa9b`
+
+- `sunset-embers.jpg`: `ffe7f290cf7070f15424f05ac977bfd17e7fc6bc72203895ffaa78c3c5db0a07`
+
+- Downloaded original `colorful`: `889a60ced430f696651e6dd4c6a68af7a9d8af5e94f803d11bcbd42b972c4957`
+
+- Downloaded original `becker`: `e15df76c0f6cb69c10909572735a4bd651dec1db6bc2c926e392e64a0ed0b781`

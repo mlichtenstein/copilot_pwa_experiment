@@ -8,7 +8,7 @@ test("textures load; switching keeps time; step pauses, reset restores defaults"
   let callback, pixels, stamp = 0, drawn;
   const items = new Map(), listeners = {};
   const get = id => {
-    if (!items.has(id)) items.set(id, { value: String(defaults[id] ?? (id === "shape" ? "combined" : "")), checked: id === "texture-broken", disabled: true,
+    if (!items.has(id)) items.set(id, { value: String(defaults[id] ?? (id === "shape" ? "noise" : id === "placement" ? "full" : "")), checked: id === "texture-rose" || id === "horizon-hills", disabled: true,
       textContent: "", handlers: {}, addEventListener(name, fn) { this.handlers[name] = fn; }, setAttribute() {} });
     return items.get(id);
   };
@@ -28,7 +28,7 @@ test("textures load; switching keeps time; step pauses, reset restores defaults"
     assert.equal(get("play").disabled, false);
     const first = pixels.slice();
     get("step").handlers.click(); frame(); assert.ok(get("stats").textContent.includes("t 1.0 s"));
-    get("texture-broken").checked = false; get("texture-bank").checked = true; get("texture-bank").handlers.change(); frame();
+    get("texture-rose").checked = false; get("texture-bank").checked = true; get("texture-bank").handlers.change(); frame();
     assert.ok(get("stats").textContent.includes("Soft bank · t 1.0 s"));
     get("play").handlers.click(); frame(); frame(100);
     assert.ok(get("stats").textContent.includes("t 1.1 s"));
@@ -36,7 +36,7 @@ test("textures load; switching keeps time; step pauses, reset restores defaults"
     globalThis.document.hidden = false; listeners.visibilitychange(); frame();
     assert.ok(get("stats").textContent.includes("t 1.1 s"));
     get("reset").handlers.click(); frame();
-    assert.equal(get("play").textContent, "Play wind"); assert.equal(get("texture-broken").checked, true);
+    assert.equal(get("play").textContent, "Play wind"); assert.equal(get("texture-rose").checked, true);
     assert.deepEqual(pixels, first);
   } finally { globalThis.document = original.document; globalThis.Image = original.Image; globalThis.requestAnimationFrame = original.raf; }
 });
