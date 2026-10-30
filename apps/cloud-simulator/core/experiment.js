@@ -30,6 +30,7 @@
  *   decorate({ doc, controlFor }) → refresh(params, instance)   add custom pieces next to
  *                 generated controls (previews); refresh runs after params change or load
  *   stats(params, frame, instance)    one-line status under the buttons
+ *   groupNotes    { group: note } bolds those groups' titles and adds the note ("" for none)
  * An instance is:
  *   update(params, { playing })  take a full, cleaned params object (rebuild what depends on it)
  *   step(dt, frame)  advance any simulation by dt clock seconds; return false if nothing
@@ -100,7 +101,7 @@ export function validateExperiment(experiment) {
   if (experiment?.playLabels !== undefined && !(Array.isArray(experiment.playLabels) && experiment.playLabels.length === 2)) problems.push("playLabels must be [play, pause]");
   for (const action of experiment?.actions ?? []) {
     if (typeof action?.id !== "string" || !action.id || typeof action.label !== "string" || typeof action.run !== "function") problems.push("every action needs an id, a label and run");
-    else if (["play", "reset", "drift"].includes(action.id) || action.id.startsWith("new-")) problems.push(`action id ${action.id} is reserved for the host`);
+    else if (["play", "drift", ...(experiment.sun ? ["reset"] : [])].includes(action.id) || action.id.startsWith("new-")) problems.push(`action id ${action.id} is reserved for the host`);
   }
   for (const [id, readout] of Object.entries(experiment?.readouts ?? {})) if (typeof readout !== "function") problems.push(`readout ${id} must be a function`);
   if (!Array.isArray(experiment?.params)) problems.push("params must be an array");

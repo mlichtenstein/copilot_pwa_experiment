@@ -10,7 +10,8 @@
 export const experiments = [
   { id: "sunset", title: "Sunset study", href: "sunset.html", load: () => import("../sunset-experiment.js").then(module => module.sunset) },
   { id: "horizon", title: "Horizon light", href: "horizon.html", load: () => import("../horizon-experiment.js").then(module => module.horizon) },
-  { id: "shafts", title: "Light shafts", href: "shafts.html", load: () => import("../shafts-experiment.js").then(module => module.shafts) }
+  { id: "shafts", title: "Light shafts", href: "shafts.html", load: () => import("../shafts-experiment.js").then(module => module.shafts) },
+  { id: "noise", title: "Noise weather", href: "noise.html", load: () => import("../noise-experiment.js").then(module => module.noise) }
 ];
 
 export const findExperiment = id => experiments.find(entry => entry.id === id) ?? null;

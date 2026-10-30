@@ -217,7 +217,11 @@ export function mountExperiment(experiment, {
   const container = param => {
     if (!param.group) return panel;
     if (!groups.has(param.group)) {
-      const fieldset = make(doc, "fieldset", {}, make(doc, "legend", { textContent: param.group }));
+      // A group with a note (groupNotes) gets a bold title: "<b>Cloud layer</b> · note".
+      const note = experiment.groupNotes?.[param.group];
+      const legend = note === undefined ? make(doc, "legend", { textContent: param.group })
+        : make(doc, "legend", {}, make(doc, "b", { textContent: param.group }), ...(note ? [` · ${note}`] : []));
+      const fieldset = make(doc, "fieldset", {}, legend);
       groups.set(param.group, fieldset); panel.append(fieldset);
     }
     return groups.get(param.group);
