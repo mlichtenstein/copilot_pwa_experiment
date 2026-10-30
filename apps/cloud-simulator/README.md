@@ -37,3 +37,13 @@ Beer–Lambert attenuation and Henyey–Greenstein single scattering follow the 
 Run `node --test apps/cloud-simulator/*test.js` for both experiments. Browser review: compare density before/after sun playback; scrub the sun toward the horizon; vary extinction/albedo/exposure and compare diagnostic views; check phone-width labels, pause/reset/new seed, and offline reload of both pages after worker activation. Browser verification must be recorded separately from model checks.
 
 Both experiment pages keep the field in a separate visible pane while controls and formulas scroll independently. Wide screens use side-by-side panes; phones stack the field above the controls. The controls region can receive keyboard focus for scrolling.
+
+## Experiment 03: three-layer light shafts
+
+[shafts.html](shafts.html) uses a 64×40×24 world grid and a 128×80 perspective display. Three fixed cloud sheets sit at world z = 22, 50, 78. `shafts-model.js` contains geometry, a far-to-near sunlight sweep and camera scattering integration; `shafts.js` owns controls and paused-by-default animation. The existing separate simulation/scrolling-control panes apply.
+
+The sweep interpolates outgoing transmission from the previous z slice along the sun direction, then applies Beer–Lambert attenuation. Each cell is visited once; camera samples read this shared result rather than tracing shadow rays. The restricted sun range (elevation 1–35°, azimuth ±40°) keeps the light's z component positive. Camera rays use FOV and perspective intersections, accumulating single-scattered haze/cloud light with segment attenuation. Diagnostic views expose raw sheet densities, sunlight at a depth slice and air scattering only. Layer multipliers affect extinction but not raw density views. Zero haze removes the air-only contribution exactly.
+
+This is a deliberately coarse relative-units model: finite open boundaries, interpolated sheets/shadows, one view sample per depth slice, approximate solar RGB/sky, RGB haze weights with scalar extinction, fixed cloud phase/albedo, no multiple scattering or cloud evolution. The world box and equations are described on-page. PBRT references remain the inspiration for attenuation and phase, not a claim of matching its integrator.
+
+Run `node --test apps/cloud-simulator/*test.js`. Review controls, sun playback/reset, seeds, all views, haze=0, individual sheet multipliers, perspective FOV, phone scrolling and offline navigation after worker activation. Timing is shown on-page; device performance must be measured. The GUI coalesces slider updates and caches the sunlight sweep for view/FOV/exposure/phase-only changes.
