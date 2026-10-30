@@ -1,6 +1,8 @@
 /* Purpose: Horizon-light controls, fixed-pixel presentation and sunset playback.
- * Consumers: horizon.html. Dependencies: horizon-model.js, page IDs, Canvas and service worker APIs. */
+ * Consumers: horizon.html, horizon-ui.test.js. Dependencies: horizon-model.js, ../shared/presets-panel.js (emoji rating bar
+ *   and ?p= links; it skips mounting in the test harness), page IDs, Canvas and service worker APIs. */
 import { defaults, renderHorizon, cloudCenters } from "./horizon-model.js";
+import { mountPresetBar } from "../shared/presets-panel.js";
 const element = id => document.getElementById(id), canvas = element("sky"), context = canvas.getContext("2d");
 let dirty = true, playing = false, previous, elapsed = 0, elevationDirection = -1, azimuthDirection = 1;
 function pause() { playing = false; element("play").textContent = "Play sunset"; element("play").setAttribute("aria-pressed", "false"); }
@@ -43,6 +45,15 @@ function frame(time) {
   if (dirty && !document.hidden) render(); previous = time; requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+// Ratings and links: every slider and the grid size (this experiment has no seed).
+const getParams = () => ({ ...Object.fromEntries(Object.keys(defaults).map(key => [key, Number(element(key).value)])),
+  resolution: `${canvas.width}x${canvas.height}` });
+function applyParams(params) {
+  pause();
+  for (const key of Object.keys(defaults)) if (typeof params[key] === "number") element(key).value = params[key];
+  dirty = true;
+}
+mountPresetBar(element("presets"), { app: "cloud-simulator/horizon", getParams, applyParams, canvas });
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("./cloud-sw.js").catch(error => {
   console.error("Horizon offline setup failed", error); element("status").textContent = "Offline setup failed; the experiment still runs online.";
 });
