@@ -3,12 +3,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { defaults } from "./shafts-model.js";
+import { visibilityDefaults } from "./visibility-model.js";
+const controlDefaults = { ...defaults, ...visibilityDefaults };
 test("sun slider redraws; pattern buttons change one layer; reset restores the original experiment", async () => {
   const originalDocument = globalThis.document, originalRAF = globalThis.requestAnimationFrame;
   let callback, pixels;
   const elements = new Map();
   const get = id => {
-    if (!elements.has(id)) elements.set(id, { value: String(defaults[id] ?? ""), checked: id === "strategy-visibility",
+    if (!elements.has(id)) elements.set(id, { value: String(controlDefaults[id] ?? ""), checked: id === "strategy-visibility",
       textContent: "", listeners: {}, addEventListener(name, handler) { this.listeners[name] = handler; }, setAttribute() {} });
     return elements.get(id);
   };
@@ -24,9 +26,15 @@ test("sun slider redraws; pattern buttons change one layer; reset restores the o
     get("strategy-visibility").checked = false; get("strategy-geometric").checked = true;
     get("strategy-geometric").listeners.change(); callback(4);
     assert.notDeepEqual(pixels, first);
+    assert.equal(get("sourceRadius").disabled, true);
     assert.equal(get("patterns").textContent, originalPatterns);
     get("strategy-visibility").checked = true; get("strategy-geometric").checked = false;
     get("strategy-visibility").listeners.change(); callback(8);
+    assert.deepEqual(pixels, first);
+    assert.equal(get("sourceRadius").disabled, false);
+    get("sourceRadius").value = "0"; get("sourceRadius").listeners.input(); callback(10);
+    assert.notDeepEqual(pixels, first);
+    get("sourceRadius").value = "6"; get("sourceRadius").listeners.input(); callback(12);
     assert.deepEqual(pixels, first);
     get("sunAzimuth").value = "20"; get("sunAzimuth").listeners.input(); callback(16);
     assert.notDeepEqual(pixels, first);
