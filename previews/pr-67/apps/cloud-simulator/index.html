@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<!-- Purpose: Rain experiment controls and field display. Consumers: browser.
+     Dependencies: style.css, app.js, manifest.json. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111c30">
+  <title>Cloud Simulator · Rain study</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="experiment">
+<main class="experiment-layout">
+  <header class="experiment-header"><p class="eyebrow">Cloud simulator / Experiment 01</p><h1>Rain study</h1>
+    <p>Two fields. One local rule. See what falls.</p><p>Rain study · <a href="sunset.html">Sunset study</a> · <a href="convection.html">Convection study</a> · <a href="horizon.html">Horizon light</a> · <a href="valley.html">Valley textures</a></p></header>
+  <section class="viewport simulation-pane" aria-label="Vertical slice of the atmosphere">
+    <canvas id="sky" width="128" height="96" role="img" aria-label="Animated pixel grid showing atmospheric water; use the view menu for temperature or saturation."></canvas>
+    <div class="axis"><span>Cold upper air</span><span>Warm lower air ↓</span></div>
+  </section>
+  <div class="controls-pane" role="region" aria-label="Scrollable experiment controls" tabindex="0">
+<div class="playback"><button id="play" type="button" aria-pressed="true">Pause</button>
+    <button id="step" type="button">Step</button><button id="reset" type="button">Reset seed</button>
+    <button id="new-seed" type="button">New seed</button></div>
+  <p id="stats" class="stats"></p>
+  <section class="controls" aria-label="Experiment parameters">
+    <label>View<select id="view"><option value="water">Water content</option><option value="temperature">Temperature</option><option value="saturation">Relative saturation</option></select></label>
+    <label><span><code>transfer</code></span><small>Fraction of a wet pixel’s total water sent downward per tick (0–1).</small> <output id="transfer-value"></output><input id="transfer" type="range" min="0" max="1" step="0.05" value="0.65"></label>
+    <label><span><code>baseThreshold</code></span><small>Water-content scale for the local precipitation threshold; warmer pixels need more water.</small> <output id="threshold-value"></output><input id="threshold" type="range" min="0.05" max="1.5" step="0.05" value="0.4"></label>
+    <label><span><code>speed</code></span><small>Simulation ticks per second; playback speed, not a physical fall velocity.</small> <output id="speed-value"></output><input id="speed" type="range" min="1" max="40" step="1" value="15"></label>
+    <fieldset><legend>Starting fields · changing these resets the run</legend>
+      <label><span><code>moisture</code></span><small>Multiplier for initial water content; represents available water, not relative humidity.</small> <output id="moisture-value"></output><input id="moisture" type="range" min="0" max="4" step="0.1" value="1.7"></label>
+      <label><span><code>temperatureNoise</code></span><small>Amplitude of initial temperature variations around the vertical gradient.</small> <output id="noise-value"></output><input id="noise" type="range" min="0" max="2" step="0.05" value="0.35"></label>
+      <label><span><code>patchSize</code></span><small>Water-noise spacing in pixels; temperature-noise spacing is twice this.</small> <output id="patch-value"></output><input id="patch" type="range" min="2" max="24" step="1" value="8"></label>
+      <label><span><code>seed</code></span><small>Integer controlling the repeatable random arrangement of both starting fields.</small><input id="seed" type="number" min="0" max="4294967295" step="1" value="42"></label>
+    </fieldset>
+  </section>
+  <p id="legend">Water: dark = dry, pale blue = wet. Fixed color scale; no decorative trails.</p>
+
+  <details><summary>The rules and update formulas</summary>
+    <p>Each pixel holds <code>water</code> (dimensionless water content) and <code>temperature</code> (normalized from 0, cold, to 1, warm). The slider names below match the model parameters. These are experimental quantities, not calibrated humidity or degrees Celsius.</p>
+    <p>For each pixel, on each tick:</p>
+    <p><code>localThreshold = baseThreshold × (0.55 + 0.9 × temperature)</code></p>
+    <p><code>falling = water &gt; localThreshold ? water × transfer : 0</code></p>
+    <p><code>waterNext = water − falling + fallingFromPixelAbove</code></p>
+    <p>All right-hand values come from the old grid. Water moves at most one pixel per tick. The top receives no incoming water; outflow at the bottom is added to <code>drained</code>. Temperature stays fixed. Warm pixels have a higher threshold and can stop a streak.</p>
+    <p>Playback uses <code>tickInterval = 1 / speed</code> seconds. Changing <code>transfer</code> or <code>baseThreshold</code> affects the current run; changing starting-field parameters resets it.</p>
+    <p>Starting fields use independent smooth noise values between 0 and 1, generated from <code>seed</code>. With <code>altitude</code> ranging from 0 at the bottom to 1 at the top:</p>
+    <p><code>temperature = clamp(1 − altitude + (thermalNoise − 0.5) × temperatureNoise, 0, 1)</code></p>
+    <p><code>water = moisture × waterNoise² × (altitude &gt; 0.62 ? 3 : 0.12)</code></p>
+    <p><code>patchSize</code> sets water-noise spacing in pixels; thermal-noise spacing is <code>2 × patchSize</code>. The same seed and starting parameters reproduce the same fields.</p>
+    <p>No replenishment, wind, evaporation, or separate droplets yet. Water eventually settles or drains.</p>
+  </details>
+  <p id="status" role="status"></p><noscript>This experiment needs JavaScript to run.</noscript>
+</div>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
