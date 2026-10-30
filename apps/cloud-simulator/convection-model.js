@@ -1,7 +1,8 @@
 /*
  * Purpose: Browser-independent convection experiment: heated floor, cooled lid,
- *   buoyant overturning, cloud, falling rain, evaporation, a closed water cycle and an
- *   optional warm inversion that caps the convection; plus the views that draw it.
+ *   buoyant overturning, cloud, falling rain, evaporation, a closed water cycle and
+ *   optional layering: a warm inversion that caps the convection, or a mixed subcloud
+ *   layer under a lifting condensation level (flat cumulus bases); plus the views.
  * Consumers: convection.js and convection-model.test.js.
  * Dependencies: none; values are dimensionless experimental units, not a weather model.
  */
@@ -13,8 +14,11 @@ export const defaults = {
   evaporation: 0.08, expansion: 0.5, surfaceEvaporation: 0.2, surfaceHumidity: 0.4,
   rainThreshold: 0.005, autoconversion: 0.3, rainEvaporation: 0.03, fallSpeed: 1,
   loading: 0.4, flicker: 0.6, maxSpeed: 0.24,
-  // Inversion: a warm, stable layer (see step 1b).
-  inversion: true, inversionHeight: 0.6, inversionDepth: 0.1, inversionBase: 0.4, inversionStrength: 0.35,
+  // Layering: "none", "inversion" (a warm stable cap, step 1b) or "lcl" (a mixed
+  // subcloud layer under flat cloud bases, step 1c). The old `inversion` boolean still works.
+  layering: "lcl", lclHeight: 0.35, lclExpansion: 1, lclMixing: 0.05, lclEvaporation: 0.3,
+  lclMoisture: 2,
+  inversionHeight: 0.6, inversionDepth: 0.1, inversionBase: 0.4, inversionStrength: 0.35,
   inversionRate: 0.02,
   // Drawing only (Sunset view): "cumulus" shaped cloud or "raw" cloud water, and frayed edges.
   cloudStyle: "cumulus", feather: true
@@ -68,6 +72,26 @@ export function createConvection({ width = 128, height = 96, seed = 42, water = 
   for (let i = 0; i < size; i++) simulation.vapor[i] *= scale;
   simulation.pool.fill(Math.max(0, water * size - airborne * scale) / width);
   return simulation;
+}
+
+// Mean of each row of a field (the horizontal-mean sounding).
+function rowMeansOf(field, width, height) {
+  const means = new Float64Array(height);
+  for (let y = 0; y < height; y++) { let sum = 0; for (let x = 0; x < width; x++) sum += field[y * width + x]; means[y] = sum / width; }
+  return means;
+}
+// Vapor capacity of pixel i. In LCL mode it is judged at the row's mean temperature, the
+// steeper `lclExpansion` and the moister `lclMoisture` air mass (see step 1c); otherwise
+// at the pixel's own temperature.
+function capacityAt(i, temperature, rowMean, rules, lcl, width, height) {
+  return lcl ? saturation(rowMean[Math.floor(i / width)], altitudeOf(i, width, height), rules.saturation * rules.lclMoisture, rules.lclExpansion)
+    : saturation(temperature[i], altitudeOf(i, width, height), rules.saturation, rules.expansion);
+}
+// Which layering a run uses: `layering`, else the older `inversion` boolean, else the default.
+export function layeringOf(options = {}) {
+  if (options.layering) return options.layering;
+  if (options.inversion !== undefined) return options.inversion ? "inversion" : "none";
+  return defaults.layering;
 }
 
 // Environmental temperature the inversion holds above `inversionHeight`; undefined below,
@@ -127,14 +151,21 @@ export function step(simulation, options = {}) {
   const stream = simulation.stream;
 
   // 1. Heated floor and cooled lid. The floor target flickers per column from the seed.
+  //    Puddles evaporate until floor vapor reaches `surfaceHumidity × saturation`. In LCL
+  //    mode the target is instead the vapor that saturates at `lclHeight` (a surface
+  //    dewpoint, see 1c), and air moister than that gives water back to the puddle as dew.
+  const layering = layeringOf(options), lcl = layering === "lcl";
+  const lclRow = Math.round((1 - rules.lclHeight) * (height - 1));
+  const surfaceTarget = lcl
+    ? saturation(rowMeansOf(temperature, width, height)[lclRow], rules.lclHeight, rules.saturation * rules.lclMoisture, rules.lclExpansion)
+    : rules.surfaceHumidity * rules.saturation;
   for (let x = 0; x < width; x++) {
     const floor = (height - 1) * width + x;
     const target = 1 + rules.flicker * (nextRandom(simulation) - 0.5);
     temperature[floor] += rules.heating * (target - temperature[floor]);
     temperature[x] += rules.cooling * (0 - temperature[x]);
-    // Puddles evaporate until floor vapor reaches `surfaceHumidity × saturation`, cooling the air.
-    const deficit = rules.surfaceHumidity * rules.saturation - vapor[floor];
-    const lift = Math.min(simulation.pool[x], Math.max(0, rules.surfaceEvaporation * deficit));
+    const deficit = surfaceTarget - vapor[floor];
+    const lift = Math.min(simulation.pool[x], rules.surfaceEvaporation * (lcl ? deficit : Math.max(0, deficit)));
     simulation.pool[x] -= lift; vapor[floor] += lift; temperature[floor] -= rules.latentHeat * lift;
   }
 
@@ -146,7 +177,7 @@ export function step(simulation, options = {}) {
   //     the air beside it, so it stops rising and spreads sideways under the layer. The
   //     sounding starts at `inversionBase`, cooler than the mixed layer, which stands in
   //     for the cloud-top cooling that keeps a real capped layer overturning.
-  if (rules.inversion) {
+  if (layering === "inversion") {
     for (let y = 1; y < height - 1; y++) {
       const target = inversionTarget(1 - y / (height - 1), rules);
       if (target === undefined) continue;
@@ -157,13 +188,43 @@ export function step(simulation, options = {}) {
     }
   }
 
+  // 1c. Lifting condensation level. Real fair-weather cumulus sit on a well-mixed subcloud
+  //     layer: turbulence gives it one moisture content, and a thermal's warmth is a
+  //     fraction of a degree against a dewpoint spread of several, so every parcel
+  //     cools to saturation at nearly the same height (about 125 m per °C of spread)
+  //     and the cloud bases line up flat. Here: (a) capacity is judged at each row's
+  //     mean temperature (`capacityAt`), since the toy's plumes are far warmer than
+  //     real thermals and would otherwise saturate higher than the air around them;
+  //     (b) scanning up from the floor while the layer's mean vapor is below the next
+  //     row's capacity finds the mixed layer, and its vapor is relaxed toward the
+  //     layer's mean at `lclMixing` per tick (water is only moved, never made); (c) the
+  //     steeper `lclExpansion` lapse makes the change from clear to cloudy quick, and
+  //     faster `lclEvaporation` dries cloud that sinks below the base or mixes out
+  //     at a top; (d) `lclMoisture` doubles the capacity, a moist air mass like the
+  //     tropical trades, where the clouds hold enough water to rain. With dry air the
+  //     rain all evaporates in the clear layer under the bases (virga). Above the base, condensation warms the rising air and keeps it buoyant.
+  if (lcl) {
+    let q = 0, rows = 0, top = height - 1;
+    const rowMean = rowMeansOf(temperature, width, height);
+    for (let y = height - 1; y >= 1; y--) {
+      let rowVapor = 0;
+      for (let x = 0; x < width; x++) rowVapor += vapor[y * width + x];
+      if (rows > 0 && saturation(rowMean[y], 1 - y / (height - 1), rules.saturation * rules.lclMoisture, rules.lclExpansion) <= q / rows) break;
+      q += rowVapor / width; rows++; top = y;
+    }
+    q /= rows;
+    for (let i = top * width; i < size; i++) vapor[i] += rules.lclMixing * (q - vapor[i]);
+  }
+
   // 2. Phase changes. Supersaturated vapor condenses into cloud (`liquid`) and warms the
   //    air; cloud, then rain, in subsaturated air evaporates and cools it. Cloud above
   //    `rainThreshold` collects into rain drops at `autoconversion` per tick. Total water is unchanged.
+  const rowMean = rowMeansOf(temperature, width, height);
+  const evaporation = lcl ? rules.lclEvaporation : rules.evaporation;
   for (let i = 0; i < size; i++) {
-    const capacity = saturation(temperature[i], altitudeOf(i, width, height), rules.saturation, rules.expansion);
+    const capacity = capacityAt(i, temperature, rowMean, rules, lcl, width, height);
     const excess = vapor[i] - capacity;
-    const change = excess > 0 ? rules.condensation * excess : -Math.min(liquid[i], rules.evaporation * -excess);
+    const change = excess > 0 ? rules.condensation * excess : -Math.min(liquid[i], evaporation * -excess);
     vapor[i] -= change; liquid[i] += change;
     temperature[i] += rules.latentHeat * change;
     const deficit = capacity - vapor[i];
@@ -270,6 +331,10 @@ const RAIN_COLOR = [175, 235, 255];
 export const CLOUD_DEPTH_SCALE = 0.004, WARM_SCALE = 0.06, CLOUD_BLUR = 3, CLOUD_EDGE = [0.25, 0.42], BILLOW = 0.45;
 // Capped cloud: CAP_SCALE warmer air CAP_REACH pixels above makes cloud water solid.
 export const CAP_SCALE = 0.1, CAP_REACH = 4;
+// Rising cloud: an updraft of RISE_SCALE pixels per tick makes cloud water solid.
+export const RISE_SCALE = 0.05;
+// Feather is cut back on a cloud's underside, judged UNDERSIDE_REACH pixels above and below.
+export const UNDERSIDE_REACH = 3;
 // Feathered edges: fringe threshold range, noise strength and fringe opacity.
 export const FEATHER_EDGE = [0.04, 0.4], FEATHER = 1.4, FEATHER_OPACITY = 0.75, FEATHER_BLUR = 4.5;
 // Air near saturation adds a faint haze from 90% relative humidity (at most HAZE_OPACITY).
@@ -312,21 +377,36 @@ export function blur(field, width, height, radius) {
 // noise pushes the threshold down to FEATHER_EDGE[0] in places and up in others, so
 // wisps reach out and fade over several pixels while the core stays solid.
 // Returns the solid `core` (used for shading) and the drawn `cover` (core plus fringe).
-export function cloudLayers(cloud, buoyancy, width, height, { capping, feather = false } = {}) {
+export function cloudLayers(cloud, buoyancy, width, height, { capping, rising, feather = false } = {}) {
   const puff = cloud.map((water, i) => clip01(water / CLOUD_DEPTH_SCALE)
-    * Math.max(clip01(buoyancy[i] / WARM_SCALE), capping ? clip01(capping[i] / CAP_SCALE) : 0));
+    * Math.max(clip01(buoyancy[i] / WARM_SCALE), capping ? clip01(capping[i] / CAP_SCALE) : 0,
+      rising ? clip01(rising[i] / RISE_SCALE) : 0));
   const lobes = billows(width, height);
   const core = blur(puff, width, height, CLOUD_BLUR).map((value, i) => smoothstep(CLOUD_EDGE[0], CLOUD_EDGE[1], value * (1 + BILLOW * lobes[i])));
   if (!feather) return { core, cover: core };
   // The fringe comes from a wider blur, so it reaches FEATHER_BLUR pixels out, and is
   // thinned by the noise into wisps that fade in gently (squared) toward the core.
   const wisps = fray(width, height);
-  const cover = blur(puff, width, height, FEATHER_BLUR).map((value, i) => Math.max(core[i],
-    FEATHER_OPACITY * smoothstep(FEATHER_EDGE[0], FEATHER_EDGE[1], value * (1 + FEATHER * wisps[i])) ** 2));
+  // Under a cloud (solid core above, none below) the fringe is cut back, so the base stays crisp.
+  const reach = UNDERSIDE_REACH * width;
+  const cover = blur(puff, width, height, FEATHER_BLUR).map((value, i) => {
+    const under = clip01((i >= reach ? core[i - reach] : 0) - (i + reach < core.length ? core[i + reach] : 0));
+    return Math.max(core[i], (1 - under) * FEATHER_OPACITY * smoothstep(FEATHER_EDGE[0], FEATHER_EDGE[1], value * (1 + FEATHER * wisps[i])) ** 2);
+  });
   return { core, cover };
 }
 // The drawn cover alone.
 export const cloudCover = (cloud, buoyancy, width, height, options) => cloudLayers(cloud, buoyancy, width, height, options).cover;
+// Upward speed at each pixel, pixels per tick, from the stream function at its corners.
+export function rising({ stream, width, height }) {
+  const out = new Float64Array(width * height), columns = width + 1;
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const top = stream[y * columns + x + 1] - stream[y * columns + x];
+    const bottom = stream[(y + 1) * columns + x + 1] - stream[(y + 1) * columns + x];
+    out[y * width + x] = (top + bottom) / 2;
+  }
+  return out;
+}
 // How much warmer the air CAP_REACH pixels above is than each pixel (0 if colder).
 export function capping(temperature, width, height) {
   const out = new Float64Array(temperature.length);
@@ -411,12 +491,7 @@ export function renderConvection(simulation, view = "sunset", options = {}) {
   const rules = { ...defaults, ...options };
   const { width, height, temperature, vapor, liquid, rain } = simulation;
   const pixels = new Uint8ClampedArray(width * height * 4);
-  const rowMeans = new Float64Array(height);
-  for (let y = 0; y < height; y++) {
-    let sum = 0;
-    for (let x = 0; x < width; x++) sum += temperature[y * width + x];
-    rowMeans[y] = sum / width;
-  }
+  const rowMeans = rowMeansOf(temperature, width, height), lcl = layeringOf(options) === "lcl";
   const clip = value => Math.max(0, Math.min(1, value));
   // Sunset: cloud cover, a dome-shaped thickness for shading, and sunlight reaching each pixel.
   let coverOf, coreOf, reachOf, slopeOf, depthOf;
@@ -427,7 +502,7 @@ export function renderConvection(simulation, view = "sunset", options = {}) {
     const size = temperature.length;
     depthOf = new Float64Array(size); reachOf = new Float64Array(size);
     for (let i = 0; i < size; i++) {
-      const relative = vapor[i] / saturation(temperature[i], altitudeOf(i, width, height), rules.saturation, rules.expansion);
+      const relative = vapor[i] / capacityAt(i, temperature, rowMeans, rules, lcl, width, height);
       const near = clip((relative - HAZE_START) / (1 - HAZE_START));
       depthOf[i] = Math.max(0, liquid[i]) / CLOUD_DEPTH_SCALE + RAW_HAZE_DEPTH * near * near;
     }
@@ -435,7 +510,7 @@ export function renderConvection(simulation, view = "sunset", options = {}) {
   } else if (view === "sunset") {
     const size = temperature.length;
     const buoyancy = temperature.map((t, i) => t - rowMeans[Math.floor(i / width)]);
-    const layers = cloudLayers(liquid, buoyancy, width, height, { capping: capping(temperature, width, height), feather: rules.feather });
+    const layers = cloudLayers(liquid, buoyancy, width, height, { capping: capping(temperature, width, height), rising: rising(simulation), feather: rules.feather });
     coverOf = layers.cover; coreOf = layers.core;
     // Thickness: cover blurred wide (DOME_BLUR) plus tight (BILLOW_BLUR, nudged by the
     // lobes), so it is highest deep inside a mass and falls toward its edges, like
@@ -468,7 +543,7 @@ export function renderConvection(simulation, view = "sunset", options = {}) {
     } else if (view === "sunset") {
       const altitude = altitudeOf(i, width, height);
       const warmth = (temperature[i] - rowMeans[Math.floor(i / width)]) / 0.15;
-      const relative = vapor[i] / saturation(temperature[i], altitude, rules.saturation, rules.expansion);
+      const relative = vapor[i] / capacityAt(i, temperature, rowMeans, rules, lcl, width, height);
       const sky = sunsetSky(altitude, warmth);
       const light = cloudColor(1.5 * slopeOf[i] * (0.35 + 0.65 * reachOf[i]), altitude);
       // Sky, lit haze near saturation, a thin veil of still cloud water, then the puffs.
@@ -488,7 +563,7 @@ export function renderConvection(simulation, view = "sunset", options = {}) {
       // and drizzle do not wash out the blobs.
       if (view === "lamp") rgb = wet(rgb, shower * 0.85);
     } else if (view === "humidity") {
-      const relative = vapor[i] / saturation(temperature[i], altitudeOf(i, width, height), rules.saturation, rules.expansion);
+      const relative = vapor[i] / capacityAt(i, temperature, rowMeans, rules, lcl, width, height);
       const r = clip(relative);
       rgb = relative >= 1 ? [255, 160, 80] : [13 + 140 * r, 24 + 170 * r, 43 + 200 * r];
     } else {
