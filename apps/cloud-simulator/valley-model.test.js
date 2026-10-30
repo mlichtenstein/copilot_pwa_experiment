@@ -109,6 +109,12 @@ test("clearance is monotone from the visible hillside and independent of hidden 
     assert.equal(previous, 1);
   }
 });
+test("valley clearance follows broad left/right hill faces without decorative ripple spikes", () => {
+  const opts = { horizon: "valley", wind: 4, windwardClearance: 0.2, leewardClearance: 0 };
+  for (const x of [-0.8, -0.6, -0.4]) assert.equal(terrainProfile(x, opts).width, 0);
+  for (const x of [0.4, 0.6, 0.8]) assert.ok(terrainProfile(x, opts).width > 0);
+  assert.equal(terrainProfile(0, opts).width, 0);
+});
 test("two-cloud blend preserves endpoints, opacity and shading without transparent-pixel fringes", () => {
   assert.deepEqual(mixCloudSamples({alpha:1,shade:0.8}, {alpha:0,shade:0}, 0.5), {alpha:0.5,shade:0.8});
   assert.deepEqual(mixCloudSamples({alpha:0,shade:1}, {alpha:0,shade:0}, 0.5), {alpha:0,shade:0});

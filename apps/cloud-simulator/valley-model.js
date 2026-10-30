@@ -37,7 +37,11 @@ function visibleRidge(x, horizon) {
 }
 export function terrainProfile(x, options = {}) {
   const s = { ...defaults, ...options }, ridge = visibleRidge(x, s.horizon);
-  const rise = -(visibleRidge(x + 0.01, s.horizon) - visibleRidge(x - 0.01, s.horizon)) / 0.02;
+  const layer = [0, 1, 2].find(i => mountainRidge(x, i, s.horizon) === ridge);
+  // Classify the broad hillside, not small decorative ridge ripples that produce spikes.
+  const hillWidth = [0.58, 0.48, 0.4][layer], height = [0.45, 0.57, 0.7][layer];
+  const rise = s.horizon === "open" ? 0 : s.horizon === "hills" ? -0.14 * Math.cos(x * 4 + layer)
+    : 2 * x * height / (hillWidth * hillWidth) * Math.exp(-((x / hillWidth) ** 2));
   // All clouds use the visible terrain envelope: hidden ridges cannot punch floating holes.
   const facing = rise * Math.sign(s.wind);
   const windward = smoothstep(0, 0.15, facing), leeward = smoothstep(0, 0.15, -facing);
