@@ -10,15 +10,18 @@ const canvas = element("sky");
 const context = canvas.getContext("2d");
 const image = context.createImageData(canvas.width, canvas.height);
 // Sliders whose id matches a model rule; the remaining rules keep their defaults.
-const liveRules = ["buoyancy", "viscosity", "heating", "cooling", "latentHeat", "expansion", "evaporation", "fallSpeed", "flicker"];
+const liveRules = ["buoyancy", "viscosity", "heating", "cooling", "latentHeat", "expansion", "evaporation", "autoconversion", "fallSpeed", "flicker"];
 const legends = {
-  lamp: "Lava lamp: orange = warmer than the row average (rising), blue = cooler (sinking), white = rain and thick cloud.",
-  water: "Water: dark air, blue tint = vapor, white = cloud and rain. Fixed color scale; no decorative trails.",
+  lamp: "Lava lamp: orange = warmer than the row average (rising), blue = cooler (sinking), pale cyan = falling rain (cloud is hidden here; see Cloud and rain).",
+  water: "Cloud and rain: dark air, blue tint = vapor, gray-white = cloud, pale cyan = falling rain. Fixed color scale; no decorative trails.",
   temperature: "Temperature: blue = cold, red = warm. The floor is heated and the lid is cooled.",
   buoyancy: "Buoyancy: orange = warmer than the row average (rising), blue = cooler (sinking). Clips at ±0.15.",
   humidity: "Relative humidity: brighter = closer to saturation; orange = saturated, where cloud forms."
 };
 let simulation;
+// Seeds only make a run reproducible; behavior should look alike on any seed, so the
+// page picks one at random and Reset restarts the same run.
+let seed = crypto.getRandomValues(new Uint32Array(1))[0];
 let running = !matchMedia("(prefers-reduced-motion: reduce)").matches;
 let elapsed = 0;
 let previousTime;
@@ -29,7 +32,7 @@ function render() {
   image.data.set(renderConvection(simulation, element("view").value, rules()));
   context.putImageData(image, 0, 0);
   const water = totalWater(simulation) / simulation.temperature.length;
-  element("stats").textContent = `Tick ${simulation.tick} · Seed ${element("seed").value} · Water/cell ${water.toFixed(3)} · Fastest flow ${simulation.speed.toFixed(2)} px/tick`;
+  element("stats").textContent = `Tick ${simulation.tick} · Water/cell ${water.toFixed(3)} · Fastest flow ${simulation.speed.toFixed(2)} px/tick`;
 }
 
 function setRunning(next) {
@@ -40,13 +43,6 @@ function setRunning(next) {
 }
 
 function reset() {
-  const input = element("seed"), seed = Number(input.value);
-  if (input.value === "" || !Number.isInteger(seed) || seed < 0 || seed > 4294967295) {
-    input.setCustomValidity("Use a whole-number seed from 0 to 4294967295.");
-    input.reportValidity();
-    return;
-  }
-  input.setCustomValidity("");
   simulation = createConvection({ width: canvas.width, height: canvas.height, seed, water: Number(element("water").value) });
   elapsed = 0;
   render();
@@ -61,13 +57,11 @@ for (const id of [...liveRules, "speed", "water"]) {
     else render();
   });
 }
-element("seed").addEventListener("input", () => element("seed").setCustomValidity(""));
-element("seed").addEventListener("change", reset);
 element("play").addEventListener("click", () => setRunning(!running));
 element("step").addEventListener("click", () => { setRunning(false); step(simulation, rules()); render(); });
 element("reset").addEventListener("click", reset);
 element("new-seed").addEventListener("click", () => {
-  element("seed").value = crypto.getRandomValues(new Uint32Array(1))[0];
+  seed = crypto.getRandomValues(new Uint32Array(1))[0];
   reset();
 });
 element("view").addEventListener("change", () => {
