@@ -16,7 +16,7 @@ export function groundAt(x, depth = 2) { return [0.66,0.79,0.91][depth]+0.035*Ma
 const terrainAt = (state,x) => groundAt(x,state.depth);
 function random(state) { state.rng = (Math.imul(state.rng,1664525)+1013904223)>>>0; return state.rng/4294967296; }
 export function beginStrike(state) {
-  state.nodes = [{x:0.3+random(state)*0.4,y:0.10+state.depth*0.055,parent:-1,branch:false}];
+  state.nodes = [{x:0.22+state.depth*0.28+(random(state)-0.5)*0.22,y:0.10+state.depth*0.055,parent:-1,branch:false}];
   state.head = 0; state.returnPath = []; state.phase = "leader"; state.age = 0; state.growth = 0; state.strikes++;
 }
 function extend(state, parent, params, branch = false, direction = 0) {
