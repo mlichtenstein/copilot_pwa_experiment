@@ -1,6 +1,6 @@
 {
   "name": "Cloud Simulator",
-  "short_name": "Rain study",
+  "short_name": "Cloud sim",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

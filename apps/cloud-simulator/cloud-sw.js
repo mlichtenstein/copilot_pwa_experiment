@@ -2,7 +2,7 @@
  * Purpose: Cache the cloud simulator for offline use within this registration's scope.
  * Consumers: the browser, registered by the experiment pages.
  * Dependencies: service worker and Cache Storage APIs; files listed in FILES (including the
- *   shared presets module in ../shared/).
+ *   shared presets and drift modules in ../shared/).
  *
  * Cache Storage is shared by every app and preview on this origin. The cache
  * name includes the registration scope so production and /previews/pr-N/ do
@@ -11,9 +11,9 @@
 const SCOPE_PATH = new URL(self.registration.scope).pathname.replace(/\/+$/, "") || "/";
 const CACHE_PREFIX = "cloud-simulator::" + SCOPE_PATH + "::";
 const CACHE = CACHE_PREFIX + "v1";
-const FILES = ["./", "index.html", "manifest.json", "icon.svg", "style.css", "app.js", "simulation.js", "sunset.html", "sunset.js", "sunset-model.js", "convection.html", "convection.js", "convection-model.js", "horizon.html", "horizon.js", "horizon-model.js", "atmosphere-model.js", "horizon-bitmaps.js",
+const FILES = ["./", "index.html", "manifest.json", "icon.svg", "style.css", "sunset.html", "sunset.js", "sunset-model.js", "convection.html", "convection.js", "convection-model.js", "horizon.html", "horizon.js", "horizon-model.js", "atmosphere-model.js", "horizon-bitmaps.js", "noise.html", "noise.js", "noise-model.js",
   "shafts.html", "shafts.js", "shafts-model.js", "visibility-model.js",
-  "../shared/presets.js", "../shared/presets-panel.js", "../shared/presets.css"];
+  "../shared/presets.js", "../shared/presets-panel.js", "../shared/presets.css", "../shared/drift.js"];
 
 function precache() {
   return caches.open(CACHE).then(cache => Promise.all(FILES.map(path => {
