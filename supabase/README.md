@@ -1,6 +1,7 @@
 <!-- Purpose: How to set up and look after the Supabase backend for saved presets (issue #61).
      Consumers: the project owner (Maxwell) and contributors changing the database.
-     Dependencies: migrations/*_presets.sql; the Supabase dashboard for project uluovxbitpyaijrzwzyp. -->
+     Dependencies: migrations/*.sql, apply-migrations.mjs, .github/workflows/supabase-migrations.yml,
+     the SUPABASE_ACCESS_TOKEN repository secret, and Supabase project uluovxbitpyaijrzwzyp. -->
 
 # Supabase
 
@@ -8,12 +9,27 @@ The shared **presets** feature ([`apps/shared/`](../apps/shared/README.md)) stor
 
 The client holds only the public project URL and the **publishable** key. Row-level security decides what that key can do. Never put a secret or service-role key in the repo or the client.
 
-## One-time setup (project owner)
+## Setup is automatic
 
-1. **Create the table.** In the dashboard, open **SQL Editor**, paste all of [`migrations/20261030090000_presets.sql`](migrations/20261030090000_presets.sql), and click **Run**. (With the Supabase CLI linked to the project, `supabase db push` does the same.)
-2. **Turn on anonymous saves.** Open **Authentication > Sign In / Providers** and switch on **Allow anonymous sign-ins**, then **Save**. Leave **Allow new users to sign up** on, because an anonymous sign-in counts as a sign-up.
+Nobody pastes SQL into the dashboard. Database changes live in [`migrations/`](migrations/) as timestamped `.sql` files. When a change to `supabase/migrations/**` reaches `main`, the [Supabase migrations workflow](../.github/workflows/supabase-migrations.yml) runs [`apply-migrations.mjs`](apply-migrations.mjs). That script uses the Supabase Management API, so no database password is needed:
 
-Until step 1 is done, the Presets panel says the table is missing. Until step 2 is done, the list loads but saving reports that anonymous sign-ins are off. Copy link (parameters in the URL) works either way, including offline.
+- It lists the migration files in filename order.
+- It skips any version already recorded in `supabase_migrations.schema_migrations`, the history table the Supabase CLI uses, so `supabase migration list` agrees.
+- It runs each remaining file and records it in one transaction. A failed file changes nothing and stops the run.
+
+You can also start the workflow by hand from the Actions tab (**Run workflow**). Re-running it is harmless. It does not touch the Deploy workflow, GitHub Pages, or pull request previews, and pull requests do not run it. So a migration takes effect only after its PR merges.
+
+To add a database change, create `migrations/<YYYYMMDDHHMMSS>_<name>.sql` (or run `supabase migration new <name>`). Write it so it is safe to run twice. Never edit a migration that has already run; add a new one instead.
+
+### The access token secret
+
+The workflow needs the repository secret **`SUPABASE_ACCESS_TOKEN`**: a Supabase personal access token from [supabase.com/dashboard/account/tokens](https://supabase.com/dashboard/account/tokens). Add it under **Settings > Secrets and variables > Actions > New repository secret** ([direct link](https://github.com/mlichtenstein/copilot_pwa_experiment/settings/secrets/actions)). Without it, the workflow fails with a message that says so. The token can manage the whole Supabase account, so keep it only in that secret, never in the repo or the client.
+
+To run the script locally: `SUPABASE_ACCESS_TOKEN=... node supabase/apply-migrations.mjs --dry-run` (drop `--dry-run` to apply).
+
+### Current state
+
+`20261030090000_presets.sql` has been applied and recorded on Oct 30, 2026. Anonymous sign-ins are on: this is an auth setting, not SQL, so it was switched on once through the Management API (`external_anonymous_users_enabled`). It is the dashboard's **Authentication > Sign In / Providers > Allow anonymous sign-ins** toggle. Keep **Allow new users to sign up** on as well, because an anonymous sign-in counts as a sign-up. If anonymous sign-ins are turned off, the list still loads, but saving reports that anonymous sign-ins are off.
 
 ## What the migration sets up
 

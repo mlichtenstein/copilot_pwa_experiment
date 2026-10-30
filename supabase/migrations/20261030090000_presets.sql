@@ -1,9 +1,10 @@
 -- Purpose: Create the shared `presets` table for saved app parameters (issue #61), with
 --   row-level security for open, anonymous saves and a simple per-user hourly save limit.
--- Consumers: the Supabase project (paste into the dashboard SQL editor, or `supabase db push`);
+-- Consumers: the Supabase project, applied by supabase/apply-migrations.mjs (the Supabase migrations workflow);
 --   apps/shared/presets.js reads and writes it through the Data API.
 -- Dependencies: Supabase Postgres with the auth schema (auth.users, auth.uid()) and
 --   gen_random_uuid(); Anonymous sign-ins enabled for writes (see supabase/README.md).
+-- Safe to re-run: every statement is create-if-missing or drop-and-recreate.
 
 create table if not exists public.presets (
   id uuid primary key default gen_random_uuid(),
@@ -24,16 +25,20 @@ create index if not exists presets_created_by_created_at on public.presets (crea
 alter table public.presets enable row level security;
 
 -- Everyone, signed in or not, can read and browse presets.
+drop policy if exists "presets are readable by everyone" on public.presets;
 create policy "presets are readable by everyone" on public.presets
   for select to anon, authenticated using (true);
 
 -- Writes need a session; anonymous sign-ins count (they use the authenticated role).
+drop policy if exists "visitors insert their own presets" on public.presets;
 create policy "visitors insert their own presets" on public.presets
   for insert to authenticated with check (created_by = (select auth.uid()));
 
+drop policy if exists "visitors update their own presets" on public.presets;
 create policy "visitors update their own presets" on public.presets
   for update to authenticated using (created_by = (select auth.uid())) with check (created_by = (select auth.uid()));
 
+drop policy if exists "visitors delete their own presets" on public.presets;
 create policy "visitors delete their own presets" on public.presets
   for delete to authenticated using (created_by = (select auth.uid()));
 
