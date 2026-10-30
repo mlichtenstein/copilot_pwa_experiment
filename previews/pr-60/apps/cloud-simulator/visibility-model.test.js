@@ -4,7 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createScene, defaults } from "./shafts-model.js";
 import { silhouetteSegments, visibilityPolygon, pointInPolygon, buildVisibility,
-  renderVisibility, combinedVisibility, visibilityOrder } from "./visibility-model.js";
+  renderVisibility, combinedVisibility, visibilityOrder, outsideCircleSegments } from "./visibility-model.js";
 test("unobstructed visibility covers the bounds; a wall blocks points behind it", () => {
   const empty = visibilityPolygon([1, 5], [], [0, 0, 10, 10]);
   assert.ok(pointInPolygon([9, 5], empty));
@@ -58,6 +58,27 @@ test("zero opacity clears polygons; moving sun preserves fields; opaque source c
   assert.notDeepEqual(renderVisibility(scene, first), renderVisibility(scene, second));
   scene.layers.forEach((layer, i) => assert.deepEqual(layer.density, original[i]));
   for (const layer of scene.layers) layer.density.fill(2);
-  const blocked = buildVisibility(scene, {}, 32, 20);
+  const blocked = buildVisibility(scene, { sourceRadius: 0 }, 32, 20);
   assert.ok(blocked.layers.every(l => l.blocked && l.polygon.length === 0 && l.visible.every(v => v === 0)));
+});
+
+test("source radius lets light escape a nearby silhouette but a distant wall still blocks", () => {
+  const box = [[[-1, -1], [1, -1]], [[1, -1], [1, 1]], [[1, 1], [-1, 1]], [[-1, 1], [-1, -1]]];
+  const isSolid = p => Math.abs(p[0]) < 1 && Math.abs(p[1]) < 1;
+  const polygon = visibilityPolygon([0, 0], [...box, [[5, -5], [5, 5]]], [-10, -10, 10, 10], 2, isSolid);
+  assert.ok(pointInPolygon([4, 0], polygon));
+  assert.ok(!pointInPolygon([7, 0], polygon));
+  assert.ok(pointInPolygon([-7, 0], polygon));
+});
+test("a thick cloud limits the glow to the reach radius", () => {
+  const polygon = visibilityPolygon([0, 0], [], [-10, -10, 10, 10], 2, () => true);
+  assert.ok(pointInPolygon([1, 0], polygon));
+  assert.ok(!pointInPolygon([3, 0], polygon));
+});
+test("circle clipping preserves only distant portions of crossing edges", () => {
+  const clipped = outsideCircleSegments([0, 0], [[-5, 0], [5, 0]], 2);
+  assert.equal(clipped.length, 2);
+  assert.ok(Math.abs(clipped[0][1][0] + 2) < 1e-10);
+  assert.ok(Math.abs(clipped[1][0][0] - 2) < 1e-10);
+  assert.deepEqual(outsideCircleSegments([0, 0], [[-1, 0], [1, 0]], 2), []);
 });

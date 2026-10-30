@@ -3,6 +3,7 @@
  * Dependencies: shafts-model.js for shared fields/settings; sunset-model.js for sun color. */
 import { defaults, sharpenDensity, sampleCloud, sunDirection } from "./shafts-model.js";
 import { sunlight } from "./sunset-model.js";
+export const visibilityDefaults = { sourceRadius: 6 };
 const SCALE = Math.tan(58 * Math.PI / 360);
 export function projectPoint(x, y, depth, width, height) {
   return [(x / ((depth + 12) * SCALE * width / height) + 1) * width / 2,
@@ -48,20 +49,43 @@ export function raySegmentDistance(origin, direction, segment) {
   const t = cross(ax, ay, sx, sy) / denominator, u = cross(ax, ay, direction[0], direction[1]) / denominator;
   return t >= 0 && u >= -1e-10 && u <= 1 + 1e-10 ? t : Infinity;
 }
+// Remove only the portions of an edge inside the sun's pass-through circle.
+export function outsideCircleSegments(origin, segment, radius) {
+  if (radius <= 0) return [segment];
+  const [a, b] = segment, dx = b[0] - a[0], dy = b[1] - a[1];
+  const ox = a[0] - origin[0], oy = a[1] - origin[1];
+  const aa = dx * dx + dy * dy;
+  if (aa === 0) return [];
+  const bb = 2 * (ox * dx + oy * dy), cc = ox * ox + oy * oy - radius * radius;
+  const discriminant = bb * bb - 4 * aa * cc, cuts = [0, 1];
+  if (discriminant > 0) for (const t of [(-bb - Math.sqrt(discriminant)) / (2 * aa), (-bb + Math.sqrt(discriminant)) / (2 * aa)]) if (t > 0 && t < 1) cuts.push(t);
+  cuts.sort((x, y) => x - y);
+  const result = [], at = t => [a[0] + t * dx, a[1] + t * dy];
+  for (let i = 0; i < cuts.length - 1; i++) {
+    const middle = at((cuts[i] + cuts[i + 1]) / 2);
+    if (Math.hypot(middle[0] - origin[0], middle[1] - origin[1]) >= radius) result.push([at(cuts[i]), at(cuts[i + 1])]);
+  }
+  return result;
+}
 // Rays just beside each boundary endpoint capture the visibility changes at corners.
-export function visibilityPolygon(origin, obstacles, bounds) {
+export function visibilityPolygon(origin, obstacles, bounds, radius = 0, isSolid = () => false) {
   const [left, top, right, bottom] = bounds;
   const corners = [[left, top], [right, top], [right, bottom], [left, bottom]];
-  const segments = [...obstacles, ...corners.map((p, i) => [p, corners[(i + 1) % 4]])];
+  const segments = [...obstacles.flatMap(segment => outsideCircleSegments(origin, segment, radius)), ...corners.map((p, i) => [p, corners[(i + 1) % 4]])];
   const angles = new Set();
+  if (radius > 0) for (let i = 0; i < 96; i++) angles.add(i * 2 * Math.PI / 96 - Math.PI);
   for (const segment of segments) for (const point of segment) {
     const angle = Math.atan2(point[1] - origin[1], point[0] - origin[0]);
     for (const offset of [-1e-6, 0, 1e-6]) angles.add(angle + offset);
   }
   return [...angles].map(angle => {
     const direction = [Math.cos(angle), Math.sin(angle)];
-    let distance = Infinity;
-    for (const segment of segments) distance = Math.min(distance, raySegmentDistance(origin, direction, segment));
+    const start = [origin[0] + direction[0] * (radius + 1e-7), origin[1] + direction[1] * (radius + 1e-7)];
+    let distance = radius > 0 && isSolid(start) ? radius : Infinity;
+    if (!Number.isFinite(distance)) for (const segment of segments) {
+      const hit = raySegmentDistance(origin, direction, segment);
+      if (hit >= radius - 1e-8) distance = Math.min(distance, hit);
+    }
     return { angle, point: [origin[0] + direction[0] * distance, origin[1] + direction[1] * distance] };
   }).sort((a, b) => a.angle - b.angle).map(hit => hit.point);
 }
@@ -74,7 +98,7 @@ export function pointInPolygon(point, polygon) {
   return inside;
 }
 export function buildVisibility(scene, options = {}, width = 128, height = 80) {
-  const settings = { ...defaults, ...options }, sun = projectedSun(settings, width, height);
+  const settings = { ...defaults, ...visibilityDefaults, ...options }, sun = projectedSun(settings, width, height);
   const layers = scene.layers.map(layer => {
     const mask = thresholdMask(layer, settings), segments = silhouetteSegments(layer, mask, width, height);
     const points = segments.flat();
@@ -82,12 +106,16 @@ export function buildVisibility(scene, options = {}, width = 128, height = 80) {
       Math.min(-height, sun[1] - height, ...points.map(p => p[1] - 1)),
       Math.max(2 * width, sun[0] + width, ...points.map(p => p[0] + 1)),
       Math.max(2 * height, sun[1] + height, ...points.map(p => p[1] + 1))];
-    // A 2D light inside a solid silhouette cannot illuminate its exterior.
-    const worldX = (sun[0] / width * 2 - 1) * SCALE * width / height * (layer.depth + 12);
-    const worldY = (1 - sun[1] / height * 2) * SCALE * (layer.depth + 12);
-    const mx = Math.floor(worldX / layer.cellSize + layer.width / 2), my = Math.floor(layer.height / 2 - worldY / layer.cellSize);
-    const blocked = mx >= 0 && my >= 0 && mx < layer.width && my < layer.height && mask[my * layer.width + mx] !== 0;
-    const polygon = blocked ? [] : visibilityPolygon(sun, segments, bounds);
+    // Radius is specified in native 128x80 image pixels, independent of output size.
+    const radius = settings.sourceRadius * width / 128;
+    const isSolid = point => {
+      const worldX = (point[0] / width * 2 - 1) * SCALE * width / height * (layer.depth + 12);
+      const worldY = (1 - point[1] / height * 2) * SCALE * (layer.depth + 12);
+      const mx = Math.floor(worldX / layer.cellSize + layer.width / 2), my = Math.floor(layer.height / 2 - worldY / layer.cellSize);
+      return mx >= 0 && my >= 0 && mx < layer.width && my < layer.height && mask[my * layer.width + mx] !== 0;
+    };
+    const blocked = isSolid(sun);
+    const polygon = blocked && radius === 0 ? [] : visibilityPolygon(sun, segments, bounds, radius, isSolid);
     const visible = Uint8Array.from({ length: width * height }, (_, i) => pointInPolygon([i % width + 0.5, Math.floor(i / width) + 0.5], polygon) ? 1 : 0);
     return { polygon, segments, visible, blocked };
   });

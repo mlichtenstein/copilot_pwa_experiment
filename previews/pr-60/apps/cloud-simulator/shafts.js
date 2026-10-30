@@ -1,25 +1,27 @@
 /* Purpose: Simple sun/cloud/haze controls and image playback.
  * Consumers: shafts.html. Dependencies: shafts-model.js, visibility-model.js, page IDs, Canvas and service worker APIs. */
 import { defaults, createScene, createLayer, buildLightMaps, renderShafts } from "./shafts-model.js";
-import { buildVisibility, renderVisibility } from "./visibility-model.js";
+import { buildVisibility, renderVisibility, visibilityDefaults } from "./visibility-model.js";
 const element = id => document.getElementById(id), canvas = element("sky"), context = canvas.getContext("2d");
+const controlDefaults = { ...defaults, ...visibilityDefaults };
 let scene = createScene(), dirty = true, playing = false, previous, elapsed = 0, direction = 1;
 function render() {
   const start = performance.now();
-  const options = Object.fromEntries(Object.keys(defaults).map(key => [key, Number(element(key).value)]));
+  const options = Object.fromEntries(Object.keys(controlDefaults).map(key => [key, Number(element(key).value)]));
   const polygonMode = element("strategy-visibility").checked;
+  element("sourceRadius").disabled = !polygonMode;
   const image = context.createImageData(canvas.width, canvas.height);
   if (polygonMode) image.data.set(renderVisibility(scene, buildVisibility(scene, options, canvas.width, canvas.height)));
   else image.data.set(renderShafts(scene, buildLightMaps(scene, options), canvas.width, canvas.height));
   context.putImageData(image, 0, 0);
-  for (const key of Object.keys(defaults)) element(key + "-value").textContent = element(key).value;
+  for (const key of Object.keys(controlDefaults)) element(key + "-value").textContent = element(key).value;
   element("stats").textContent = `3 cloud layers · ${polygonMode ? "visibility polygons" : "geometric shadows"} · ${(performance.now() - start).toFixed(0)} ms/frame`;
   element("patterns").textContent = scene.layers.map(layer => `${layer.name}: ${layer.seed}`).join(" · ");
   dirty = false;
 }
 for (const id of ["strategy-visibility", "strategy-geometric"]) element(id).addEventListener("change", () => { dirty = true; });
 function pause() { playing = false; element("play").textContent = "Play sun"; element("play").setAttribute("aria-pressed", "false"); }
-for (const key of Object.keys(defaults)) element(key).addEventListener("input", () => {
+for (const key of Object.keys(controlDefaults)) element(key).addEventListener("input", () => {
   if (key === "sunAzimuth") pause(); dirty = true;
 });
 element("play").addEventListener("click", () => {
@@ -28,7 +30,7 @@ element("play").addEventListener("click", () => {
   element("play").setAttribute("aria-pressed", String(playing));
 });
 element("reset").addEventListener("click", () => {
-  pause(); for (const [key, value] of Object.entries(defaults)) element(key).value = value;
+  pause(); for (const [key, value] of Object.entries(controlDefaults)) element(key).value = value;
   scene = createScene(); dirty = true;
 });
 for (let i = 0; i < 3; i++) element("pattern-" + i).addEventListener("click", () => {
