@@ -31,6 +31,17 @@ test("sun slider redraws; pattern buttons change one layer; reset restores the o
     get("strategy-visibility").checked = true; get("strategy-geometric").checked = false;
     get("strategy-visibility").listeners.change(); callback(8);
     assert.deepEqual(pixels, first);
+    get("strategy-layered").checked = true; get("strategy-visibility").checked = false;
+    get("strategy-layered").listeners.change(); callback(9);
+    const layered = pixels.slice();
+    assert.notDeepEqual(layered, first);
+    assert.equal(get("patterns").textContent, originalPatterns);
+    get("reset").listeners.click(); callback(9.5);
+    assert.equal(get("strategy-layered").checked, true);
+    assert.deepEqual(pixels, layered);
+    get("strategy-layered").checked = false; get("strategy-visibility").checked = true;
+    get("strategy-visibility").listeners.change(); callback(9.75);
+    assert.deepEqual(pixels, first);
     assert.equal(get("sourceRadius").disabled, false);
     get("sourceRadius").value = "0"; get("sourceRadius").listeners.input(); callback(10);
     assert.notDeepEqual(pixels, first);
