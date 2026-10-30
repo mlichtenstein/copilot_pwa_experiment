@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { defaults, sampleTexture, revealFields, mountainRidge, terrainProfile, renderValley, textureOptions } from "./valley-model.js";
+import { defaults, sampleTexture, revealFields, mountainRidge, terrainProfile, mixCloudSamples, renderValley, textureOptions } from "./valley-model.js";
 import { decodeCloudTexture } from "./valley-textures.js";
 function texture(seed) {
   let state = seed;
@@ -18,7 +18,7 @@ test("texture sampling wraps horizontally in either direction and is empty outsi
   assert.equal(sampleTexture(image, 0.5, -0.01), 0);
   assert.equal(sampleTexture(image, 0.5, 1.01), 0);
 });
-test("slope pockets swap with wind, stay partial and let zero-clearance clouds reach terrain", () => {
+test("visible slopes swap with wind, stay attached and let zero-clearance clouds reach terrain", () => {
   let active = 0, untouched = 0;
   for (let i = 0; i < 100; i++) {
     const x = -1 + i * 0.02, opts = { wind: 4, windwardClearance: 0.15, leewardClearance: 0 };
@@ -92,4 +92,30 @@ test("photo processing removes sky, retains cloud shading and never passes RGB t
   // Different source hues with identical grayscale + alpha have identical rendered output.
   const a = { width: 1, height: 1, pixels: new Float32Array([1]), shading: new Float32Array([0.4]), mirrored: true };
   assert.deepEqual(renderValley({ ...a, rgb: new Uint8Array([255,0,0]) }, 0, opts, "noise", 32, 20), renderValley({ ...a, rgb: new Uint8Array([0,0,255]) }, 0, opts, "noise", 32, 20));
+});
+
+test("clearance is monotone from the visible hillside and independent of hidden layer ridges", () => {
+  for (const horizon of ["valley", "hills"]) for (const wind of [-4, 4]) for (let i = 0; i <= 80; i++) {
+    const x = -1 + i / 40, opts = { horizon, wind, windwardClearance: 0.2, leewardClearance: 0 };
+    const terrain = terrainProfile(x, opts);
+    assert.equal(terrain.ridge, Math.min(...[0,1,2].map(layer => mountainRidge(x, layer, horizon))));
+    let previous = 0;
+    for (let j = 0; j <= 20; j++) {
+      const y = terrain.ridge - j * 0.015;
+      const f = revealFields(x, y, 0, opts, "noise", 0);
+      assert.ok(f.clearance >= previous); previous = f.clearance;
+      for (const layer of [1,2]) assert.equal(revealFields(x, y, 0, opts, "noise", layer).clearance, f.clearance);
+    }
+    assert.equal(previous, 1);
+  }
+});
+test("two-cloud blend preserves endpoints, opacity and shading without transparent-pixel fringes", () => {
+  assert.deepEqual(mixCloudSamples({alpha:1,shade:0.8}, {alpha:0,shade:0}, 0.5), {alpha:0.5,shade:0.8});
+  assert.deepEqual(mixCloudSamples({alpha:0,shade:1}, {alpha:0,shade:0}, 0.5), {alpha:0,shade:0});
+  const a = texture(91), b = texture(42), opts = { horizon:"hills", placement:"full" };
+  const draw = (t, amount, other) => renderValley(t, 2, { ...opts, textureBlend:amount }, "noise", 48, 30, other);
+  assert.deepEqual(draw(a, 0, b), draw(a, 0, a));
+  assert.deepEqual(draw(a, 1, b), draw(b, 0, b));
+  assert.notDeepEqual(draw(a, 0.5, b), draw(a, 0, b));
+  assert.deepEqual(draw(a, 0.5, a), draw(a, 0, a));
 });

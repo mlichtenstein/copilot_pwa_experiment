@@ -4,16 +4,26 @@ import { defaults, textureOptions, renderValley } from "./valley-model.js";
 import { decodeCloudTexture } from "./valley-textures.js";
 const element = id => document.getElementById(id), canvas = element("sky"), context = canvas.getContext("2d");
 let textures, time = 0, playing = false, previous, elapsed = 0, dirty = true;
-function selectedTexture() { return textureOptions.find(option => element("texture-" + option.id).checked) ?? textureOptions[0]; }
+function selectedTexture(slot) { return textureOptions.find(option => option.id === element("texture-" + slot).value) ?? textureOptions[0]; }
+function preview(slot) {
+  const selected = selectedTexture(slot), texture = textures[selected.id], target = element("preview-" + slot), ctx = target.getContext("2d");
+  const image = ctx.createImageData(target.width, target.height);
+  for (let y = 0; y < target.height; y++) for (let x = 0; x < target.width; x++) {
+    const i = Math.floor(y / target.height * texture.height) * texture.width + Math.floor(x / target.width * texture.width), out = (y * target.width + x) * 4;
+    const shade = texture.shading ? texture.shading[i] : 1 - texture.pixels[i];
+    image.data[out] = image.data[out + 1] = image.data[out + 2] = shade * 255; image.data[out + 3] = texture.pixels[i] * 255;
+  }
+  ctx.putImageData(image, 0, 0); target.setAttribute("aria-label", selected.name + " grayscale cloud mask");
+}
 function render() {
   const start = performance.now(), options = Object.fromEntries(Object.keys(defaults).map(key => [key, Number(element(key).value)]));
   options.horizon = ["valley", "hills", "open"].find(id => element("horizon-" + id).checked) ?? "hills";
   options.placement = element("placement").value;
-  const selected = selectedTexture(), image = context.createImageData(canvas.width, canvas.height);
-  image.data.set(renderValley(textures[selected.id], time, options, element("shape").value, canvas.width, canvas.height));
+  const a = selectedTexture("a"), b = selectedTexture("b"), image = context.createImageData(canvas.width, canvas.height);
+  image.data.set(renderValley(textures[a.id], time, options, element("shape").value, canvas.width, canvas.height, textures[b.id]));
   context.putImageData(image, 0, 0);
   for (const key of Object.keys(defaults)) element(key + "-value").textContent = element(key).value;
-  element("stats").textContent = `${selected.name} · t ${time.toFixed(1)} s · ${(performance.now() - start).toFixed(0)} ms/frame`;
+  element("stats").textContent = `${a.name} → ${b.name} · ${Math.round(options.textureBlend * 100)}% B · t ${time.toFixed(1)} s · ${(performance.now() - start).toFixed(0)} ms/frame`;
   dirty = false;
 }
 function setPlaying(value) {
@@ -22,7 +32,7 @@ function setPlaying(value) {
   element("play").setAttribute("aria-pressed", String(playing));
 }
 for (const key of Object.keys(defaults)) element(key).addEventListener("input", () => { dirty = true; });
-for (const option of textureOptions) element("texture-" + option.id).addEventListener("change", () => { dirty = true; });
+for (const slot of ["a", "b"]) element("texture-" + slot).addEventListener("change", () => { if (textures) preview(slot); dirty = true; });
 for (const id of ["valley", "hills", "open"]) element("horizon-" + id).addEventListener("change", () => { dirty = true; });
 element("placement").addEventListener("change", () => { dirty = true; });
 element("shape").addEventListener("change", () => { dirty = true; });
@@ -31,7 +41,8 @@ element("step").addEventListener("click", () => { setPlaying(false); time += 1; 
 element("reset").addEventListener("click", () => {
   setPlaying(false); time = 0;
   for (const [key, value] of Object.entries(defaults)) element(key).value = value;
-  for (const option of textureOptions) element("texture-" + option.id).checked = option.id === "rose";
+  element("texture-a").value = "rose"; element("texture-b").value = "billow";
+  if (textures) { preview("a"); preview("b"); }
   element("shape").value = "noise"; element("placement").value = "full";
   for (const id of ["valley", "hills", "open"]) element("horizon-" + id).checked = id === "hills"; dirty = true;
 });
@@ -43,7 +54,7 @@ async function loadTexture(option) {
   return [option.id, decodeCloudTexture(rgba, 512, 512, option.profile)];
 }
 export const ready = Promise.all(textureOptions.map(loadTexture)).then(entries => {
-  textures = Object.fromEntries(entries);
+  textures = Object.fromEntries(entries); preview("a"); preview("b");
   for (const id of ["play", "step", "reset"]) element(id).disabled = false;
 }).catch(error => {
   console.error("Valley texture load failed", error); element("status").textContent = "Cloud textures could not load. Reload online to try again.";
