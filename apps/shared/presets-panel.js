@@ -4,7 +4,7 @@
  *   link (settings in ?p=), a Recent list of the last ratings with thumbnails that reloads
  *   their settings on click, and an About note explaining the bar. Every control has a short
  *   title tooltip, so its explanation sits on it. Restores ?p= on mount.
- * Consumers: the cloud simulator pages (sunset.js, convection.js, horizon.js, noise.js).
+ * Consumers: the cloud simulator pages (convection.js, horizon.js, noise.js) and the shared experiment host (cloud-simulator/core/host.js, used by sunset.js).
  * Dependencies: presets.js; a container element; the app's getParams() returning a plain JSON
  *   object and applyParams(params) applying one; optionally the app's <canvas> for thumbnails;
  *   DOM, localStorage, history, clipboard and online/offline events. Styles: presets.css.

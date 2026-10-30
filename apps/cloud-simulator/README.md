@@ -14,21 +14,29 @@ Open the folder (its `index.html`) through an HTTP server, or use the PR's Revie
 
 ## Files
 
-Each experiment is a page, a UI script and a browser-independent model (for example `noise.html`, `noise.js`, `noise-model.js`), with tests beside the models. `index.html` forwards to `noise.html`. `manifest.json` describes installation metadata, uses relative start/scope URLs, and depends on `icon.svg`. `cloud-sw.js` precaches every runtime asset in a cache named for its registration scope.
+Each experiment is a page, a UI script and a browser-independent model (for example `noise.html`, `noise.js`, `noise-model.js`), with tests beside the models.
+
+The experiments are being moved onto one shared module architecture ([#68](https://github.com/mlichtenstein/copilot_pwa_experiment/issues/68)); Sunset study is the first. A ported experiment is a module (`sunset-experiment.js`) that describes its parameters as a schema and creates an instance with `update(params)`, `step(dt, frame)`, `render(frame)` → RGBA pixels and `dispose()`. `core/` holds the shared parts:
+
+- `core/experiment.js`: the contract, parameter kinds (range, select, seed), validation and cleaning of untrusted values.
+- `core/sun-path.js`: the one sun path every experiment with a sun follows, a figure-eight (a 1:2 Lissajous loop, like a sideways analemma) over a 90 s period: azimuth `40° × sin(2πφ)`, elevation `10° + 15° × sin(4πφ)`. The two lobes cross at 0° across, 10° up, and the sun dips about 5° under the horizon at the bottom of each lobe. Each experiment maps those degrees onto its own picture.
+- `core/clock.js`: the shared clock (play/pause, frame steps capped at 250 ms, nothing while the tab is hidden) and the animation loop.
+- `core/host.js`: builds the page from the schema (sliders, the shared `sunPhase` slider, Play sun / Reset sun, New seed buttons), runs the loop, and connects the rating bar and `?p=` links (`getParams`/`applyParams`).
+- `core/registry.js`: the list of ported experiments. `index.html` forwards to `noise.html`. `manifest.json` describes installation metadata, uses relative start/scope URLs, and depends on `icon.svg`. `cloud-sw.js` precaches every runtime asset in a cache named for its registration scope.
 
 ## Checks
 
-Run `node --test apps/cloud-simulator/*test.js` from the repository root. For browser checks, serve the root with `python3 -m http.server 8000 --bind 127.0.0.1`, then open `/apps/cloud-simulator/` (it forwards to Noise weather). Check playback, all views and controls, narrow layout, and offline reload after the service worker controls the page. Production and preview scopes should have separate caches.
+Run `node --test apps/cloud-simulator/*test.js apps/cloud-simulator/core/*test.js` from the repository root. For browser checks, serve the root with `python3 -m http.server 8000 --bind 127.0.0.1`, then open `/apps/cloud-simulator/` (it forwards to Noise weather). Check playback, all views and controls, narrow layout, and offline reload after the service worker controls the page. Production and preview scopes should have separate caches.
 
 ## Experiment 02: sunset study
 
-Open [sunset.html](sunset.html). Droplet density is fixed, seeded Gaussian patches extruded along camera depth into a 2.5D slab. `sunset-model.js` owns density generation and all lighting; `sunset.js` owns UI/playback only. The only animation is a distant sun moving along an arc; playback starts paused. Manual sun positioning, repeatable density seeds, parameter descriptions and collapsed formulas support experimentation. Density, sunlight transmission and camera transmission views isolate the terms.
+Open [sunset.html](sunset.html). Droplet density is fixed, seeded Gaussian patches extruded along camera depth into a 2.5D slab. `sunset-model.js` owns density generation and all lighting; `sunset-experiment.js` describes the parameters and wires the model into the shared host, and `sunset.js` only mounts it. The only animation is the distant sun moving along the shared figure-eight path (`sunPhase`; 45° of azimuth spans the half-width of the picture, and daylight follows the sine of the elevation); playback starts paused. Older saved settings with the previous `sunAngle` load everything except the sun's place. Manual sun positioning, repeatable density seeds, parameter descriptions and collapsed formulas support experimentation. Density, sunlight transmission and camera transmission views isolate the terms.
 
 Beer–Lambert attenuation and Henyey–Greenstein single scattering follow the ideas in [PBRT transmittance](https://www.pbr-book.org/4ed/Volume_Scattering/Transmittance) and [phase functions](https://www.pbr-book.org/4ed/Volume_Scattering/Phase_Functions). Our cosine convention uses propagation directions (forward is +1). RGB atmospheric extinction, sky backdrop, neutral ambient fill, fixed solar depth direction and horizon fading are deliberate approximations. The finite slab has open lateral edges; rays outside the density grid see vacuum. Six depth samples and eight sun-path samples approximate the integrals; dense settings can show quadrature error. No multiple scattering or calibrated meteorology is claimed.
 
 `extinction` is per density unit per pixel length, `slabDepth` is in pixel lengths; remaining radiometric quantities use relative units. Neither rain state nor density evolves in this experiment. The shared cloud service worker precaches sunset assets in the existing app scope; installation opens Noise weather, which links to Sunset study.
 
-Run `node --test apps/cloud-simulator/*test.js` for all experiments. Browser review: compare density before/after sun playback; scrub the sun toward the horizon; vary extinction/albedo/exposure and compare diagnostic views; check phone-width labels, pause/reset/new seed, and offline reload of both pages after worker activation. Browser verification must be recorded separately from model checks.
+Run `node --test apps/cloud-simulator/*test.js apps/cloud-simulator/core/*test.js` for all experiments. Browser review: compare density before/after sun playback; watch the sun trace the figure-eight and dip under the horizon; scrub the sun toward the horizon; vary extinction/albedo/exposure and compare diagnostic views; check phone-width labels, pause/reset/new seed, and offline reload of both pages after worker activation. Browser verification must be recorded separately from model checks.
 
 All experiment pages keep the field in a separate visible pane while controls and formulas scroll independently. Wide screens use side-by-side panes; phones stack the field above the controls. The controls region can receive keyboard focus for scrolling.
 
