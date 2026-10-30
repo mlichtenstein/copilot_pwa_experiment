@@ -3,35 +3,35 @@
  * Consumers: noise.html.
  * Dependencies: noise-model.js, page element IDs, Canvas 2D and service worker APIs.
  */
-import { defaults, createWeather, step, sampleFields, renderWeather, airborneRain, pooledRain } from "./noise-model.js";
+import { defaults, createWeather, step, sampleFields, renderWeather, airborneRain, pooledRain,
+  createRainLayer, updateRainLayer } from "./noise-model.js";
 
 const element = id => document.getElementById(id);
 const canvas = element("sky");
 const context = canvas.getContext("2d");
 const image = context.createImageData(canvas.width, canvas.height);
-// Every slider whose id matches a model rule; all of them affect the current run.
+// Every slider is a model rule and affects the current run.
 const liveRules = Object.keys(defaults).filter(id => element(id));
+const TICKS_PER_SECOND = 20;
 const legends = {
-  sunset: "Sunset: clouds lit peach toward the low sun at lower right and grey-violet where thick; soft grey veils = falling rain; blue floor = puddles.",
-  water: "Cloud and rain: white = cloud, gold tint = cloud charged enough to rain, pale blue = rain in the air.",
-  relative: "Relative humidity: brighter = closer to the cloud threshold; orange = above it, where cloud appears.",
-  humidity: "Humidity: dark = dry, blue = moist (after drying aloft).",
-  temperature: "Temperature: blue = cold, red = warm (after the lapse rate).",
-  pressure: "Pressure: purple = low (more cloud), yellow = high (clearer).",
-  wind: "Wind gusts: teal = blowing left, pink = blowing right. They only push the rain, on top of windScroll."
+  sunset: "Sunset: clouds lit peach toward the low sun at lower right and grey-violet where thick; soft grey streaks = falling rain; blue floor = puddles.",
+  water: "Cloud and rain: white = cloud, gold tint = cloud mature enough to rain, pale blue = rain in the air.",
+  relative: "Cloud forming: relative humidity × the cloud-layer band; brighter = closer to forming, orange = cloud forms.",
+  humidity: "Humidity: dark = dry, blue = moist.",
+  temperature: "Temperature: blue = cold, red = warm.",
+  pressure: "Pressure: purple = low (more cloud), yellow = high (clearer)."
 };
-let simulation;
+let simulation, rain;
 // Seeds only make a run reproducible; behavior should look alike on any seed.
 let seed = crypto.getRandomValues(new Uint32Array(1))[0];
 let running = !matchMedia("(prefers-reduced-motion: reduce)").matches;
 let elapsed = 0;
 let previousTime;
 
-const valueOf = input => input.type === "checkbox" ? Number(input.checked) : Number(input.value);
-const rules = () => ({ ...defaults, ...Object.fromEntries(liveRules.map(id => [id, valueOf(element(id))])) });
+const rules = () => ({ ...defaults, ...Object.fromEntries(liveRules.map(id => [id, Number(element(id).value)])) });
 
 function render() {
-  image.data.set(renderWeather(simulation, element("view").value, rules()));
+  image.data.set(renderWeather(simulation, element("view").value, rules(), rain));
   context.putImageData(image, 0, 0);
   const cloudy = simulation.cloud.filter(value => value > 0).length / simulation.cloud.length;
   element("stats").textContent = `Tick ${simulation.tick} · Cloud ${(100 * cloudy).toFixed(0)}% · Rain in air ${airborneRain(simulation).toFixed(2)} · Puddles ${pooledRain(simulation).toFixed(2)}`;
@@ -44,26 +44,31 @@ function setRunning(next) {
   element("play").setAttribute("aria-pressed", String(running));
 }
 
+function advance(current) {
+  step(simulation, current);
+  updateRainLayer(rain, simulation, current);
+}
+
 function reset() {
   simulation = createWeather({ width: canvas.width, height: canvas.height, seed });
+  rain = createRainLayer(seed);
   sampleFields(simulation, rules());
   elapsed = 0;
   render();
 }
 
-for (const id of [...liveRules, "speed"]) {
-  const output = element(id + "-value");
-  const update = () => { if (output) output.textContent = element(id).value; };
+for (const id of liveRules) {
+  const update = () => { element(id + "-value").textContent = element(id).value; };
   update();
   element(id).addEventListener("input", () => {
     update();
-    // Field sliders show their effect at once, even while paused.
-    if (id !== "speed") sampleFields(simulation, rules());
+    // Slider changes show at once, even while paused.
+    sampleFields(simulation, rules());
     render();
   });
 }
 element("play").addEventListener("click", () => setRunning(!running));
-element("step").addEventListener("click", () => { setRunning(false); step(simulation, rules()); render(); });
+element("step").addEventListener("click", () => { setRunning(false); advance(rules()); render(); });
 element("reset").addEventListener("click", reset);
 element("new-seed").addEventListener("click", () => {
   seed = crypto.getRandomValues(new Uint32Array(1))[0];
@@ -79,10 +84,9 @@ setRunning(running);
 function frame(time) {
   if (running && !document.hidden && previousTime !== undefined) {
     elapsed += Math.min(time - previousTime, 250);
-    const interval = 1000 / Number(element("speed").value);
-    const current = rules();
+    const interval = 1000 / TICKS_PER_SECOND, current = rules();
     let changed = false;
-    while (elapsed >= interval) { step(simulation, current); elapsed -= interval; changed = true; }
+    while (elapsed >= interval) { advance(current); elapsed -= interval; changed = true; }
     if (changed) render();
   }
   previousTime = time;
