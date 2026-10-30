@@ -36,7 +36,8 @@ const rules = () => ({
   ...Object.fromEntries(liveRules.map(id => [id, Number(element(id).value)])),
   layering: document.querySelector("input[name=layering]:checked").value,
   cloudStyle: document.querySelector("input[name=cloudStyle]:checked").value,
-  feather: element("feather").checked
+  feather: element("feather").checked,
+  pixelArt: element("pixelArt").checked
 });
 
 function render() {
@@ -86,7 +87,7 @@ const syncOptions = () => {
   element("lclHeight").disabled = layering !== "lcl";
   // LCL mode runs its own lapse and cloud evaporation (see the formulas), so these idle.
   for (const id of ["expansion", "evaporation"]) element(id).disabled = layering === "lcl";
-  element("feather").disabled = cloudStyle === "raw";
+  element("feather").disabled = cloudStyle === "raw"; element("pixelArt").disabled = cloudStyle === "raw";
 };
 element("view").addEventListener("change", () => { showLegend(); render(); });
 for (const input of element("options").querySelectorAll("input[type=checkbox], input[type=radio]")) {

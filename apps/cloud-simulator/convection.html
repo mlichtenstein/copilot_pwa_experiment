@@ -16,7 +16,7 @@
   <header class="experiment-header"><p class="eyebrow">Cloud simulator / Experiment 03</p><h1>Convection study</h1>
     <p>Hot floor. Cold lid. Warm blobs rise, rain falls, the water comes back.</p><p><a href="index.html">Rain study</a> · <a href="sunset.html">Sunset study</a> · Convection study</p></header>
   <section class="viewport simulation-pane" aria-label="Vertical slice of a convecting box of moist air">
-    <canvas id="sky" width="128" height="96" role="img" aria-label="Animated pixel grid of sunset-lit cloud and rain over a convecting box of air; use the view menu for the lava lamp, cloud and rain, temperature, buoyancy or humidity."></canvas>
+    <canvas id="sky" width="64" height="48" role="img" aria-label="Animated pixel grid of sunset-lit cloud and rain over a convecting box of air; use the view menu for the lava lamp, cloud and rain, temperature, buoyancy or humidity."></canvas>
     <div class="axis"><span>Cooled lid</span><span>Heated, wet floor ↓</span></div>
   </section>
   <div class="controls-pane" role="region" aria-label="Scrollable experiment controls" tabindex="0">
@@ -37,6 +37,7 @@
         <label class="choice"><input type="radio" name="cloudStyle" value="cumulus" checked><span>Cumulus: rising or capped cloud, billowed</span></label>
         <label class="choice"><input type="radio" name="cloudStyle" value="raw"><span>Raw cloud water (smoky first version)</span></label></div>
       <label class="choice"><input id="feather" type="checkbox" checked><span><code>feather</code> <small>Fray cumulus edges into wisps that fade over a few pixels; cores stay solid.</small></span></label>
+      <label class="choice"><input id="pixelArt" type="checkbox" checked><span><code>pixelArt</code> <small>Banded sky, a few hard-stepped cloud shades, dithered fringe and rain.</small></span></label>
     </fieldset>
     <label><span><code>buoyancy</code></span><small>How strongly a sideways temperature difference spins the air; warm sides rise.</small> <output id="buoyancy-value"></output><input id="buoyancy" type="range" min="0" max="0.03" step="0.001" value="0.012"></label>
     <label><span><code>viscosity</code></span><small>Fraction of spin shared with neighbors per tick; higher makes fatter, slower blobs.</small> <output id="viscosity-value"></output><input id="viscosity" type="range" min="0" max="0.24" step="0.01" value="0.15"></label>
