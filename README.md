@@ -5,6 +5,8 @@
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the issue/PR workflow and verification, [CODING_STANDARDS.md](CODING_STANDARDS.md) for code conventions, and [AGENTS.md](AGENTS.md) for agent instructions.
 
+One UI guideline worth knowing up front: **explanatory text sits next to the thing it explains**, for example a tooltip on each button or an About expander beside the rating bar, rather than in a separate help page. See [Explanatory text](CODING_STANDARDS.md#explanatory-text).
+
 ## Apps
 
 - [Cloud simulator · Rain study](apps/cloud-simulator/)

@@ -1,4 +1,4 @@
-/* Purpose: Responsive pixel-field laboratory layout. Consumers: index.html, sunset.html, convection.html and noise.html.
+/* Purpose: Responsive pixel-field laboratory layout. Consumers: index.html, sunset.html, convection.html, horizon.html and noise.html.
  * Dependencies: native HTML controls and canvas; no external assets. */
 :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0b1220; color: #e0eaf6; }
 * { box-sizing: border-box; }
@@ -36,29 +36,40 @@ summary { cursor: pointer; padding: 10px 0; }
 
 a { color: #9ed8ec; }
 
-/* Keep the field on screen while parameter controls scroll independently. */
+/* The canvas is the payload: it gets the whole left column at the largest size that fits,
+ * with the header and the scrolling controls in a side column that never shrinks it. */
 .experiment { overflow: hidden; }
-.experiment-layout { height: 100vh; height: 100dvh; max-width: 1400px; padding: 12px;
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
-  grid-template-rows: auto minmax(0, 1fr); gap: 12px 20px; }
-.experiment-header { grid-column: 1 / -1; }
-.experiment-header h1 { font-size: 1.6rem; }
-.experiment-header p { margin: 4px 0; }
-.simulation-pane { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
-.simulation-pane canvas { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
-.controls-pane { min-height: 0; min-width: 0; overflow-y: auto; overscroll-behavior-y: contain;
+.experiment-layout { height: 100vh; height: 100dvh; max-width: none; padding: 10px;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "sim header" "sim controls"; gap: 10px 16px; }
+.experiment-header { grid-area: header; }
+.experiment-header h1 { font-size: 1.4rem; }
+.experiment-header p { margin: 4px 0; font-size: .9rem; }
+.experiment-header .eyebrow { margin: 0; font-size: .7rem; }
+.simulation-pane { grid-area: sim; min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+/* The emoji rating bar (../shared/presets.css) sits above the canvas. */
+.simulation-pane.with-presets { grid-template-rows: auto minmax(0, 1fr) auto; gap: 6px; border: 0; border-radius: 0; background: none; overflow: visible; }
+.simulation-pane.with-presets .preset-bar { border: 1px solid #34455e; border-radius: 10px; background: #111c30; }
+/* The canvas box: the largest rectangle of the canvas's aspect ratio (--ar, width / height,
+ * set on each canvas) that fits the space left under the bar. Scaling stays pixelated. */
+.canvas-fit { min-width: 0; min-height: 0; container-type: size; display: grid; place-items: start center; }
+.canvas-fit canvas { --fit-ar: var(--ar, 1.3333); width: min(100cqw, 100cqh * var(--fit-ar)); height: min(100cqh, 100cqw / var(--fit-ar)); aspect-ratio: auto; }
+.controls-pane { grid-area: controls; min-height: 0; min-width: 0; overflow-y: auto; overscroll-behavior-y: contain;
   scrollbar-gutter: stable; padding: 0 10px 24px 4px; }
 .controls-pane:focus-visible { outline: 2px solid #aadbea; outline-offset: -2px; }
 .controls-pane .playback { margin-top: 0; }
+/* Narrow screens: header, bar and a full-width canvas (at most 60% of the screen height), then the controls scroll below. */
 @media (max-width: 760px) {
-  .experiment-layout { grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(100px, 36dvh) minmax(0, 1fr); gap: 8px; padding: 8px; }
+  .experiment-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas: "header" "sim" "controls"; gap: 6px; padding: 6px; }
   .experiment-header .eyebrow { display: none; }
-  .experiment-header h1 { font-size: 1.2rem; }
+  .experiment-header h1 { font-size: 1.15rem; display: inline; margin-right: 8px; }
   .experiment-header p { font-size: .8rem; margin: 2px 0; }
-  .controls-pane { border-top: 1px solid #34455e; padding-top: 10px; }
+  .experiment-header p:nth-of-type(2) { display: none; }
+  .canvas-fit { container-type: normal; }
+  .canvas-fit canvas { width: min(100%, 60dvh * var(--fit-ar)); height: auto; aspect-ratio: var(--fit-ar); }
+  .controls-pane { border-top: 1px solid #34455e; padding-top: 8px; }
 }
 @media (max-height: 480px) and (min-width: 560px) {
-  .experiment-layout { grid-template-columns: minmax(0, 1fr) minmax(260px, 40%); grid-template-rows: auto minmax(0, 1fr); }
   .experiment-header p { display: inline; margin-right: 10px; }
 }

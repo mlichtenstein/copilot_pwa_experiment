@@ -139,6 +139,8 @@ jobs:
           apps="Hello World (site root)|app/|$base/"
           for dir in apps/*/; do
             [ -d "$dir" ] || continue
+            # Skip folders that are not apps (for example apps/shared/, a library with no page)
+            [ -f "${dir}index.html" ] || continue
             slug=${dir#apps/}
             slug=${slug%/}
             case "$slug" in
