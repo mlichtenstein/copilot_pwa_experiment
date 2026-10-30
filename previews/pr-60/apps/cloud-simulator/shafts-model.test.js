@@ -64,3 +64,29 @@ test("supported extreme sunlight and opacity settings remain finite", () => {
     assert.ok(image.every((v, i) => i % 4 !== 3 || v === 255));
   }
 });
+
+test("layer resolution and world coverage grow with distance; view/sun paths stay in padded grid", () => {
+  const scene = createScene();
+  assert.deepEqual(scene.layers.map(layer => [layer.width, layer.height]), [[32, 20], [64, 40], [96, 60]]);
+  for (const x of [0, 127]) for (const y of [0, 79]) {
+    const ray = cameraRay(x, y, 128, 80, 85);
+    for (const layer of scene.layers) {
+      const distance = ((layer.z + 0.5) * scene.dz + 12) / ray[2];
+      assert.ok(Math.abs(ray[0] * distance) < layer.width * layer.cellSize / 2);
+      assert.ok(Math.abs(ray[1] * distance) < layer.height * layer.cellSize / 2);
+    }
+    for (const elevation of [1, 35]) for (const azimuth of [-40, 40]) {
+      const { direction } = sweepSunlight(scene, { sunElevation: elevation, sunAzimuth: azimuth });
+      for (let z = 0; z < scene.nz; z++) {
+        const depth = (z + 0.5) * scene.dz, distance = (depth + 12) / ray[2];
+        const sunDistance = (scene.nz * scene.dz - depth) / direction[2];
+        assert.ok(Math.abs(ray[0] * distance + direction[0] * sunDistance) < scene.nx * scene.dx / 2);
+        assert.ok(Math.abs(ray[1] * distance + direction[1] * sunDistance) < scene.ny * scene.dy / 2);
+      }
+    }
+  }
+});
+test("selected sunlight depth changes the diagnostic image", () => {
+  const scene = createScene(), lighting = sweepSunlight(scene);
+  assert.notDeepEqual(renderShafts(scene, lighting, "slice", 128, 80, 0), renderShafts(scene, lighting, "slice", 128, 80, 23));
+});

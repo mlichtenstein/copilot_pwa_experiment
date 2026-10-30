@@ -5,17 +5,25 @@ export const defaults = { sunElevation: 12, sunAzimuth: -18, cloudExtinction: 0.
   haze: 0.012, g: 0.6, fov: 58, exposure: 1.3, near: 1, middle: 1, far: 1 };
 export const layerNames = ["near", "middle", "far"];
 export function createScene(seed = 42) {
-  const nx = 64, ny = 40, nz = 24;
+  // A padded lighting box encloses every supported camera ray and its sunlight path.
+  const nx = 128, ny = 80, nz = 24;
   const layers = layerNames.map((name, i) => {
-    const source = createDensity(nx * 2, ny * 2, (seed + i * 997) >>> 0).density;
-    return { name, z: [5, 12, 19][i], density: Float64Array.from({ length: nx * ny },
-      (_, index) => source[Math.floor(index / nx) * 2 * nx * 2 + index % nx * 2]) };
+    const width = [32, 64, 96][i], height = [20, 40, 60][i], cellSize = 4;
+    const sourceWidth = Math.max(128, width * 2), sourceHeight = Math.max(80, height * 2);
+    const source = createDensity(sourceWidth, sourceHeight, (seed + i * 997) >>> 0).density;
+    return { name, z: [5, 12, 19][i], width, height, cellSize,
+      density: Float64Array.from({ length: width * height }, (_, index) => {
+        const x = Math.floor(index % width / width * sourceWidth);
+        const y = Math.floor(Math.floor(index / width) / height * sourceHeight);
+        return source[y * sourceWidth + x];
+      }) };
   });
   const density = new Float32Array(nx * ny * nz);
-  for (const layer of layers) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
-    density[(layer.z * ny + y) * nx + x] = layer.density[(ny - 1 - y) * nx + x];
+  for (const layer of layers) for (let y = 0; y < layer.height; y++) for (let x = 0; x < layer.width; x++) {
+    const gx = (nx - layer.width) / 2 + x, gy = (ny - layer.height) / 2 + y;
+    density[(layer.z * ny + gy) * nx + gx] = layer.density[(layer.height - 1 - y) * layer.width + x];
   }
-  return { nx, ny, nz, dx: 1.5, dy: 1.5, dz: 4, layers, density, seed };
+  return { nx, ny, nz, dx: 4, dy: 4, dz: 4, layers, density, seed };
 }
 export function sunDirection(settings) {
   const e = settings.sunElevation * Math.PI / 180, a = settings.sunAzimuth * Math.PI / 180;
@@ -73,11 +81,17 @@ export function renderShafts(scene, lighting, view = "light", width = 128, heigh
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     let rgb = [0, 0, 0];
     if (view === "slice" || layerNames.includes(view)) {
-      const gx = Math.min(scene.nx - 1, Math.floor(x / width * scene.nx));
-      const gy = scene.ny - 1 - Math.min(scene.ny - 1, Math.floor(y / height * scene.ny));
-      const z = view === "slice" ? slice : scene.layers.find(layer => layer.name === view).z;
-      const i = (z * scene.ny + gy) * scene.nx + gx;
-      const v = view === "slice" ? light[i] : scene.density[i] / 2;
+      let v;
+      if (view === "slice") {
+        const gx = Math.min(scene.nx - 1, Math.floor(x / width * scene.nx));
+        const gy = scene.ny - 1 - Math.min(scene.ny - 1, Math.floor(y / height * scene.ny));
+        v = light[(slice * scene.ny + gy) * scene.nx + gx];
+      } else {
+        const layer = scene.layers.find(layer => layer.name === view);
+        const gx = Math.min(layer.width - 1, Math.floor(x / width * layer.width));
+        const gy = Math.min(layer.height - 1, Math.floor(y / height * layer.height));
+        v = layer.density[gy * layer.width + gx] / 2;
+      }
       rgb = [v * 255, v * 255, v * 255];
     } else {
       const ray = cameraRay(x, y, width, height, settings.fov);
