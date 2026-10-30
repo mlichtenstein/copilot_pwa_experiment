@@ -1,12 +1,12 @@
 /*
- * Purpose: App-agnostic presets: encode a run's parameters into a shareable URL, validate
- *   presets, and save, list and delete them in the shared Supabase `presets` table, signing
- *   the visitor in anonymously on first save.
- * Consumers: presets-panel.js (the drop-in UI), presets.test.js, and any app that wants
- *   URL-encoded parameters without the panel.
+ * Purpose: App-agnostic emoji ratings of an app's current settings: encode settings into a
+ *   shareable URL, validate a rating, and save, list and delete rating rows in a Supabase
+ *   table (cloud_simulator_presets by default), signing the visitor in anonymously on first tap.
+ * Consumers: presets-panel.js (the drop-in rating bar), presets.test.js, and any app that wants
+ *   URL-encoded parameters without the bar.
  * Dependencies: fetch, URL, TextEncoder/TextDecoder, btoa/atob and a localStorage-like
  *   store (all injectable for tests); the Supabase Auth (/auth/v1) and PostgREST (/rest/v1)
- *   HTTP APIs; the table and policies in supabase/migrations/*_presets.sql.
+ *   HTTP APIs; the table and policies in supabase/migrations/*_cloud_simulator_presets.sql.
  */
 
 // Public project values only. The publishable key is safe in the client: row-level
@@ -15,8 +15,18 @@ export const SUPABASE_URL = "https://uluovxbitpyaijrzwzyp.supabase.co";
 export const SUPABASE_KEY = "sb_publishable_yAkIT03wv4PQHR9_vlDrog_0RmDEH64";
 
 // Limits mirror the table's check constraints, so most bad input fails before a request.
-export const LIMITS = { name: 80, note: 500, params: 8192, app: 80 };
+export const LIMITS = { name: 80, params: 8192, app: 80, thumbnail: 51200 };
 export const URL_KEY = "p";
+export const DEFAULT_TABLE = "cloud_simulator_presets";
+// The four ratings, in button order. `value` is what the table stores (its check constraint
+// allows exactly these); the emoji and label are only for display.
+export const RATINGS = [
+  { value: "love", emoji: "❤️", label: "Love it" },
+  { value: "beautiful", emoji: "🎨", label: "Beautiful, like a painting" },
+  { value: "gross", emoji: "🤮", label: "Gross" },
+  { value: "boring", emoji: "⬜", label: "Boring" }
+];
+export const ratingFor = value => RATINGS.find(rating => rating.value === value) ?? null;
 
 const bytes = text => new TextEncoder().encode(text).length;
 
@@ -58,15 +68,41 @@ export function urlWithParams(url, params) {
   return next.href;
 }
 
-// A human-readable problem with a preset, or null when it can be saved.
-export function validatePreset({ app, name, note = "", params }) {
+// A small picture of a canvas as a data URL for the table's `thumbnail` column: scaled down to
+// fit maxWidth × maxHeight (never up), WebP when the browser can encode it and that is
+// smaller, otherwise PNG. Null when it can't be made within the size limit.
+export function canvasThumbnail(canvas, { maxWidth = 128, maxHeight = 96, document: doc = globalThis.document } = {}) {
+  try {
+    const scale = Math.min(1, maxWidth / canvas.width, maxHeight / canvas.height);
+    let source = canvas;
+    if (scale < 1) {
+      source = doc.createElement("canvas");
+      source.width = Math.max(1, Math.round(canvas.width * scale));
+      source.height = Math.max(1, Math.round(canvas.height * scale));
+      source.getContext("2d").drawImage(canvas, 0, 0, source.width, source.height);
+    }
+    const candidates = [source.toDataURL("image/png"), source.toDataURL("image/webp", 0.85)].filter(isThumbnail);
+    return candidates.sort((a, b) => a.length - b.length)[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// True for a string the table's thumbnail check accepts: an image data URL within the size limit.
+export function isThumbnail(text) {
+  return typeof text === "string" && text.length <= LIMITS.thumbnail && /^data:image\/(png|webp|jpeg);base64,[A-Za-z0-9+/=]+$/.test(text);
+}
+
+// A human-readable problem with a rating, or null when it can be saved.
+export function validateRating({ app, displayName, rating, params, thumbnail = null }) {
   if (typeof app !== "string" || !app || app.length > LIMITS.app) return `App id must be 1-${LIMITS.app} characters.`;
-  const trimmed = typeof name === "string" ? name.trim() : "";
-  if (!trimmed) return "Give the preset a name.";
+  const trimmed = typeof displayName === "string" ? displayName.trim() : "";
+  if (!trimmed) return "Type your name first.";
   if (trimmed.length > LIMITS.name) return `Names are at most ${LIMITS.name} characters.`;
-  if (typeof note !== "string" || note.length > LIMITS.note) return `Notes are at most ${LIMITS.note} characters.`;
+  if (!ratingFor(rating)) return `Rating must be one of ${RATINGS.map(r => r.value).join(", ")}.`;
   if (!isPlainParams(params)) return "Parameters must be a plain object.";
-  if (bytes(JSON.stringify(params)) > LIMITS.params) return "These parameters are too large to save (8 KB limit).";
+  if (bytes(JSON.stringify(params)) > LIMITS.params) return "These settings are too large to save (8 KB limit).";
+  if (thumbnail !== null && !isThumbnail(thumbnail)) return "The thumbnail must be a PNG, WebP or JPEG data URL of at most 50 KB.";
   return null;
 }
 
@@ -82,24 +118,24 @@ async function failure(response) {
   try { body = await response.json(); } catch { /* not JSON */ }
   const text = [body.message, body.msg, body.error_description, body.error].filter(Boolean).join(" ");
   if (body.code === "PGRST205" || body.code === "42P01" || /could not find the table|does not exist/i.test(text)) {
-    return new PresetError("setup", "Saved presets aren't set up yet: the presets table is missing. See supabase/README.md.");
+    return new PresetError("setup", "Ratings aren't set up yet: the table is missing. See supabase/README.md.");
   }
   if (body.error_code === "anonymous_provider_disabled" || /anonymous sign-ins are disabled/i.test(text)) {
     return new PresetError("anonymous", "Saving isn't switched on yet: anonymous sign-ins are disabled for this project. See supabase/README.md.");
   }
-  if (/preset rate limit/i.test(text) || response.status === 429) {
-    return new PresetError("limit", "Too many saves for now. Try again in an hour.");
+  if (/rate limit/i.test(text) || response.status === 429) {
+    return new PresetError("limit", "Too many taps for now. Try again in an hour.");
   }
-  if (body.code === "23514") return new PresetError("invalid", "The server rejected this preset (name, note or size limit).");
-  return new PresetError("http", `Presets request failed (${response.status}${text ? ": " + text : ""}).`);
+  if (body.code === "23514") return new PresetError("invalid", "The server rejected this rating (name, rating or size limit).");
+  return new PresetError("http", `Ratings request failed (${response.status}${text ? ": " + text : ""}).`);
 }
 
 /*
- * A presets client for one app id. Reads need no sign-in; the first save signs in
- * anonymously and keeps the session (access and refresh tokens) in `storage`, so the
- * same visitor can delete their own presets later on this device.
+ * A ratings client for one app id and table. Reads need no sign-in; the first tap signs in
+ * anonymously and keeps the session (access and refresh tokens) in `storage`, so the same
+ * visitor can undo their own taps later on this device.
  */
-export function createPresetStore({ app, url = SUPABASE_URL, key = SUPABASE_KEY, fetch: fetchImpl = globalThis.fetch.bind(globalThis),
+export function createPresetStore({ app, table = DEFAULT_TABLE, url = SUPABASE_URL, key = SUPABASE_KEY, fetch: fetchImpl = globalThis.fetch.bind(globalThis),
   storage = globalThis.localStorage, now = () => Date.now() }) {
   const sessionKey = `presets-session:${new URL(url).host}`;
   const loadSession = () => { try { return JSON.parse(storage?.getItem(sessionKey) ?? "null"); } catch { return null; } };
@@ -111,7 +147,7 @@ export function createPresetStore({ app, url = SUPABASE_URL, key = SUPABASE_KEY,
       response = await fetchImpl(url + path, { ...options, headers: { apikey: key, "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers } });
     } catch {
-      throw new PresetError("offline", "Can't reach the presets server. Check your connection.");
+      throw new PresetError("offline", "Can't reach the ratings server. Check your connection.");
     }
     if (!response.ok) throw await failure(response);
     return response.status === 204 ? null : response.json();
@@ -137,29 +173,31 @@ export function createPresetStore({ app, url = SUPABASE_URL, key = SUPABASE_KEY,
     return keep(await call("/auth/v1/signup", { method: "POST", body: JSON.stringify({ data: {} }) }));
   }
 
+  const rows = `/rest/v1/${encodeURIComponent(table)}`;
   return {
     app,
-    // The signed-in visitor's id, or null before their first save.
+    // The signed-in visitor's id, or null before their first tap.
     userId: () => loadSession()?.user_id ?? null,
-    // This app's presets, newest first.
-    async list(limit = 50) {
-      const query = new URLSearchParams({ select: "id,app,name,note,params,commit_sha,created_at,created_by", app: `eq.${app}`, order: "created_at.desc", limit: String(limit) });
-      return call(`/rest/v1/presets?${query}`);
+    // This app's most recent ratings from everyone, newest first.
+    async list(limit = 10) {
+      const query = new URLSearchParams({ select: "id,app_id,display_name,rating,params,thumbnail,created_at,created_by", app_id: `eq.${app}`, order: "created_at.desc", limit: String(limit) });
+      return call(`${rows}?${query}`);
     },
-    async save({ name, note = "", params, commitSha = null }) {
-      const problem = validatePreset({ app, name, note, params });
+    // One tap: saves who, how it felt, the full settings and a thumbnail as a new row.
+    async save({ displayName, rating, params, thumbnail = null }) {
+      const problem = validateRating({ app, displayName, rating, params, thumbnail });
       if (problem) throw new PresetError("invalid", problem);
       const { access_token } = await session(true);
-      const [row] = await call("/rest/v1/presets", { method: "POST", headers: { Prefer: "return=representation" },
-        body: JSON.stringify({ app, name: name.trim(), note: note.trim() || null, params, commit_sha: commitSha }) }, access_token);
+      const [row] = await call(rows, { method: "POST", headers: { Prefer: "return=representation" },
+        body: JSON.stringify({ app_id: app, display_name: displayName.trim(), rating, params, thumbnail }) }, access_token);
       return row;
     },
-    // Deletes one of the visitor's own presets; row-level security ignores anyone else's.
+    // Deletes one of the visitor's own ratings; row-level security ignores anyone else's.
     async remove(id) {
       const current = await session(false);
-      if (!current) throw new PresetError("invalid", "Only presets saved from this browser can be deleted here.");
-      const rows = await call(`/rest/v1/presets?id=eq.${encodeURIComponent(id)}`, { method: "DELETE", headers: { Prefer: "return=representation" } }, current.access_token);
-      if (!rows?.length) throw new PresetError("invalid", "That preset wasn't deleted: it isn't yours, or it's already gone.");
+      if (!current) throw new PresetError("invalid", "Only taps made from this browser can be undone here.");
+      const deleted = await call(`${rows}?id=eq.${encodeURIComponent(id)}`, { method: "DELETE", headers: { Prefer: "return=representation" } }, current.access_token);
+      if (!deleted?.length) throw new PresetError("invalid", "That rating wasn't deleted: it isn't yours, or it's already gone.");
     }
   };
 }

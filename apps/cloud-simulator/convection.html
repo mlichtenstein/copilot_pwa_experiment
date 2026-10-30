@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- Purpose: Convection experiment controls and field display. Consumers: browser.
-     Dependencies: style.css, ../shared/presets.css, convection.js, convection-model.js, ../shared/presets-panel.js, manifest.json. -->
+     Dependencies: style.css, ../shared/presets.css, convection.js, convection-model.js, ../shared/presets-panel.js (emoji rating bar), manifest.json. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -16,7 +16,8 @@
 <main class="experiment-layout">
   <header class="experiment-header"><p class="eyebrow">Cloud simulator / Experiment 03</p><h1>Convection study</h1>
     <p>Hot floor. Cold lid. Warm blobs rise, rain falls, the water comes back.</p><p><a href="index.html">Rain study</a> · <a href="sunset.html">Sunset study</a> · Convection study · <a href="horizon.html">Horizon light</a></p></header>
-  <section class="viewport simulation-pane" aria-label="Vertical slice of a convecting box of moist air">
+  <section class="viewport simulation-pane with-presets" aria-label="Vertical slice of a convecting box of moist air">
+    <div id="presets" role="group" aria-label="Rate these settings"></div>
     <canvas id="sky" width="64" height="48" role="img" aria-label="Animated pixel grid of sunset-lit cloud and rain over a convecting box of air; use the view menu for the lava lamp, cloud and rain, temperature, buoyancy or humidity."></canvas>
     <div class="axis"><span>Cooled lid</span><span>Heated, wet floor ↓</span></div>
   </section>
@@ -59,8 +60,6 @@
     </fieldset>
   </section>
   <p id="legend">Sunset: solid clouds = cloudy air that is rising or warm, or pressed flat under warmer air above it (the inversion); with the LCL they sit on flat bases at one height over clear air, lit peach and pink from a low sun at lower right and grey-violet in their own shadow, with frayed wisps at the edges; faint veil = still cloud and near-saturated haze; soft curtains = falling rain.</p>
-
-  <section id="presets" aria-label="Saved presets"></section>
 
   <details><summary>The rules and update formulas</summary>
     <p>Each pixel holds <code>temperature</code> (0 cold to 1 hot), <code>vapor</code>, <code>cloud</code>, <code>rain</code> and <code>spin</code> (vorticity). Each floor column also has a <code>puddle</code>. These are experimental units, not degrees or grams. With <code>altitude</code> from 0 at the floor to 1 at the lid, each tick:</p>

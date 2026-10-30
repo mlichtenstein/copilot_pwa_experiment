@@ -1,11 +1,11 @@
-<!-- Purpose: How to set up and look after the Supabase backend for saved presets (issue #61).
+<!-- Purpose: How to set up and look after the Supabase backend for the emoji rating bar's saved settings (issue #61).
      Consumers: the project owner (Maxwell) and contributors changing the database.
      Dependencies: migrations/*.sql, apply-migrations.mjs, .github/workflows/supabase-migrations.yml,
      the SUPABASE_ACCESS_TOKEN repository secret, and Supabase project uluovxbitpyaijrzwzyp. -->
 
 # Supabase
 
-The shared **presets** feature ([`apps/shared/`](../apps/shared/README.md)) stores saved app parameters in one Supabase table. Anyone can read presets. Saving works without an account: the first save signs the visitor in anonymously, and they can delete their own presets later from the same browser.
+The shared **rating bar** ([`apps/shared/`](../apps/shared/README.md)) stores each emoji tap, with the app's settings and a thumbnail, in one Supabase table, `cloud_simulator_presets`. Anyone can read the ratings. Rating works without an account: the first tap signs the visitor in anonymously, and Undo deletes their own taps from the same browser.
 
 The client holds only the public project URL and the **publishable** key. Row-level security decides what that key can do. Never put a secret or service-role key in the repo or the client.
 
@@ -29,24 +29,44 @@ To run the script locally: `SUPABASE_ACCESS_TOKEN=... node supabase/apply-migrat
 
 ### Current state
 
-`20261030090000_presets.sql` has been applied and recorded on Oct 30, 2026. Anonymous sign-ins are on: this is an auth setting, not SQL, so it was switched on once through the Management API (`external_anonymous_users_enabled`). It is the dashboard's **Authentication > Sign In / Providers > Allow anonymous sign-ins** toggle. Keep **Allow new users to sign up** on as well, because an anonymous sign-in counts as a sign-up. If anonymous sign-ins are turned off, the list still loads, but saving reports that anonymous sign-ins are off.
+Both migrations have been applied and recorded, on Oct 30, 2026:
 
-## What the migration sets up
+1. `20261030090000_presets.sql` created the first `presets` table.
+2. `20261030120000_cloud_simulator_presets.sql` renamed it to `cloud_simulator_presets` and turned it into the rating table described below. It was applied from the PR branch before merge, so the workflow will skip it on merge as already recorded.
 
-- Table `public.presets`: `id`, `app` (for example `cloud-simulator/convection`), `name` (1-80 characters), `note` (up to 500), `params` (a JSON object including the seed, at most 8 KB), `commit_sha`, `created_at`, and `created_by` (defaults to `auth.uid()`).
-- Row-level security: everyone can select. Signed-in users, including anonymous ones, can insert rows only as themselves, and can update or delete only their own rows.
-- Abuse limit: a trigger rejects more than 20 saves per user per rolling hour. Supabase also limits anonymous sign-ins to 30 per hour per IP address by default (**Authentication > Rate Limits**).
+Anonymous sign-ins are on. This is an auth setting, not SQL, so it was switched on once through the Management API (`external_anonymous_users_enabled`). In the dashboard it is the **Authentication > Sign In / Providers > Allow anonymous sign-ins** toggle. Keep **Allow new users to sign up** on as well, because an anonymous sign-in counts as a sign-up. If anonymous sign-ins are turned off, the Recent list still loads, but tapping an emoji reports that anonymous sign-ins are off.
+
+## The table
+
+`public.cloud_simulator_presets`, one row per emoji tap:
+
+| Column | What it holds |
+| --- | --- |
+| `id` | uuid |
+| `app_id` | the page, for example `cloud-simulator/convection`, `cloud-simulator/rain`, `cloud-simulator/sunset` or `cloud-simulator/horizon` (1-80 characters) |
+| `display_name` | the name the visitor typed (1-80 characters) |
+| `rating` | `love` ❤️, `beautiful` 🎨, `gross` 🤮 or `boring` ⬜ |
+| `params` | a JSON object with every setting, including the seed, view and resolution (at most 8 KB) |
+| `thumbnail` | a `data:image/png`, `webp` or `jpeg` base64 data URL of the canvas, about 128×96, at most 51,200 characters (50 KB); null if none |
+| `created_at`, `created_by` | when, and the (anonymous) user, which defaults to `auth.uid()` |
+| `note`, `commit_sha` | kept from the first version, unused by the bar, nullable |
+
+- **Ratings:** the rating check is `NOT VALID`, so it applies to every new row but leaves the one row saved before ratings existed (rating null) in place. Delete that row and run `alter table public.cloud_simulator_presets validate constraint cloud_simulator_presets_rating_check;` to make it strict for old rows too.
+- **Row-level security:** everyone can select. Signed-in users, including anonymous ones, can insert rows only as themselves and delete only their own rows. Nobody can update a row through the API; a tap is a fact, and Undo deletes it.
+- **Abuse limit:** a trigger rejects more than 120 taps per user per rolling hour. Supabase also limits anonymous sign-ins to 30 per hour per IP address by default (**Authentication > Rate Limits**).
 
 ## Moderation
 
-Use **Table Editor > presets** in the dashboard. It bypasses row-level security, so you can edit or delete any row there. To browse without the dashboard:
+Use **Table Editor > cloud_simulator_presets** in the dashboard. It bypasses row-level security, so you can edit or delete any row there. To browse without the dashboard:
 
 ```sh
-curl "https://uluovxbitpyaijrzwzyp.supabase.co/rest/v1/presets?select=name,note,app,created_at&order=created_at.desc" \
+curl "https://uluovxbitpyaijrzwzyp.supabase.co/rest/v1/cloud_simulator_presets?select=display_name,rating,app_id,created_at&order=created_at.desc" \
   -H "apikey: sb_publishable_yAkIT03wv4PQHR9_vlDrog_0RmDEH64"
 ```
 
-To clean up old anonymous users (their presets go with them), run in the SQL Editor:
+To count ratings per page: `...?select=app_id,rating&app_id=eq.cloud-simulator/sunset`, then tally them, or run `select app_id, rating, count(*) from cloud_simulator_presets group by 1, 2;` in the SQL Editor.
+
+To clean up old anonymous users (their ratings go with them), run in the SQL Editor:
 
 ```sql
 delete from auth.users where is_anonymous is true and created_at < now() - interval '30 days';
@@ -54,4 +74,4 @@ delete from auth.users where is_anonymous is true and created_at < now() - inter
 
 ## Optional follow-up: CAPTCHA
 
-Supabase recommends CAPTCHA (Cloudflare Turnstile or hCaptcha) for anonymous sign-ins to slow down bots: **Authentication > Attack Protection**. Do not turn it on yet. The client does not send a CAPTCHA token, so every anonymous sign-in would fail. Adding the Turnstile widget to the panel and sending its token on sign-up is a follow-up.
+Supabase recommends CAPTCHA (Cloudflare Turnstile or hCaptcha) for anonymous sign-ins to slow down bots: **Authentication > Attack Protection**. Do not turn it on yet. The client does not send a CAPTCHA token, so every anonymous sign-in would fail. Adding the Turnstile widget to the bar and sending its token on sign-up is a follow-up.
