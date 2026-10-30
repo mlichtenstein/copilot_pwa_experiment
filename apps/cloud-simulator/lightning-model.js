@@ -1,32 +1,36 @@
-/* Purpose: Seeded branching lightning growth, flash dynamics and read-only pixel rendering.
- * Consumers: lightning.js, model tests, and the generic experiment host. Dependencies: valley-noise.js. */
+/* Purpose: Three charge-driven storm layers, branching discharge dynamics and read-only pixel rendering.
+ * Consumers: lightning.js, model tests, and the generic experiment host. Dependencies: valley-noise.js and charge-field.js. */
 import { perlin3 } from "./valley-noise.js";
+import {createCharge,stepCharge,strongestGradient,chargePoint,discharge} from "./charge-field.js";
 const width = 160, height = 100, clamp = v => Math.max(0, Math.min(1, v));
 export const parameters = [
-  { key:"downwardBias", default:1.1, min:0.2, max:3, step:0.1, description:"Strength of downward preference in the leader's direction score; larger values straighten the main channel." },
+  { key:"fieldBias", default:2, min:0.2, max:4, step:0.1, description:"Strength of attraction along the selected charge gradient toward its cloud or ground endpoint." },
   { key:"roughness", default:1.4, min:0, max:3, step:0.1, description:"Strength of seeded field variation and random direction choice; larger values make the path wander." },
   { key:"branchChance", default:0.25, min:0, max:0.6, step:0.05, description:"Probability of a short side branch at each main-channel growth step." },
   { key:"leaderSpeed", default:70, min:10, max:150, step:5, description:"Main-channel growth steps per simulated second." },
   { key:"flashDuration", default:0.6, min:0.2, max:1.5, step:0.1, description:"Seconds over which the connected channel and its surrounding illumination fade." },
   { key:"flashStrength", default:0.65, min:0, max:1, step:0.05, description:"Brightness of the connected channel and its illumination of clouds, air and struck terrain." },
   { key:"haze", default:0.55, min:0, max:1, step:0.05, description:"How strongly air and cloud droplets reveal light around the channel." },
-  { key:"interval", default:6, min:3, max:15, step:0.5, description:"Seconds of quiet after a flash before the next automatically grown strike." }
+  { key:"chargeRate", default:1, min:0, max:3, step:0.1, description:"Rate of stochastic charge buildup, relaxation and diffusion in each layer; zero freezes quiet fields." },
+  { key:"breakdownGradient", default:4, min:1, max:10, step:0.25, description:"Potential difference per scene distance required to initiate a cloud-to-cloud or cloud-to-ground channel." }
 ];
 export function groundAt(x, depth = 2) { return [0.66,0.79,0.91][depth]+0.035*Math.sin(x*9+1+depth*1.7)+0.016*Math.sin(x*23+depth); }
 const terrainAt = (state,x) => groundAt(x,state.depth);
 function random(state) { state.rng = (Math.imul(state.rng,1664525)+1013904223)>>>0; return state.rng/4294967296; }
 export function beginStrike(state) {
-  state.nodes = [{x:0.22+state.depth*0.28+(random(state)-0.5)*0.22,y:0.10+state.depth*0.055,parent:-1,branch:false}];
-  state.head = 0; state.returnPath = []; state.phase = "leader"; state.age = 0; state.growth = 0; state.strikes++;
+  const origin=chargePoint(state.strike.from,state.depth);
+  state.nodes = [{...origin,parent:-1,branch:false}];
+  state.head=0;state.returnPath=[];state.phase="leader";state.age=0;state.growth=0;state.strikes++;
 }
 function extend(state, parent, params, branch = false, direction = 0) {
   const from = state.nodes[parent], length = branch ? 0.025 : 0.018;
+  const targetAngle=Math.atan2(state.strike.target.x-from.x,state.strike.target.y-from.y);
   let best, score = -Infinity;
   for (let i=0;i<7;i++) {
-    const angle = branch ? direction + (i-3)*0.12 : (i-3)*0.36;
+    const angle = branch ? targetAngle+direction + (i-3)*0.12 : targetAngle+(i-3)*0.36;
     const dx=Math.sin(angle)*length,dy=Math.cos(angle)*length;
     const field=perlin3((from.x+dx)*14,(from.y+dy)*14,state.seed%997,91);
-    const candidate=params.downwardBias*dy/length+params.roughness*(field+random(state)*0.7);
+    const candidate=params.fieldBias*Math.cos(angle-targetAngle)+params.roughness*(field+random(state)*0.7);
     if(candidate>score){score=candidate;best={x:Math.max(0.02,Math.min(0.98,from.x+dx)),y:Math.min(terrainAt(state,Math.max(0.02,Math.min(0.98,from.x+dx))),from.y+dy),parent,branch};}
   }
   state.nodes.push(best); return state.nodes.length-1;
@@ -37,16 +41,23 @@ function grow(state, params) {
     let parent=state.head; const direction=(random(state)<0.5?-1:1)*(0.65+random(state)*0.65), count=2+Math.floor(random(state)*7);
     for(let i=0;i<count;i++) parent=extend(state,parent,params,true,direction);
   }
-  if(state.nodes[state.head].y>=terrainAt(state,state.nodes[state.head].x) || state.nodes.length>=760) {
-    if(state.nodes[state.head].y<terrainAt(state,state.nodes[state.head].x)){state.nodes.push({x:state.nodes[state.head].x,y:terrainAt(state,state.nodes[state.head].x),parent:state.head,branch:false});state.head=state.nodes.length-1;}
-    for(let i=state.head;i>=0;i=state.nodes[i].parent) state.returnPath.push(i);
+  const head=state.nodes[state.head],target=state.strike.target;
+  if(Math.hypot(head.x-target.x,head.y-target.y)<.025 || head.y>=terrainAt(state,head.x)) {
+    // A cloud target may wander into terrain first; record the actual connection type.
+    if(head.y>=terrainAt(state,head.x))state.strike.kind="ground";
+    else {state.nodes.push({...target,parent:state.head,branch:false});state.head=state.nodes.length-1;}
+    for(let i=state.head;i>=0;i=state.nodes[i].parent)state.returnPath.push(i);
+    discharge(state.charge,state.depth,state.returnPath.map(i=>state.nodes[i]));
     state.phase="flash";state.age=0;
+  } else if(state.nodes.length>=760) {
+    // A failed channel dissipates instead of teleporting to a target or faking contact.
+    state.phase="quiet";state.age=0;
   }
 }
-function createLayer({seed,params,start,depth}) {
-  const state={depth,seed:seed>>>0,rng:seed>>>0,time:0,age:0,phase:"ready",nodes:[],returnPath:[],head:0,growth:0,strikes:0,clouds:[]};
+
+function createLayer({seed,depth}) {
+  const state={depth,seed:seed>>>0,rng:seed>>>0,time:0,age:0,phase:"quiet",charge:createCharge(seed^0xa341316c),strike:null,nodes:[],returnPath:[],head:0,growth:0,strikes:0,clouds:[]};
   for(let y=0;y<height;y++)for(let x=0;x<width;x++) state.clouds.push(clamp((perlin3(x/width*5,y/height*9,seed%997,13)-0.25)*2)*Math.exp(-(((y/height-(0.16+depth*0.06))/0.22)**4)));
-  if(start==="peak"){beginStrike(state);while(state.phase==="leader")grow(state,params);}
   return state;
 }
 function stepLayer(state,dt,params) {
@@ -55,10 +66,13 @@ function stepLayer(state,dt,params) {
   if(state.phase==="leader") {
     state.growth+=dt*params.leaderSpeed;
     while(state.growth>=1 && state.phase==="leader"){state.growth--;grow(state,params);}
-  } else {
+  } else if(state.phase==="flash") {
     state.age+=dt;
-    if(state.phase==="flash" && state.age+1e-10>=params.flashDuration){state.phase="quiet";state.age=0;}
-    else if(state.phase==="quiet" && state.age+1e-10>=params.interval)beginStrike(state);
+    if(state.age+1e-10>=params.flashDuration){state.phase="quiet";state.age=0;}
+  } else {
+    stepCharge(state.charge,dt,params.chargeRate);
+    const candidate=strongestGradient(state.charge,state.depth,groundAt);
+    if(candidate.gradient>=params.breakdownGradient){state.strike=candidate;beginStrike(state);}
   }
 }
 function renderLayer(state,params,pixels) {
@@ -75,7 +89,7 @@ function renderLayer(state,params,pixels) {
     }
   }
   const contact=state.nodes[state.head];
-  const terrainPower=state.phase==="flash"?power:0;
+  const terrainPower=state.phase==="flash"&&state.strike.kind==="ground"?power:0;
   for(let y=0;y<height;y++)for(let x=0;x<width;x++) {
     const i=y*width+x, v=y/height,cloud=state.clouds[i],hills=terrainAt(state,x/width);
     const glow=Math.min(1.3,light[i]),core=cores[i],offset=i*4;
@@ -96,11 +110,24 @@ function renderLayer(state,params,pixels) {
   }
 }
 export function createLightning({seed,params,start="peak"}) {
-  return {time:0,layers:[0,1,2].map(depth=>createLayer({seed:(seed+Math.imul(depth,2654435761))>>>0,params,start,depth}))};
+  const state={time:0,layers:[0,1,2].map(depth=>createLayer({seed:(seed+Math.imul(depth,2654435761))>>>0,params,depth}))};
+  // Prepare just one naturally triggered event for inspection. Other layers retain their own charge.
+  // At chargeRate=0 use unit rate only during preparation, then freeze the live quiet fields.
+  let selected;
+  for(let tick=0;tick<12000&&!selected;tick++)for(const layer of state.layers){
+    stepCharge(layer.charge,.1,params.chargeRate||1);
+    const candidate=strongestGradient(layer.charge,layer.depth,groundAt);
+    if(candidate.gradient>=params.breakdownGradient){layer.strike=candidate;layer.phase="ready";selected=layer;break;}
+  }
+  if(selected&&start==="peak"){beginStrike(selected);while(selected.phase==="leader")grow(selected,params);}
+  state.phase=phaseSummary(state);
+  return state;
 }
+const phaseSummary=state=>state.layers.map((layer,i)=>`${["far","middle","near"][i]}: ${layer.strike&&layer.phase!=="quiet"?layer.strike.kind+" ":""}${layer.phase}`).join(" / ");
 export function stepLightning(state,dt,params) {
   state.time+=dt;
   for(const layer of state.layers)stepLayer(layer,dt,params);
+  state.phase=phaseSummary(state);
 }
 export function renderLightning(state,params) {
   const pixels=new Uint8ClampedArray(width*height*4);
