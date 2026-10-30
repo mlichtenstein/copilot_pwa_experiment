@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<!-- Purpose: Convection experiment controls and field display. Consumers: browser.
+     Dependencies: style.css, convection.js, convection-model.js, manifest.json. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111c30">
+  <title>Cloud Simulator · Convection study</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="experiment">
+<main class="experiment-layout">
+  <header class="experiment-header"><p class="eyebrow">Cloud simulator / Experiment 03</p><h1>Convection study</h1>
+    <p>Hot floor. Cold lid. Warm blobs rise, rain falls, the water comes back.</p><p><a href="index.html">Rain study</a> · <a href="sunset.html">Sunset study</a> · Convection study</p></header>
+  <section class="viewport simulation-pane" aria-label="Vertical slice of a convecting box of moist air">
+    <canvas id="sky" width="128" height="96" role="img" aria-label="Animated pixel grid of rising warm plumes, sinking cool air, cloud and rain; use the view menu for water, temperature, buoyancy or humidity."></canvas>
+    <div class="axis"><span>Cooled lid</span><span>Heated, wet floor ↓</span></div>
+  </section>
+  <div class="controls-pane" role="region" aria-label="Scrollable experiment controls" tabindex="0">
+<div class="playback"><button id="play" type="button" aria-pressed="true">Pause</button>
+    <button id="step" type="button">Step</button><button id="reset" type="button">Reset seed</button>
+    <button id="new-seed" type="button">New seed</button></div>
+  <p id="stats" class="stats"></p>
+  <section class="controls" aria-label="Experiment parameters">
+    <label>View<select id="view"><option value="lamp">Lava lamp</option><option value="water">Water content</option><option value="temperature">Temperature</option><option value="buoyancy">Buoyancy</option><option value="humidity">Relative humidity</option></select></label>
+    <label><span><code>buoyancy</code></span><small>How strongly a sideways temperature difference spins the air; warm sides rise.</small> <output id="buoyancy-value"></output><input id="buoyancy" type="range" min="0" max="0.03" step="0.001" value="0.012"></label>
+    <label><span><code>viscosity</code></span><small>Fraction of spin shared with neighbors per tick; higher makes fatter, slower blobs.</small> <output id="viscosity-value"></output><input id="viscosity" type="range" min="0" max="0.24" step="0.01" value="0.15"></label>
+    <label><span><code>heating</code></span><small>Fraction of the gap to the hot floor temperature closed per tick in the bottom row.</small> <output id="heating-value"></output><input id="heating" type="range" min="0" max="1" step="0.05" value="0.25"></label>
+    <label><span><code>cooling</code></span><small>Fraction of the gap to the cold lid temperature closed per tick in the top row.</small> <output id="cooling-value"></output><input id="cooling" type="range" min="0" max="1" step="0.05" value="0.5"></label>
+    <label><span><code>latentHeat</code></span><small>Warming per unit of vapor condensed; evaporation cools by the same amount.</small> <output id="latentHeat-value"></output><input id="latentHeat" type="range" min="0" max="1" step="0.05" value="0.35"></label>
+    <label><span><code>expansion</code></span><small>How much rising air cools by expanding; sets how low the cloud base sits.</small> <output id="expansion-value"></output><input id="expansion" type="range" min="0" max="1.5" step="0.05" value="0.5"></label>
+    <label><span><code>evaporation</code></span><small>Fraction of the humidity deficit refilled from cloud or rain per tick.</small> <output id="evaporation-value"></output><input id="evaporation" type="range" min="0" max="0.5" step="0.01" value="0.08"></label>
+    <label><span><code>fallSpeed</code></span><small>Fraction of rain-sized water (above the cloud threshold) moving down one pixel per tick.</small> <output id="fallSpeed-value"></output><input id="fallSpeed" type="range" min="0" max="1" step="0.05" value="0.35"></label>
+    <label><span><code>flicker</code></span><small>Seeded random wobble of the floor temperature per column; keeps the flow from locking.</small> <output id="flicker-value"></output><input id="flicker" type="range" min="0" max="1.5" step="0.05" value="0.6"></label>
+    <label><span><code>speed</code></span><small>Simulation ticks per second; playback speed, not a wind speed.</small> <output id="speed-value"></output><input id="speed" type="range" min="1" max="60" step="1" value="30"></label>
+    <fieldset><legend>Starting fields · changing these resets the run</legend>
+      <label><span><code>water</code></span><small>Mean water per pixel (vapor + cloud + rain + puddles); conserved for the whole run.</small> <output id="water-value"></output><input id="water" type="range" min="0" max="0.4" step="0.01" value="0.11"></label>
+      <label><span><code>seed</code></span><small>Integer controlling the starting bubbles and the floor flicker; same seed, same run.</small><input id="seed" type="number" min="0" max="4294967295" step="1" value="42"></label>
+    </fieldset>
+  </section>
+  <p id="legend">Lava lamp: orange = warmer than the row average (rising), blue = cooler (sinking), white = rain and thick cloud.</p>
+
+  <details><summary>The rules and update formulas</summary>
+    <p>Each pixel holds <code>temperature</code> (0 cold to 1 hot), <code>vapor</code>, <code>liquid</code> (cloud and rain) and <code>spin</code> (vorticity). Each floor column also has a <code>puddle</code>. These are experimental units, not degrees or grams. With <code>altitude</code> from 0 at the floor to 1 at the lid, each tick:</p>
+    <p><b>1. Floor and lid.</b> <code>floorT += heating × (1 + flicker × (random − 0.5) − floorT)</code>; <code>lidT += cooling × (0 − lidT)</code>. Puddles evaporate: <code>lift = min(puddle, 0.2 × (0.4 − floorVapor))</code>, which moves water into floor vapor and cools it by <code>latentHeat × lift</code>.</p>
+    <p><b>2. Clouds.</b> <code>capacity = exp(3 × (temperature − 1 − expansion × altitude))</code>. Above capacity, <code>0.25 × excess</code> condenses into liquid and warms the pixel by <code>latentHeat</code> per unit. Below capacity, liquid evaporates at <code>evaporation × deficit</code> and cools it.</p>
+    <p><b>3. Buoyancy.</b> <code>lightness = temperature − 0.4 × liquid</code>; <code>spin −= buoyancy × d(lightness)/dx</code>, then 0.4% drag and <code>viscosity</code> sharing with neighbors. A warm pixel beside a cool one starts the air turning, up on the warm side.</p>
+    <p><b>4. Flow.</b> A stream function solves <code>∇²ψ = −spin</code> (24 over-relaxed sweeps, walls closed). Flow across each pixel edge is the difference of <code>ψ</code> at its two corners, so air is never created or destroyed. The fastest edge is capped at 0.24 pixels per tick.</p>
+    <p><b>5. Transport.</b> Temperature, vapor, liquid and spin move with the flow by upwind edge fluxes; what leaves one pixel enters its neighbor. Temperature also diffuses at 0.01.</p>
+    <p><b>6. Rain.</b> <code>falling = fallSpeed × max(0, liquid − 0.01)</code> drops one pixel. Rain leaving the bottom row fills that column’s puddle.</p>
+    <p>The loop: heated floor air rises, expands and condenses. Condensing releases heat, so the cloud keeps rising. The lid cools it and rain falls out. Rain evaporating below cools the air, which sinks. Puddles re-wet the floor. Total water stays constant, and the seeded floor flicker keeps the blobs from settling into fixed rolls. Changing any slider except <code>water</code> affects the current run.</p>
+  </details>
+  <p id="status" role="status"></p><noscript>This experiment needs JavaScript to run.</noscript>
+</div>
+</main>
+<script type="module" src="convection.js"></script>
+</body>
+</html>
