@@ -1,6 +1,8 @@
 /* Purpose: Sunset controls, animation and pixel canvas presentation.
- * Consumers: sunset.html. Dependencies: sunset-model.js, DOM IDs, Canvas and service worker APIs. */
+ * Consumers: sunset.html. Dependencies: sunset-model.js, ../shared/presets-panel.js (emoji rating bar and ?p= links),
+ *   DOM IDs, Canvas and service worker APIs. */
 import { defaults, createDensity, renderSunset } from "./sunset-model.js";
+import { mountPresetBar } from "../shared/presets-panel.js";
 const element = id => document.getElementById(id);
 const canvas = element("sky"), context = canvas.getContext("2d");
 let field = createDensity();
@@ -53,6 +55,17 @@ function frame(time) {
   previous = time; requestAnimationFrame(frame);
 }
 render(); requestAnimationFrame(frame);
+// Ratings and links: every slider, the density seed, the view and the grid size.
+const getParams = () => ({ ...Object.fromEntries(Object.keys(defaults).map(key => [key, Number(element(key).value)])),
+  seed: Number(element("seed").value), view: element("view").value, resolution: `${canvas.width}x${canvas.height}` });
+function applyParams(params) {
+  setPlaying(false);
+  for (const key of Object.keys(defaults)) if (typeof params[key] === "number") element(key).value = params[key];
+  if ([...element("view").options].some(option => option.value === params.view)) element("view").value = params.view;
+  if (Number.isInteger(params.seed) && params.seed >= 0 && params.seed < 2 ** 32) element("seed").value = params.seed;
+  resetDensity();
+}
+mountPresetBar(element("presets"), { app: "cloud-simulator/sunset", getParams, applyParams, canvas });
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("./cloud-sw.js").catch(error => {
   console.error("Sunset offline setup failed", error);
   element("status").textContent = "Offline setup failed; the experiment still works online.";

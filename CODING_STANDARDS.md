@@ -41,6 +41,10 @@ Keep game rules/state independent of the browser UI and authored content separat
 
 Follow the [adventure engine guide](apps/adventure/README.md) and the [Waiting Game design](docs/waiting-game-design.md) and [milestones](docs/waiting-game-milestones.md) for affected work. Follow Waiting Game milestones in order. Its proposed TypeScript structure and future tests are design targets, not evidence that such tooling exists.
 
+## Explanatory text
+
+Put an explanation next to the thing it explains, not in a distant help section. Give every button and control a short `title` tooltip (and an `aria-label` when it shows only an icon or emoji), keep a slider's description in its own label, and put a longer note in a small expander beside the control it covers, like the rating bar's About. Longer background, formulas and design notes can still live in a details section or a README, but the one sentence someone needs to use a control belongs on or beside it.
+
 ## PWA behavior
 
 Preserve static GitHub Pages compatibility and relative URLs. Keep manifests, service-worker registration scopes, and production/preview paths working. When adding or removing cached files, update that worker's precache list. Each cache name includes the worker's registration scope, and the fetch handler refreshes the bucket from the network, so a content deploy does not need a cache-name bump. On activate, delete only older cache names for that same scope. Do not delete another app's or preview's caches. Consider both installed and offline clients.
