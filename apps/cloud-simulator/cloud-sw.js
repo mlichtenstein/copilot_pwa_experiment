@@ -10,7 +10,7 @@
 const SCOPE_PATH = new URL(self.registration.scope).pathname.replace(/\/+$/, "") || "/";
 const CACHE_PREFIX = "cloud-simulator::" + SCOPE_PATH + "::";
 const CACHE = CACHE_PREFIX + "v1";
-const FILES = ["./", "index.html", "manifest.json", "icon.svg", "style.css", "app.js", "simulation.js", "sunset.html", "sunset.js", "sunset-model.js", "convection.html", "convection.js", "convection-model.js", "horizon.html", "horizon.js", "horizon-model.js", "atmosphere-model.js", "horizon-bitmaps.js"];
+const FILES = ["./", "index.html", "manifest.json", "icon.svg", "style.css", "app.js", "simulation.js", "sunset.html", "sunset.js", "sunset-model.js", "convection.html", "convection.js", "convection-model.js", "horizon.html", "horizon.js", "horizon-model.js", "atmosphere-model.js", "horizon-bitmaps.js", "valley.html", "valley.js", "valley-model.js", "textures/FX_CloudAlpha01.jpg", "textures/FX_CloudAlpha06.jpg", "textures/FX_CloudAlpha08.jpg"];
 
 function precache() {
   return caches.open(CACHE).then(cache => Promise.all(FILES.map(path => {
