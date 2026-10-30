@@ -17,7 +17,7 @@ test("textures load; switching keeps time; step pauses, reset restores defaults"
   globalThis.document = { hidden: false, getElementById: get, addEventListener(name, fn) { listeners[name] = fn; }, createElement: () => ({ getContext: () => ({
     drawImage: image => { drawn = image.src; }, getImageData: () => {
       const data = new Uint8ClampedArray(512 * 512 * 4), offset = drawn.includes("01") ? 31 : drawn.includes("06") ? 79 : 143;
-      for (let i = 0; i < data.length; i += 4) data[i] = data[i + 1] = data[i + 2] = (i / 4 + offset) % 256;
+      for (let i = 0; i < data.length; i += 4) { data[i] = data[i + 1] = data[i + 2] = (i / 4 + offset) % 256; data[i + 3] = 255; }
       return { data };
     }
   }) }) };
@@ -35,7 +35,11 @@ test("textures load; switching keeps time; step pauses, reset restores defaults"
     globalThis.document.hidden = true; listeners.visibilitychange(); frame(5000);
     globalThis.document.hidden = false; listeners.visibilitychange(); frame();
     assert.ok(get("stats").textContent.includes("t 1.1 s"));
+    get("windwardClearance").value = "0.2"; get("windwardClearance").handlers.input(); frame();
+    get("leewardClearance").value = "0"; get("leewardClearance").handlers.input(); frame();
     get("reset").handlers.click(); frame();
+    assert.equal(Number(get("windwardClearance").value), defaults.windwardClearance);
+    assert.equal(Number(get("leewardClearance").value), defaults.leewardClearance);
     assert.equal(get("play").textContent, "Play wind"); assert.equal(get("texture-rose").checked, true);
     assert.deepEqual(pixels, first);
   } finally { globalThis.document = original.document; globalThis.Image = original.Image; globalThis.requestAnimationFrame = original.raf; }
