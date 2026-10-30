@@ -31,7 +31,7 @@ export const SATURATION_SLOPE = 3;
 const SOLVER_ITERATIONS = 24;
 const OVER_RELAXATION = 1.7;
 
-// Same linear congruential generator as simulation.js, with its state kept in the
+// Same linear congruential generator as randomFromSeed in sunset-model.js, with its state kept in the
 // simulation so a run stays JSON-serializable and repeatable from any tick.
 function nextRandom(simulation) {
   simulation.randomState = (Math.imul(1664525, simulation.randomState) + 1013904223) >>> 0;
@@ -298,8 +298,8 @@ export function step(simulation, options = {}) {
   vorticity = advect(vorticity, u, v, width, height);
 
   // 7. Rain also falls through the air, `fallSpeed` pixels per tick (faster than the
-  //    strongest updraft), like the rain study. Drops leaving the bottom row collect in
-  //    floor puddles that evaporate again (step 1): nothing drains, so the cycle can run
+  //    strongest updraft). Drops leaving the bottom row collect in floor
+  //    puddles that evaporate again (step 1): nothing drains, so the cycle can run
   //    indefinitely.
   const fallen = rain.slice();
   for (let i = 0; i < size; i++) {
