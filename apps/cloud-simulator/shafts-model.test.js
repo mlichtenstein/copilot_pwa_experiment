@@ -54,9 +54,9 @@ test("shadow smoothing blends cells while nearest sampling preserves a hard boun
   assert.equal(sharpenDensity(0.2, 8), 0);
   assert.ok(sharpenDensity(0.5, 8) > sharpenDensity(0.5, 1));
 });
-test("sharper unsmoothed shadows change the light maps without changing cloud fields", () => {
+test("sharper shadows change the light maps without changing cloud fields", () => {
   const scene = createScene(), copy = scene.layers.map(l => l.density.slice());
-  const original = buildLightMaps(scene), sharp = buildLightMaps(scene, { cloudSharpness: 8, shadowSmoothing: false });
+  const original = buildLightMaps(scene), sharp = buildLightMaps(scene, { cloudSharpness: 8 });
   assert.notDeepEqual(original.gaps[0].pixels, sharp.gaps[0].pixels);
   scene.layers.forEach((layer, i) => assert.deepEqual(layer.density, copy[i]));
 });

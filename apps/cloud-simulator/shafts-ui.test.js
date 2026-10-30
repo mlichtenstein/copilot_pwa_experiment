@@ -26,11 +26,8 @@ test("sun slider redraws; pattern buttons change one layer; reset restores the o
     get("pattern-0").listeners.click(); callback(32);
     assert.equal(get("patterns").textContent, "near: 43 · middle: 1039 · far: 2036");
     get("cloudSharpness").value = "8"; get("cloudSharpness").listeners.input(); callback(40);
-    const smooth = pixels.slice();
-    get("shadowSmoothing").checked = false; get("shadowSmoothing").listeners.input(); callback(44);
-    assert.notDeepEqual(pixels, smooth);
     get("reset").listeners.click(); callback(48);
-    assert.equal(get("shadowSmoothing").checked, true);
+    assert.ok(!elements.has("shadowSmoothing"));
     assert.equal(Number(get("cloudSharpness").value), 1);
     assert.equal(get("patterns").textContent, originalPatterns);
     assert.deepEqual(pixels, first);
