@@ -1,8 +1,9 @@
 /*
  * Purpose: Drop-in rating bar for any app: a remembered name field, four emoji buttons
- *   (each tap saves the current settings, the rating and a canvas thumbnail as one row), Undo
- *   for this browser's last taps, Copy link (settings in ?p=), and a Recent list of the last
- *   ratings with thumbnails that reloads their settings on click. Restores ?p= on mount.
+ *   (each tap saves the current settings, the rating and a canvas thumbnail as one row), Copy
+ *   link (settings in ?p=), a Recent list of the last ratings with thumbnails that reloads
+ *   their settings on click, and an About note explaining the bar. Every control has a short
+ *   title tooltip, so its explanation sits on it. Restores ?p= on mount.
  * Consumers: the cloud simulator pages (app.js for index.html, sunset.js, convection.js, horizon.js).
  * Dependencies: presets.js; a container element; the app's getParams() returning a plain JSON
  *   object and applyParams(params) applying one; optionally the app's <canvas> for thumbnails;
@@ -27,6 +28,16 @@ function ago(when, now = Date.now()) {
   return new Date(when).toLocaleDateString(undefined, { dateStyle: "medium" });
 }
 
+// The About pop-over: what each emoji means, why tapping helps, the remembered name and Copy link.
+function aboutPanel() {
+  return make("div", { className: "preset-about-text preset-pop" },
+    make("p", { textContent: "Play with the settings, and whenever the picture makes you feel something, tap the emoji that fits:" }),
+    make("ul", {}, ...RATINGS.map(rating => make("li", {}, make("span", { className: "preset-about-emoji", textContent: rating.emoji }), ` ${rating.meaning}`))),
+    make("p", { textContent: "Why tap? Every tap saves your name, the emoji, all of the current settings and a small picture of the canvas. Together the taps show Maxwell which parts of the settings feel good or bad, and let anyone find a good spot again from Recent." }),
+    make("p", { textContent: "Your name is remembered on this device, so you only type it once." }),
+    make("p", { textContent: "🔗 Copy link copies a web address that reopens these exact settings. Share it or keep it." }));
+}
+
 /*
  * Mounts the bar into `container` and returns { reload }, or null when there is no real
  * container (a missing element, or a test harness without a DOM), so apps stay testable.
@@ -37,31 +48,33 @@ export function mountPresetBar(container, { app, getParams, applyParams, canvas 
   const storage = (() => { try { return globalThis.localStorage; } catch { return null; } })();
   const name = make("input", { type: "text", maxLength: LIMITS.name, placeholder: "Your name", autocomplete: "nickname",
     value: storage?.getItem(NAME_KEY) ?? "", className: "preset-name" });
+  name.title = "Your name, saved with each tap and remembered on this device";
   name.setAttribute("aria-label", "Your name, saved with each rating");
   const buttons = RATINGS.map(rating => {
-    const button = make("button", { type: "button", className: "preset-rate", textContent: rating.emoji, title: rating.label });
+    const button = make("button", { type: "button", className: "preset-rate", textContent: rating.emoji, title: `${rating.label}: tap to save these settings` });
     button.setAttribute("aria-label", `Rate these settings: ${rating.label}`);
     button.addEventListener("click", () => rate(rating.value));
     return button;
   });
-  const undo = make("button", { type: "button", className: "preset-tool", textContent: "↶", title: "Undo my last tap", disabled: true });
-  undo.setAttribute("aria-label", "Undo my last tap");
-  const share = make("button", { type: "button", className: "preset-tool", textContent: "🔗", title: "Copy a link to these settings" });
-  share.setAttribute("aria-label", "Copy a link to these settings");
-  const list = make("ol", { className: "preset-recent-list" });
-  const recent = make("details", { className: "preset-recent" }, make("summary", { textContent: "Recent" }), list);
+  const share = make("button", { type: "button", className: "preset-tool", textContent: "🔗", title: "Copy a link that reopens these exact settings" });
+  share.setAttribute("aria-label", "Copy a link that reopens these exact settings");
+  const list = make("ol", { className: "preset-recent-list preset-pop" });
+  const recent = make("details", { className: "preset-menu preset-recent" },
+    make("summary", { textContent: "Recent", title: "The last ratings from everyone; click one to load its settings" }), list);
+  const about = make("details", { className: "preset-menu preset-about" },
+    make("summary", { textContent: "About", title: "What the emojis mean and why to tap them" }), aboutPanel());
+  for (const menu of [recent, about]) menu.addEventListener("toggle", () => { if (menu.open) for (const other of [recent, about]) if (other !== menu) other.open = false; });
   const status = make("p", { className: "preset-status", role: "status" });
   container.classList.add("preset-bar");
-  container.replaceChildren(make("div", { className: "preset-row" }, name, make("div", { className: "preset-rates" }, ...buttons), undo, share, recent), status);
+  container.replaceChildren(make("div", { className: "preset-row" }, name, make("div", { className: "preset-rates" }, ...buttons), share,
+    make("div", { className: "preset-menus" }, recent, about)), status);
 
   const say = text => { status.textContent = text; };
   const online = () => navigator.onLine !== false;
-  const mine = []; // ids of this session's taps, newest last, for Undo
   let unavailable = false;
 
   function sync() {
     for (const button of buttons) button.disabled = !online() || unavailable;
-    undo.disabled = !online() || !mine.length;
     if (!online()) say("Offline: ratings are paused; the app and 🔗 still work.");
   }
 
@@ -95,8 +108,7 @@ export function mountPresetBar(container, { app, getParams, applyParams, canvas 
     storage?.setItem(NAME_KEY, name.value.trim());
     say(`Saving ${rating.emoji}…`);
     try {
-      const row = await store.save({ displayName: name.value, rating: value, params: getParams(), thumbnail: canvas ? canvasThumbnail(canvas) : null });
-      mine.push(row.id);
+      await store.save({ displayName: name.value, rating: value, params: getParams(), thumbnail: canvas ? canvasThumbnail(canvas) : null });
       say(`Saved ${rating.emoji} ${rating.label.toLowerCase()}.`);
       await load();
     } catch (error) {
@@ -106,13 +118,6 @@ export function mountPresetBar(container, { app, getParams, applyParams, canvas 
   }
 
   name.addEventListener("change", () => storage?.setItem(NAME_KEY, name.value.trim()));
-  undo.addEventListener("click", async () => {
-    const id = mine.at(-1);
-    if (!id) return;
-    undo.disabled = true;
-    try { await store.remove(id); mine.pop(); say("Undone."); await load(); } catch (error) { say(error.message); }
-    sync();
-  });
   share.addEventListener("click", async () => {
     const link = urlWithParams(location.href, getParams());
     history.replaceState(null, "", link);

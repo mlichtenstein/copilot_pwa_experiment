@@ -1,6 +1,6 @@
 /*
  * Purpose: App-agnostic emoji ratings of an app's current settings: encode settings into a
- *   shareable URL, validate a rating, and save, list and delete rating rows in a Supabase
+ *   shareable URL, validate a rating, and save and list rating rows in a Supabase
  *   table (cloud_simulator_presets by default), signing the visitor in anonymously on first tap.
  * Consumers: presets-panel.js (the drop-in rating bar), presets.test.js, and any app that wants
  *   URL-encoded parameters without the bar.
@@ -19,12 +19,12 @@ export const LIMITS = { name: 80, params: 8192, app: 80, thumbnail: 51200 };
 export const URL_KEY = "p";
 export const DEFAULT_TABLE = "cloud_simulator_presets";
 // The four ratings, in button order. `value` is what the table stores (its check constraint
-// allows exactly these); the emoji and label are only for display.
+// allows exactly these); the emoji, label (tooltips) and meaning (the About note) are only for display.
 export const RATINGS = [
-  { value: "love", emoji: "❤️", label: "Love it" },
-  { value: "beautiful", emoji: "🎨", label: "Beautiful, like a painting" },
-  { value: "gross", emoji: "🤮", label: "Gross" },
-  { value: "boring", emoji: "⬜", label: "Boring" }
+  { value: "love", emoji: "❤️", label: "Love it", meaning: "Love: you could watch this all day." },
+  { value: "beautiful", emoji: "🎨", label: "Beautiful, like a painting", meaning: "Beautiful: it looks like a painting." },
+  { value: "gross", emoji: "🤮", label: "Gross", meaning: "Gross: something looks wrong or ugly." },
+  { value: "boring", emoji: "⬜", label: "Boring", meaning: "Boring: nothing interesting is happening." }
 ];
 export const ratingFor = value => RATINGS.find(rating => rating.value === value) ?? null;
 
@@ -132,8 +132,8 @@ async function failure(response) {
 
 /*
  * A ratings client for one app id and table. Reads need no sign-in; the first tap signs in
- * anonymously and keeps the session (access and refresh tokens) in `storage`, so the same
- * visitor can undo their own taps later on this device.
+ * anonymously and keeps the session (access and refresh tokens) in `storage`, so later taps on
+ * this device count as the same visitor.
  */
 export function createPresetStore({ app, table = DEFAULT_TABLE, url = SUPABASE_URL, key = SUPABASE_KEY, fetch: fetchImpl = globalThis.fetch.bind(globalThis),
   storage = globalThis.localStorage, now = () => Date.now() }) {
@@ -191,13 +191,6 @@ export function createPresetStore({ app, table = DEFAULT_TABLE, url = SUPABASE_U
       const [row] = await call(rows, { method: "POST", headers: { Prefer: "return=representation" },
         body: JSON.stringify({ app_id: app, display_name: displayName.trim(), rating, params, thumbnail }) }, access_token);
       return row;
-    },
-    // Deletes one of the visitor's own ratings; row-level security ignores anyone else's.
-    async remove(id) {
-      const current = await session(false);
-      if (!current) throw new PresetError("invalid", "Only taps made from this browser can be undone here.");
-      const deleted = await call(`${rows}?id=eq.${encodeURIComponent(id)}`, { method: "DELETE", headers: { Prefer: "return=representation" } }, current.access_token);
-      if (!deleted?.length) throw new PresetError("invalid", "That rating wasn't deleted: it isn't yours, or it's already gone.");
     }
   };
 }

@@ -9,10 +9,17 @@
 .preset-rate { font-size: 1.25rem; line-height: 1; }
 .preset-tool { font-size: 1rem; }
 .preset-status { margin: 0; min-height: 1.2em; font-size: .78rem; line-height: 1.3; }
-.preset-recent { position: relative; margin-left: auto; font-size: .85rem; }
-.preset-recent > summary { padding: 8px 4px; }
-.preset-recent-list { position: absolute; right: 0; z-index: 5; margin: 4px 0 0; padding: 6px; list-style: none; display: grid; gap: 4px;
-  width: min(320px, 85vw); max-height: 60vh; overflow-y: auto; background: #111c30; border: 1px solid #536781; border-radius: 8px; box-shadow: 0 6px 18px #0008; }
+/* Recent and About: two pop-overs at the end of the row; opening one closes the other. */
+.preset-menus { display: flex; gap: 10px; margin-left: auto; }
+.preset-menu { position: relative; font-size: .85rem; }
+.preset-menu > summary { padding: 8px 4px; }
+.preset-pop { position: absolute; right: 0; z-index: 5; margin: 4px 0 0; padding: 6px; width: min(320px, 85vw); max-height: 60vh; overflow-y: auto;
+  background: #111c30; border: 1px solid #536781; border-radius: 8px; box-shadow: 0 6px 18px #0008; }
+.preset-recent-list { list-style: none; display: grid; gap: 4px; }
+.preset-about-text { max-height: 80vh; padding: 4px 12px; font-size: .85rem; line-height: 1.45; }
+.preset-about-text p { margin: 8px 0; }
+.preset-about-text ul { margin: 4px 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.preset-about-emoji { display: inline-block; width: 1.6em; font-size: 1.1rem; }
 .preset-bar .preset-recent-item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; font-size: .82rem; padding: 4px; }
 .preset-recent-item img, .preset-thumb-empty { flex: none; width: 64px; height: 48px; object-fit: cover; image-rendering: pixelated;
   border-radius: 4px; background: #1b2a40; }
