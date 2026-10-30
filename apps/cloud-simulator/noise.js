@@ -12,13 +12,13 @@ const image = context.createImageData(canvas.width, canvas.height);
 // Every slider whose id matches a model rule; all of them affect the current run.
 const liveRules = Object.keys(defaults).filter(id => element(id));
 const legends = {
-  sunset: "Sunset: clouds lit peach toward the low sun at lower right and grey-violet where thick; pale blue dashes = falling rain; blue floor = puddles.",
+  sunset: "Sunset: clouds lit peach toward the low sun at lower right and grey-violet where thick; soft grey veils = falling rain; blue floor = puddles.",
   water: "Cloud and rain: white = cloud, gold tint = cloud charged enough to rain, pale blue = rain in the air.",
   relative: "Relative humidity: brighter = closer to the cloud threshold; orange = above it, where cloud appears.",
   humidity: "Humidity: dark = dry, blue = moist (after drying aloft).",
   temperature: "Temperature: blue = cold, red = warm (after the lapse rate).",
   pressure: "Pressure: purple = low (more cloud), yellow = high (clearer).",
-  wind: "Wind: teal = blowing left, pink = blowing right. It only pushes the rain."
+  wind: "Wind gusts: teal = blowing left, pink = blowing right. They only push the rain, on top of windScroll."
 };
 let simulation;
 // Seeds only make a run reproducible; behavior should look alike on any seed.
@@ -27,7 +27,8 @@ let running = !matchMedia("(prefers-reduced-motion: reduce)").matches;
 let elapsed = 0;
 let previousTime;
 
-const rules = () => ({ ...defaults, ...Object.fromEntries(liveRules.map(id => [id, Number(element(id).value)])) });
+const valueOf = input => input.type === "checkbox" ? Number(input.checked) : Number(input.value);
+const rules = () => ({ ...defaults, ...Object.fromEntries(liveRules.map(id => [id, valueOf(element(id))])) });
 
 function render() {
   image.data.set(renderWeather(simulation, element("view").value, rules()));
@@ -51,7 +52,8 @@ function reset() {
 }
 
 for (const id of [...liveRules, "speed"]) {
-  const update = () => { element(id + "-value").textContent = element(id).value; };
+  const output = element(id + "-value");
+  const update = () => { if (output) output.textContent = element(id).value; };
   update();
   element(id).addEventListener("input", () => {
     update();

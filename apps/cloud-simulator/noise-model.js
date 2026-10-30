@@ -1,8 +1,9 @@
 /*
  * Purpose: Browser-independent noise-weather experiment: humidity, temperature, pressure
- *   and wind are slices of seeded 3D gradient noise moving through time; cloud appears
- *   where relative humidity crosses a threshold, and lingering cloud drops real rain that
- *   falls, drifts, evaporates and collects; plus the views that draw it as pixel art.
+ *   and wind are slices of seeded 3D gradient noise moving through time and scrolling
+ *   sideways together; cloud appears where relative humidity, favored just above a lifting
+ *   condensation level (LCL), crosses a threshold, and lingering cloud drops real rain that
+ *   falls slowly, drifts, evaporates and collects; plus the views that draw it as pixel art.
  * Consumers: noise.js and noise-model.test.js.
  * Dependencies: none; values are dimensionless experimental units, not a weather model.
  */
@@ -12,10 +13,10 @@
 export const FIELDS = ["humidity", "temperature", "pressure", "wind"];
 const field = (scale, speed, octaves, roughness, bias, amplitude) => ({ scale, speed, octaves, roughness, bias, amplitude });
 const FIELD_DEFAULTS = {
-  humidity: field(16, 0.012, 3, 0.5, 0.32, 0.35),
-  temperature: field(24, 0.006, 2, 0.5, 0.75, 0.12),
-  pressure: field(32, 0.005, 2, 0.5, 0, 1),
-  wind: field(28, 0.008, 2, 0.5, 0, 1)
+  humidity: field(32, 0.012, 3, 0.5, 0.32, 0.35),
+  temperature: field(48, 0.006, 2, 0.5, 0.75, 0.12),
+  pressure: field(64, 0.005, 2, 0.5, 0, 1),
+  wind: field(56, 0.008, 2, 0.5, 0, 1)
 };
 
 export const defaults = {
@@ -24,15 +25,24 @@ export const defaults = {
   // Temperature falls by `lapse` from floor to lid, so air aloft holds less vapor.
   lapse: 0.4,
   // Humidity falls by `drying` from floor to lid: most water vapor stays low.
-  drying: 0.3,
+  drying: 0.55,
   // Low pressure (negative) lowers the capacity, adding lift; high pressure clears.
   pressureLift: 0.3,
-  // Cloud appears where relative humidity exceeds `cloudThreshold`.
+  // Every field scrolls sideways together by `windScroll` pixels per tick (positive to the
+  // right), so clouds drift across as objects; rain and charge ride along.
+  windScroll: 0.1,
+  // Cloud appears where relative humidity × the LCL profile exceeds `cloudThreshold`.
   cloudThreshold: 1, cloudGain: 8,
+  // LCL profile (when `lcl` is 1): about 0 below `lclHeight` (altitude 0..1), a sigmoid step
+  // of steepness `lclSharpness` up to 1 + `lclBoost` at the LCL, tapering back to 1 with
+  // e-folding height `lclTaper` above it. It divides the cloud threshold, so cloud bases sit
+  // flat on the LCL.
+  lcl: 1, lclHeight: 0.35, lclSharpness: 60, lclBoost: 0.6, lclTaper: 0.12,
   // Cloud that lingers charges up; past `rainThreshold` it rains `rainRate × density`.
   charge: 0.02, discharge: 0.04, rainThreshold: 0.6, rainRate: 0.003,
-  // Rain falls `fallSpeed` pixels per tick, drifts with the wind, dries in dry air.
-  fallSpeed: 1, windDrift: 0.3, rainEvaporation: 0.15, puddleEvaporation: 0.002
+  // Rain falls `fallSpeed` pixels per tick (sub-pixel, so it glides), drifts with the
+  // scroll plus `windDrift × wind`, and dries in dry air.
+  fallSpeed: 0.25, windDrift: 0.15, rainEvaporation: 0.15, puddleEvaporation: 0.002
 };
 
 // Fixed slope of the capacity curve, as in the convection study: cold air holds
@@ -102,24 +112,36 @@ function noisesFor(seed) {
 }
 
 // ---- Simulation ------------------------------------------------------------------------
-export function createWeather({ width = 64, height = 48, seed = 1 } = {}) {
+export function createWeather({ width = 128, height = 96, seed = 1 } = {}) {
   const size = width * height;
   const zeros = () => new Array(size).fill(0);
   const simulation = { width, height, seed: seed >>> 0, tick: 0,
     humidity: zeros(), temperature: zeros(), pressure: zeros(), wind: zeros(),
     relative: zeros(), cloud: zeros(), charge: zeros(), rain: zeros(),
-    puddle: new Array(width).fill(0), rained: 0, evaporated: 0 };
+    puddle: new Array(width).fill(0), rained: 0, evaporated: 0,
+    // Accumulated sideways scroll and rain fall, in pixels, so sliders never jump the view.
+    scroll: 0, fallen: 0, lclProfile: new Array(height).fill(1) };
   sampleFields(simulation, defaults);
   return simulation;
 }
 
 const altitudeOf = (i, width, height) => 1 - Math.floor(i / width) / (height - 1);
 
+// Cloud-forming multiplier by altitude: near 0 below the LCL, a sharp step up to 1 + boost
+// at it, tapering back toward 1 above. 1 everywhere when the LCL is off.
+export function lclFactor(altitude, rules = defaults) {
+  if (!rules.lcl) return 1;
+  const above = altitude - rules.lclHeight;
+  const rise = 1 / (1 + Math.exp(-rules.lclSharpness * above));
+  return rise * (1 + rules.lclBoost * Math.exp(-Math.max(0, above) / Math.max(0.01, rules.lclTaper)));
+}
+
 // Fill the four fields, relative humidity and cloud for the current tick. Each field is
-// a 2D slice at time `tick × speed` through its own 3D noise.
+// a 2D slice at time `tick × speed` through its own 3D noise, shifted right by the scroll.
 export function sampleFields(simulation, options = {}) {
   const rules = { ...defaults, ...options };
   const { width, height, tick } = simulation;
+  const scroll = simulation.scroll ?? 0;
   const noises = noisesFor(simulation.seed);
   for (const name of FIELDS) {
     const scale = Math.max(1, rules[name + "Scale"]), time = tick * rules[name + "Speed"];
@@ -128,24 +150,52 @@ export function sampleFields(simulation, options = {}) {
     const values = simulation[name], noise = noises[name];
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
       // Raw Perlin rarely leaves ±0.5, so double it to use the slider's full amplitude.
-      values[y * width + x] = bias + amplitude * 2 * fractal(noise, x / scale, y / scale, time, octaves, roughness);
+      values[y * width + x] = bias + amplitude * 2 * fractal(noise, (x - scroll) / scale, y / scale, time, octaves, roughness);
     }
   }
+  for (let y = 0; y < height; y++) simulation.lclProfile[y] = lclFactor(altitudeOf(y * width, width, height), rules);
   for (let i = 0; i < width * height; i++) {
-    const altitude = altitudeOf(i, width, height);
+    const altitude = altitudeOf(i, width, height), favor = simulation.lclProfile[Math.floor(i / width)];
     simulation.temperature[i] -= rules.lapse * (altitude - 0.5);
     simulation.humidity[i] -= rules.drying * (altitude - 0.5);
     const humidity = Math.max(0, simulation.humidity[i]);
     simulation.relative[i] = humidity / saturation(simulation.temperature[i], simulation.pressure[i], rules.pressureLift);
-    simulation.cloud[i] = Math.max(0, Math.min(1, (simulation.relative[i] - rules.cloudThreshold) * rules.cloudGain));
+    simulation.cloud[i] = Math.max(0, Math.min(1, (simulation.relative[i] * favor - rules.cloudThreshold) * rules.cloudGain));
   }
 }
 
-// One tick: advance time, resample the fields, charge lingering cloud, then move rain.
+// Conservative sub-pixel move: each pixel's amount is split bilinearly over the (up to) four
+// pixels around its target, wrapping at the side walls. Amounts moving below the bottom row
+// go to `spill(x, amount)` (or are dropped when there is none). Totals are preserved.
+function advect(values, width, height, moveOf, spill) {
+  const next = new Array(values.length).fill(0);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const i = y * width + x, amount = values[i];
+    if (amount <= 0) continue;
+    const [dx, dy] = moveOf(i);
+    const tx = x + dx, ty = y + dy, x0 = Math.floor(tx), y0 = Math.floor(ty);
+    const fx = tx - x0, fy = ty - y0;
+    for (const [ox, oy, weight] of [[0, 0, (1 - fx) * (1 - fy)], [1, 0, fx * (1 - fy)], [0, 1, (1 - fx) * fy], [1, 1, fx * fy]]) {
+      if (weight <= 0) continue;
+      const column = (((x0 + ox) % width) + width) % width, row = y0 + oy;
+      if (row >= height) spill?.(column, amount * weight);
+      else next[Math.max(0, row) * width + column] += amount * weight;
+    }
+  }
+  for (let i = 0; i < values.length; i++) values[i] = next[i];
+}
+
+// One tick: advance time and scroll, resample the fields, charge lingering cloud, then
+// move rain.
 export function step(simulation, options = {}) {
   const rules = { ...defaults, ...options };
   const { width, height, cloud, charge, rain, relative, wind, puddle } = simulation;
   simulation.tick++;
+  simulation.scroll = (simulation.scroll ?? 0) + rules.windScroll;
+  const fall = Math.max(0, Math.min(1, rules.fallSpeed));
+  simulation.fallen = (simulation.fallen ?? 0) + fall;
+  // Charge belongs to the drifting cloud, so it scrolls with the fields.
+  if (rules.windScroll) advect(charge, width, height, () => [rules.windScroll, 0]);
   sampleFields(simulation, rules);
   const size = width * height;
   // Cloud that stays in place charges up; clear air lets the charge drain away.
@@ -163,23 +213,10 @@ export function step(simulation, options = {}) {
     const loss = rain[i] * Math.min(1, rules.rainEvaporation * Math.max(0, 1 - relative[i]));
     rain[i] -= loss; simulation.evaporated += loss;
   }
-  // Fall: `fallSpeed` (0..1) of each pixel's rain drops one row, and the moving part
-  // slides sideways by `windDrift × wind`, wrapping at the side walls. Rain leaving the
-  // bottom row fills that column's puddle. Every drop leaves one pixel and enters another.
-  const next = new Array(size).fill(0);
-  const fall = Math.max(0, Math.min(1, rules.fallSpeed));
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-    const i = y * width + x, amount = rain[i];
-    if (amount <= 0) continue;
-    const moving = amount * fall;
-    next[i] += amount - moving;
-    const drift = Math.max(-1, Math.min(1, rules.windDrift * wind[i]));
-    const side = drift >= 0 ? 1 : -1, sideways = moving * Math.abs(drift);
-    if (y === height - 1) { puddle[x] += moving; continue; }
-    next[i + width] += moving - sideways;
-    next[(y + 1) * width + (x + side + width) % width] += sideways;
-  }
-  for (let i = 0; i < size; i++) rain[i] = next[i];
+  // Fall: rain moves `fallSpeed` pixels down and `windScroll + windDrift × wind` pixels
+  // sideways per tick, split over neighboring pixels so slow rain glides instead of
+  // jumping. Rain leaving the bottom row fills that column's puddle.
+  advect(rain, width, height, i => [rules.windScroll + rules.windDrift * wind[i], fall], (x, amount) => { puddle[x] += amount; });
   for (let x = 0; x < width; x++) {
     const loss = puddle[x] * rules.puddleEvaporation;
     puddle[x] -= loss; simulation.evaporated += loss;
@@ -195,15 +232,26 @@ export const pooledRain = simulation => simulation.puddle.reduce((sum, value) =>
 // A small sunset palette, in hard dithered bands: indigo at the lid to gold at the floor.
 export const SKY = [[18, 16, 48], [40, 24, 72], [70, 34, 90], [110, 44, 98], [156, 58, 96],
   [200, 82, 88], [232, 116, 82], [248, 156, 90], [252, 196, 110]];
-// Cloud shades from shadow to lit edge, and rain.
+// Cloud shades from shadow to lit edge; rain (diagnostic view, and the grey of the Sunset
+// rain veil before sky tint) and puddles.
 export const CLOUD = [[70, 46, 88], [128, 84, 124], [222, 140, 150], [255, 206, 170]];
-const RAIN = [150, 210, 236], PUDDLE = [76, 120, 168];
+const RAIN = [150, 210, 236], RAIN_GREY = [150, 146, 162], PUDDLE = [76, 120, 168];
 // 4×4 ordered dither so bands and opacities break into chunky pixel patterns.
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
 const clip01 = value => Math.max(0, Math.min(1, value));
 const mix = (a, b, t) => a.map((channel, k) => channel + (b[k] - channel) * t);
 export const RAIN_SCALE = 0.02;
-const COLUMN_PHASE = [0, 2, 1, 3, 2, 0, 3, 1, 1, 3, 0, 2, 3, 1, 2, 0];
+// Rain veil: amount of rain for full veil strength, most opacity it reaches, and the
+// smear weights trailing above each pixel (it reads as streaks falling, not dots).
+export const VEIL_SCALE = 0.05, VEIL_ALPHA = 0.6;
+const SMEAR = [1, 0.75, 0.5, 0.3, 0.15];
+// Fixed per-column streak texture: smooth along the fall, sliding down with the rain at
+// sub-pixel speed so it never steps. Values in about [0.4, 1].
+const columnHash = x => { let h = Math.imul(x ^ 0x9e3779b9, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+function streak(column, along) {
+  const phase = columnHash(column) * 64, period = 5 + 4 * columnHash(column + 7919);
+  return 0.7 + 0.3 * Math.sin((along + phase) * 2 * Math.PI / period);
+}
 
 export function skyColor(altitude, threshold = 0.5) {
   const depth = clip01(1 - altitude) * (SKY.length - 1);
@@ -220,6 +268,13 @@ export function renderWeather(simulation, view = "sunset", options = {}) {
   const rules = { ...defaults, ...options };
   const { width, height, humidity, temperature, pressure, relative, cloud, rain, puddle } = simulation;
   const pixels = new Uint8ClampedArray(width * height * 4);
+  // Sunset rain veil: a vertically smeared copy of the rain field.
+  const veil = view === "sunset" ? new Float32Array(width * height) : null;
+  if (veil) for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    let sum = 0, total = 0;
+    SMEAR.forEach((weight, k) => { if (y - k >= 0) sum += weight * rain[(y - k) * width + x]; total += weight; });
+    veil[y * width + x] = sum / total * 2;
+  }
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     const i = y * width + x, altitude = altitudeOf(i, width, height);
     const dither = BAYER[(y % 4) * 4 + (x % 4)];
@@ -236,7 +291,7 @@ export function renderWeather(simulation, view = "sunset", options = {}) {
       rgb = mix(rgb, RAIN, clip01(rain[i] / RAIN_SCALE));
     } else {
       // Sunset: banded sky, cloud in four shades (lit where the cloud thins toward the low
-      // sun at lower right, shaded inside), rain as dithered streaks, puddles on the floor.
+      // sun at lower right, shaded inside), a soft rain veil, puddles on the floor.
       rgb = skyColor(altitude, dither);
       const density = cloud[i];
       if (density > dither * 0.6) {
@@ -246,10 +301,14 @@ export function renderWeather(simulation, view = "sunset", options = {}) {
         const light = clip01(0.4 + 1.5 * (density - toward) + 0.2 * (1 - altitude) - 0.15 * (1 - density));
         rgb = CLOUD[Math.min(3, Math.floor(light * 3.999))];
       }
-      // Rain: dashes that slide down a pixel per tick, offset per column, denser in
-      // heavier rain, drawn over sky and cloud alike.
-      const dash = (y - Math.floor(simulation.tick * rules.fallSpeed) + COLUMN_PHASE[x % 16]) & 3;
-      if (dash < 2 && rain[i] / RAIN_SCALE > dither * 0.8 + 0.15) rgb = mix(rgb, RAIN, dash === 0 ? 0.85 : 0.45);
+      // Rain: a soft grey veil tinted by the sky behind it, more opaque in heavier rain,
+      // fainter inside cloud, with faint streaks that slide down with the rain.
+      const amount = clip01(veil[i] / VEIL_SCALE);
+      if (amount > 0.01) {
+        const column = Math.floor(x - (simulation.scroll ?? 0));
+        const alpha = VEIL_ALPHA * Math.sqrt(amount) * streak(column, y - (simulation.fallen ?? 0)) * (1 - 0.6 * density);
+        rgb = mix(rgb, mix(RAIN_GREY, skyColor(altitude), 0.3), alpha);
+      }
     }
     if (y === height - 1 && puddle[x] > 0.02 + dither * 0.2) rgb = PUDDLE;
     pixels.set([rgb[0], rgb[1], rgb[2], 255], i * 4);
