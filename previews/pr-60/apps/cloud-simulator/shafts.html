@@ -13,7 +13,6 @@
 <label><code>cloudOpacity</code><small>How strongly droplets block sunlight and the background; 0 makes clouds transparent.</small><output id="cloudOpacity-value"></output><input id="cloudOpacity" type="range" min="0" max="3" step="0.1" value="1.2"></label>
 <label><code>haze</code><small>Amount of illuminated air between cloud pictures; 0 removes it.</small><output id="haze-value"></output><input id="haze" type="range" min="0" max="1" step="0.05" value="0.35"></label>
 <label><code>cloudSharpness</code><small>Changes cloud-mask contrast before the opaque silhouette cutoff. Visible cloud shading stays soft.</small><output id="cloudSharpness-value"></output><input id="cloudSharpness" type="range" min="1" max="16" step="0.5" value="1"></label>
-<label><span><input id="shadowSmoothing" type="checkbox" checked> <code>shadowSmoothing</code></span><small>On antialiases projected shadow edges with four subpixel rays; off uses one ray for crisp pixel edges.</small></label>
 </section>
 <p>Cloud patterns</p><div class="playback"><button id="pattern-0" type="button">Change near</button><button id="pattern-1" type="button">Change middle</button><button id="pattern-2" type="button">Change far</button></div><p id="patterns" class="stats"></p>
 <details><summary>How the shadow shapes work</summary>
@@ -23,6 +22,6 @@
 <p>For each screen position, intersect the camera ray with the prisms, merge overlapping shadow intervals, then integrate only the illuminated air between them. There is no stack of depth slices and no stepping through a 3D volume.</p>
 <p><code>airLight(a, b) = exp(−haze × 0.04 × (a − gapNear)) − exp(−haze × 0.04 × (b − gapNear))</code></p>
 <p>Sum this contribution over unshadowed depth intervals and tint with the approximate sunset color. Blend far cloud, illuminated air, middle cloud, illuminated air and near cloud. Two 64×40 screen buffers store the final gap colors; they represent the full depth of each gap, not midpoint samples.</p>
-<p>shadowSmoothing averages four subpixel camera rays to antialias boundaries. Off uses one ray per pixel. Cloud surfaces retain their prior soft, partially transmitting shading; their geometric air shadows deliberately use hard silhouettes. This is an artistic hybrid, not full physical transport. There is no multiple scattering, evolving density or illuminated foreground air ahead of the nearest layer.</p>
+<p>Shadow edges stay crisp, using one camera ray per pixel. Cloud surfaces retain their prior soft, partially transmitting shading; their geometric air shadows deliberately use hard silhouettes. This is an artistic hybrid, not full physical transport. There is no multiple scattering, evolving density or illuminated foreground air ahead of the nearest layer.</p>
 <p>Only the sun moves during playback. Pattern buttons change one cloud field at a time; reset restores the original patterns and lighting.</p>
 </details><p id="status" role="status"></p><noscript>JavaScript is required.</noscript></div></main><script type="module" src="shafts.js"></script></body></html>

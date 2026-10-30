@@ -2,7 +2,7 @@
  * Consumers: shafts.js and shafts-model.test.js. Dependencies: sunset-model.js; no browser APIs. */
 import { createDensity, sunlight } from "./sunset-model.js";
 export const defaults = { sunElevation: 8, sunAzimuth: -18, cloudOpacity: 1.2, haze: 0.35,
-  cloudSharpness: 1, shadowSmoothing: true };
+  cloudSharpness: 1 };
 export const layerNames = ["near", "middle", "far"];
 export function createLayer(index, seed) {
   const width = [32, 64, 96][index], height = [20, 40, 60][index];
@@ -39,7 +39,7 @@ export function lightAt(scene, x, y, depth, settings) {
   for (const layer of scene.layers) if (layer.depth > depth) {
     const distance = (layer.depth - depth) / direction[2];
     const density = sharpenDensity(sampleCloud(layer, x + direction[0] * distance, y + direction[1] * distance,
-      settings.shadowSmoothing), settings.cloudSharpness);
+      false), settings.cloudSharpness);
     transmission *= Math.exp(-settings.cloudOpacity * density / direction[2]);
   }
   return transmission;
@@ -121,18 +121,14 @@ export function buildLightMaps(scene, options = {}) {
       for (let y = Math.max(0, Math.floor(minY)); y <= Math.min(height - 1, Math.floor(maxY)); y++)
         for (let x = Math.max(0, Math.floor(minX)); x <= Math.min(width - 1, Math.floor(maxX)); x++) bins[y * width + x].push(prism);
     }
-    const offsets = settings.shadowSmoothing ? [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]] : [[0, 0]];
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-      let illumination = 0;
-      for (const [ox, oy] of offsets) {
-        const [rx, ry] = screenPosition(x + ox, y + oy, width, height, -11);
-        const intervals = [];
-        for (const prism of bins[y * width + x]) {
-          const interval = shadowInterval(prism, rx, ry, direction, nearDepth, farDepth);
-          if (interval) intervals.push(interval);
-        }
-        illumination += illuminatedAir(intervals, nearDepth, farDepth, settings.haze) / offsets.length;
+      const [rx, ry] = screenPosition(x, y, width, height, -11);
+      const intervals = [];
+      for (const prism of bins[y * width + x]) {
+        const interval = shadowInterval(prism, rx, ry, direction, nearDepth, farDepth);
+        if (interval) intervals.push(interval);
       }
+      const illumination = illuminatedAir(intervals, nearDepth, farDepth, settings.haze);
       for (let c = 0; c < 3; c++) pixels[(y * width + x) * 3 + c] = illumination * color[c];
     }
     return { nearDepth, farDepth, airT, pixels, prismCount: prisms.length };
