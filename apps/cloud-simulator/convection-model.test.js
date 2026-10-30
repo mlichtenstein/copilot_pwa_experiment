@@ -2,7 +2,8 @@
  * Consumers: Node's test runner. Dependencies: node:test, node:assert and convection-model.js. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createConvection, step, totalWater, saturation, renderConvection, RAIN_SCALE } from "./convection-model.js";
+import { createConvection, step, totalWater, saturation, renderConvection, RAIN_SCALE,
+  cloudDepth, opacity, rainOpacity, sunsetSky, cloudColor } from "./convection-model.js";
 
 const allFinite = simulation => ["temperature", "vapor", "liquid", "rain", "vorticity"]
   .every(name => simulation[name].every(Number.isFinite));
@@ -88,10 +89,27 @@ test("every view renders opaque pixels without changing the state", () => {
   const simulation = createConvection({ width: 16, height: 12, seed: 3 });
   for (let tick = 0; tick < 50; tick++) step(simulation);
   const snapshot = structuredClone(simulation);
-  for (const view of ["lamp", "water", "temperature", "buoyancy", "humidity"]) {
+  for (const view of ["sunset", "lamp", "water", "temperature", "buoyancy", "humidity"]) {
     const pixels = renderConvection(simulation, view);
     assert.equal(pixels.length, 16 * 12 * 4);
     for (let i = 3; i < pixels.length; i += 4) assert.equal(pixels[i], 255);
   }
   assert.deepEqual(simulation, snapshot);
+});
+
+test("sunset mapping: clear dry air, haze near saturation, opaque cloud, see-through rain", () => {
+  assert.equal(cloudDepth(0, 0.5), 0);
+  assert.equal(cloudDepth(0, 0.9), 0);
+  const haze = opacity(cloudDepth(0, 0.99)), thin = opacity(cloudDepth(0.002, 1)), thick = opacity(cloudDepth(0.006, 1));
+  assert.ok(haze > 0 && haze < 0.2, `haze ${haze}`);
+  assert.ok(haze < thin && thin < thick && thick < 1);
+  assert.equal(rainOpacity(0), 0);
+  assert.ok(rainOpacity(RAIN_SCALE / 2) < rainOpacity(RAIN_SCALE));
+  assert.equal(rainOpacity(10 * RAIN_SCALE), rainOpacity(RAIN_SCALE));
+  assert.ok(rainOpacity(10 * RAIN_SCALE) <= 0.5);
+  // Gold floor, indigo lid; lit cloud is brighter than shaded cloud.
+  const [floor, lid] = [sunsetSky(0), sunsetSky(1)];
+  assert.ok(floor[0] > floor[2] && lid[2] > lid[0]);
+  const brightness = rgb => rgb[0] + rgb[1] + rgb[2];
+  assert.ok(brightness(cloudColor(1, 0.5)) > brightness(cloudColor(0, 0.5)));
 });
