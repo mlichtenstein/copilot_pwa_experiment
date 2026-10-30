@@ -48,3 +48,13 @@ SHA-256 records:
 ### Runtime sky mattes
 
 Sculpted bank (`rose`) uses `alpha = 1 − smoothstep(0.015, 0.12, blue − red)` to remove blue clear-sky gaps. Layered wisps (`embers`) uses `alpha = 1 − smoothstep(0.35, 0.7, red)` to remove red-bright open sky and retain dark cloud banks. Input channels are normalized to 0–1; original alpha multiplies the result. Shading is grayscale `0.2126·red + 0.7152·green + 0.0722·blue`. No source RGB reaches the renderer; its palette supplies all color. These are source-specific approximate mattes: clouds sharing the keyed sky color may vanish, and similar-colored sky may remain. They are not semantic segmentation or physical density estimates. The original grayscale maps retain their intensity-as-opacity behavior.
+
+## Additional CC0 pack maps
+
+The same WickedInsignia pack supplies three more unchanged JPEGs: `FX_CloudAlpha03.jpg` (Billowy bank), `FX_CloudAlpha05.jpg` (Scattered cloudlets), and `FX_CloudAlpha09.jpg` (Wispy curls). They use intensity as alpha and remain color-free. The source, author and CC0 release above apply to these files as well.
+
+- `FX_CloudAlpha03.jpg` SHA-256: `bd60bc491d45147406ea50171091827a2f19361d83727c6bbb2296bc7d84091a`
+
+- `FX_CloudAlpha05.jpg` SHA-256: `d46ee3f9b852158944b38cbb924579f79c986aa7c9d565d2ff5013d954682555`
+
+- `FX_CloudAlpha09.jpg` SHA-256: `1c3c4640462a520b8153ba0e766a25e3742664ed9fd90527714e90158cf0dbfc`

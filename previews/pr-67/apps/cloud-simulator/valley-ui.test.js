@@ -8,11 +8,12 @@ test("textures load; switching keeps time; step pauses, reset restores defaults"
   let callback, pixels, stamp = 0, drawn;
   const items = new Map(), listeners = {};
   const get = id => {
-    if (!items.has(id)) items.set(id, { value: String(defaults[id] ?? (id === "shape" ? "noise" : id === "placement" ? "full" : "")), checked: id === "texture-rose" || id === "horizon-hills", disabled: true,
+    if (!items.has(id)) items.set(id, { value: String(defaults[id] ?? (id === "shape" ? "noise" : id === "placement" ? "full" : id === "texture-a" ? "rose" : id === "texture-b" ? "billow" : "")), checked: id === "horizon-hills", disabled: true,
       textContent: "", handlers: {}, addEventListener(name, fn) { this.handlers[name] = fn; }, setAttribute() {} });
     return items.get(id);
   };
   Object.assign(get("sky"), { width: 48, height: 30, getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData: image => { pixels = image.data; } }) });
+  for (const slot of ["a", "b"]) Object.assign(get("preview-" + slot), { width: 96, height: 60, getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {} }) });
   globalThis.Image = class { async decode() {} };
   globalThis.document = { hidden: false, getElementById: get, addEventListener(name, fn) { listeners[name] = fn; }, createElement: () => ({ getContext: () => ({
     drawImage: image => { drawn = image.src; }, getImageData: () => {
@@ -28,8 +29,10 @@ test("textures load; switching keeps time; step pauses, reset restores defaults"
     assert.equal(get("play").disabled, false);
     const first = pixels.slice();
     get("step").handlers.click(); frame(); assert.ok(get("stats").textContent.includes("t 1.0 s"));
-    get("texture-rose").checked = false; get("texture-bank").checked = true; get("texture-bank").handlers.change(); frame();
-    assert.ok(get("stats").textContent.includes("Soft bank · t 1.0 s"));
+    get("texture-a").value = "bank"; get("texture-a").handlers.change(); frame();
+    get("texture-b").value = "veil"; get("texture-b").handlers.change();
+    get("textureBlend").value = "0.5"; get("textureBlend").handlers.input(); frame();
+    assert.ok(get("stats").textContent.includes("Soft bank → Thin veil · 50% B · t 1.0 s"));
     get("play").handlers.click(); frame(); frame(100);
     assert.ok(get("stats").textContent.includes("t 1.1 s"));
     globalThis.document.hidden = true; listeners.visibilitychange(); frame(5000);
@@ -40,7 +43,7 @@ test("textures load; switching keeps time; step pauses, reset restores defaults"
     get("reset").handlers.click(); frame();
     assert.equal(Number(get("windwardClearance").value), defaults.windwardClearance);
     assert.equal(Number(get("leewardClearance").value), defaults.leewardClearance);
-    assert.equal(get("play").textContent, "Play wind"); assert.equal(get("texture-rose").checked, true);
+    assert.equal(get("play").textContent, "Play wind"); assert.equal(get("texture-a").value, "rose"); assert.equal(get("texture-b").value, "billow"); assert.equal(Number(get("textureBlend").value), 0);
     assert.deepEqual(pixels, first);
   } finally { globalThis.document = original.document; globalThis.Image = original.Image; globalThis.requestAnimationFrame = original.raf; }
 });
