@@ -1,0 +1,91 @@
+/* Purpose: Check the experiment host in a minimal DOM harness with the Sunset module: it
+ *   builds the controls from the schema, Play runs the shared clock and moves the sun along
+ *   the path, a manual sun position pauses it, Reset sun returns it, and getParams/applyParams
+ *   round-trip (the contract the rating bar and ?p= links use).
+ * Consumers: Node test runner. Dependencies: node:test, node:assert, host.js, sun-path.js and
+ *   ../sunset-experiment.js. */
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mountExperiment, DEFAULT_SUN_PHASE } from "./host.js";
+import { SUN_PATH, sunAt, timeForPhase } from "./sun-path.js";
+import { sunset } from "../sunset-experiment.js";
+
+// Just enough of the DOM for host.js: elements with ids, children, listeners and values.
+function fakeDocument(ids) {
+  const byId = new Map();
+  const node = tag => ({
+    tagName: tag.toUpperCase(), children: [], parentNode: null, listeners: {}, attributes: {}, textContent: "", value: "",
+    append(...items) { for (const item of items) if (typeof item === "object") { item.parentNode = this; this.children.push(item); if (item.id) byId.set(item.id, item); for (const child of item.children) if (child.id) byId.set(child.id, child); } },
+    addEventListener(name, fn) { (this.listeners[name] ??= []).push(fn); },
+    fire(name) { for (const fn of this.listeners[name] ?? []) fn({ isTrusted: true }); },
+    setAttribute(name, value) { this.attributes[name] = value; }
+  });
+  const doc = { hidden: false, createElement: node, addEventListener() {}, getElementById: id => byId.get(id) ?? null };
+  for (const id of ids) { const element = node("div"); element.id = id; byId.set(id, element); }
+  return doc;
+}
+
+test("Sunset on the host: generated controls, shared sun playback, pause, reset and params round-trip", () => {
+  const doc = fakeDocument(["sky", "playback", "controls", "stats", "status"]);
+  let pixels, callback, stamp = 0;
+  Object.assign(doc.getElementById("sky"), { width: 32, height: 20, getContext: () => ({
+    createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData: image => { pixels = image.data.slice(); } }) });
+  const page = mountExperiment(sunset, { doc, raf: fn => { callback = fn; }, presets: false, serviceWorker: null });
+  const frame = (dt = 16) => { stamp += dt; callback(stamp); };
+  const $ = id => doc.getElementById(id);
+
+  // Controls: View first, then the seed, the shared sun, and the lighting sliders, with tooltips on buttons.
+  assert.deepEqual($("controls").children.map(label => label.children.find(child => ["INPUT", "SELECT"].includes(child.tagName))?.id),
+    ["view", "seed", "sunPhase", "extinction", "slabDepth", "albedo", "g", "airOpticalDepth", "ambient", "exposure"]);
+  assert.deepEqual($("playback").children.map(button => button.textContent), ["Play sun", "Reset sun", "New density seed"]);
+  assert.ok($("playback").children.every(button => button.title));
+
+  frame(); const initial = pixels;
+  assert.ok(initial.length === 32 * 20 * 4);
+  assert.match($("stats").textContent, /^Seed 42 · density fixed · sun 28° across, 25\.0° up$/);
+
+  // A slider redraws.
+  $("extinction").value = "0.3"; $("extinction").fire("input"); frame();
+  assert.notDeepEqual(pixels, initial);
+  assert.equal(page.getParams().extinction, 0.3);
+
+  // Play runs the clock; the sun moves along the shared path.
+  $("play").fire("click"); assert.equal($("play").textContent, "Pause sun");
+  const before = page.clock.time;
+  for (let i = 0; i < 10; i++) frame(100);
+  assert.ok(Math.abs(page.clock.time - before - 1) < 1e-9);
+  const sun = sunAt(page.clock.time);
+  assert.equal($("stats").textContent, `Seed 42 · density fixed · sun ${sun.azimuth.toFixed(0)}° across, ${sun.elevation.toFixed(1)}° up`);
+
+  // Moving the sun by hand stops it there.
+  $("sunPhase").value = "0.6"; $("sunPhase").fire("input");
+  assert.equal($("play").textContent, "Play sun");
+  frame(500); frame(500);
+  assert.ok(Math.abs(page.getParams().sunPhase - 0.6) < 1e-9);
+
+  // Params round-trip, including the sun's place; untrusted values are cleaned.
+  const saved = page.getParams();
+  assert.deepEqual(Object.keys(saved).sort(), [...sunset.params.map(param => param.key), "sunPhase", "resolution"].sort());
+  page.applyParams({ ...saved, extinction: 5, view: "nope", seed: "x", sunPhase: 0.25 });
+  frame();
+  assert.equal($("extinction").value, "0.5");
+  assert.equal(page.getParams().view, "light");
+  assert.equal(page.getParams().seed, 42);
+  assert.ok(Math.abs(page.getParams().sunPhase - 0.25) < 1e-9);
+  page.applyParams(saved); frame();
+  assert.deepEqual(page.getParams(), saved);
+
+  // Reset sun returns to the starting point, paused; defaults reproduce the first picture.
+  $("play").fire("click"); frame(100); $("reset").fire("click"); frame();
+  assert.equal(page.clock.playing, false);
+  assert.equal(page.clock.time, timeForPhase(DEFAULT_SUN_PHASE));
+  page.applyParams({ sunPhase: DEFAULT_SUN_PHASE }); frame();
+  assert.deepEqual(pixels, initial);
+
+  // A new density seed changes the droplets.
+  $("new-seed").fire("click"); frame();
+  assert.notEqual(page.getParams().seed, 42);
+  assert.notDeepEqual(pixels, initial);
+  assert.ok(SUN_PATH.period > 0);
+  page.dispose();
+});
