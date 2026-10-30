@@ -3,7 +3,7 @@
  * Dependencies: shafts-model.js for shared fields/settings; sunset-model.js for sun color. */
 import { defaults, sharpenDensity, sampleCloud, sunDirection } from "./shafts-model.js";
 import { sunlight } from "./sunset-model.js";
-export const visibilityDefaults = { sourceRadius: 6 };
+export const visibilityDefaults = { sourceRadius: 6, edgeFeather: 2 };
 const SCALE = Math.tan(58 * Math.PI / 360);
 export function projectPoint(x, y, depth, width, height) {
   return [(x / ((depth + 12) * SCALE * width / height) + 1) * width / 2,
@@ -97,6 +97,52 @@ export function pointInPolygon(point, polygon) {
   }
   return inside;
 }
+// Radial polygon edges are shaft sides; every other visible boundary is a cap.
+export function capEdges(polygon, sun) {
+  const result = [];
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i], b = polygon[(i + 1) % polygon.length];
+    const ax = a[0] - sun[0], ay = a[1] - sun[1], bx = b[0] - sun[0], by = b[1] - sun[1];
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (length < 1e-7) continue;
+    const radii = Math.hypot(ax, ay) * Math.hypot(bx, by);
+    const radial = radii > 0 && ax * bx + ay * by > 0 && Math.abs(cross(ax, ay, bx, by)) / radii < 1e-5;
+    if (!radial) result.push([a, b]);
+  }
+  return result;
+}
+function segmentDistance(point, segment) {
+  const [a, b] = segment, dx = b[0] - a[0], dy = b[1] - a[1];
+  const t = Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / (dx * dx + dy * dy)));
+  return Math.hypot(point[0] - a[0] - t * dx, point[1] - a[1] - t * dy);
+}
+export function capCoverage(point, visible, caps, feather) {
+  if (!visible) return 0;
+  if (feather <= 0) return 1;
+  let distance = feather;
+  for (const segment of caps) distance = Math.min(distance, segmentDistance(point, segment));
+  const t = Math.min(1, distance / feather);
+  return t * t * (3 - 2 * t);
+}
+function rasterizeCapCoverage(visible, caps, width, height, feather) {
+  const coverage = Float32Array.from(visible);
+  if (feather <= 0) return coverage;
+  // Only visit pixels in a narrow strip around each cap, not every cap at every pixel.
+  for (const segment of caps) {
+    const [a, b] = segment;
+    const left = Math.max(0, Math.ceil(Math.min(a[0], b[0]) - feather - 0.5));
+    const right = Math.min(width - 1, Math.floor(Math.max(a[0], b[0]) + feather - 0.5));
+    const top = Math.max(0, Math.ceil(Math.min(a[1], b[1]) - feather - 0.5));
+    const bottom = Math.min(height - 1, Math.floor(Math.max(a[1], b[1]) + feather - 0.5));
+    for (let y = top; y <= bottom; y++) for (let x = left; x <= right; x++) {
+      const i = y * width + x;
+      if (coverage[i] === 0) continue;
+      const t = Math.min(1, segmentDistance([x + 0.5, y + 0.5], segment) / feather);
+      coverage[i] = Math.min(coverage[i], t * t * (3 - 2 * t));
+    }
+  }
+  return coverage;
+}
 export function buildVisibility(scene, options = {}, width = 128, height = 80) {
   const settings = { ...defaults, ...visibilityDefaults, ...options }, sun = projectedSun(settings, width, height);
   const layers = scene.layers.map(layer => {
@@ -117,13 +163,23 @@ export function buildVisibility(scene, options = {}, width = 128, height = 80) {
     const blocked = isSolid(sun);
     const polygon = blocked && radius === 0 ? [] : visibilityPolygon(sun, segments, bounds, radius, isSolid);
     const visible = Uint8Array.from({ length: width * height }, (_, i) => pointInPolygon([i % width + 0.5, Math.floor(i / width) + 0.5], polygon) ? 1 : 0);
-    return { polygon, segments, visible, blocked };
+    const caps = capEdges(polygon, sun), feather = settings.edgeFeather * width / 128;
+    const coverage = rasterizeCapCoverage(visible, caps, width, height, feather);
+    return { polygon, segments, visible, coverage, blocked };
   });
   return { settings, width, height, sun, layers, color: sunlight(settings.sunElevation, 0.12) };
 }
 export function combinedVisibility(layers, first, index) {
   for (let i = first; i < layers.length; i++) if (!layers[i].visible[index]) return false;
   return true;
+}
+export function combinedCoverage(layers, first, index) {
+  let coverage = 1;
+  for (let i = first; i < layers.length; i++) {
+    if (!layers[i].visible[index]) return 0;
+    coverage *= layers[i].coverage ? layers[i].coverage[index] : 1;
+  }
+  return coverage;
 }
 // Bright light pierces denser clouds and starts farther from the projected sun.
 export const visibilityBands = [
@@ -154,8 +210,8 @@ export function renderVisibility(scene, visibility) {
       const span = layer.depth - (i === 0 ? 0 : scene.layers[i - 1].depth);
       // First pass: collect the light veils without painting over any cloud bodies.
       const alpha = (1 - Math.exp(-settings.haze * span * 0.04)) * 0.55;
-      for (const band of bands) if (combinedVisibility(band.layers, i, index)) {
-        const opacity = alpha * band.weight;
+      for (const band of bands) {
+        const opacity = alpha * band.weight * combinedCoverage(band.layers, i, index);
         rgb = rgb.map((v, c) => v * (1 - opacity) + opacity * color[c] * band.brightness);
       }
     }
@@ -165,7 +221,7 @@ export function renderVisibility(scene, visibility) {
       const density = sampleCloud(layer, rx * (layer.depth + 12), ry * (layer.depth + 12));
       const transmission = Math.exp(-settings.cloudOpacity * density);
       let litSurface = 0;
-      for (const band of bands) if (combinedVisibility(band.layers, i + 1, index)) litSurface += band.weight * band.brightness;
+      for (const band of bands) litSurface += band.weight * band.brightness * combinedCoverage(band.layers, i + 1, index);
       // Neutral-blue body fill preserves clouds in shadow; sunlight gives their warm face.
       rgb = rgb.map((v, c) => v * transmission + (1 - transmission) * ([0.045, 0.055, 0.075][c] + color[c] * litSurface * 0.42));
     }

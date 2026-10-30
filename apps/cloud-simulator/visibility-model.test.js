@@ -4,7 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createScene, defaults } from "./shafts-model.js";
 import { silhouetteSegments, visibilityPolygon, pointInPolygon, buildVisibility,
-  renderVisibility, combinedVisibility, visibilityOrder, outsideCircleSegments, buildLayeredVisibility, visibilityBands, thresholdMask } from "./visibility-model.js";
+  renderVisibility, combinedVisibility, visibilityOrder, outsideCircleSegments, buildLayeredVisibility, visibilityBands, thresholdMask, capEdges, capCoverage } from "./visibility-model.js";
 test("unobstructed visibility covers the bounds; a wall blocks points behind it", () => {
   const empty = visibilityPolygon([1, 5], [], [0, 0, 10, 10]);
   assert.ok(pointInPolygon([9, 5], empty));
@@ -108,4 +108,36 @@ test("layered visibility adds distinct blended bands and zero radius propagates 
   const zero = buildLayeredVisibility(scene, { sourceRadius: 0, cloudOpacity: 0 }, 32, 20);
   assert.ok(zero.bands.every(b => b.settings.sourceRadius === 0 && b.layers.every(l => l.visible.every(v => v === 1))));
   assert.ok(renderVisibility(scene, zero).every((v, i) => i % 4 !== 3 || v === 255));
+});
+
+test("feathering softens cloud-facing caps while shaft sides stay binary", () => {
+  const sun = [0, 0], polygon = [[2, -1], [10, -5], [10, 5], [2, 1]];
+  const caps = capEdges(polygon, sun);
+  assert.equal(caps.length, 2);
+  const sample = p => capCoverage(p, pointInPolygon(p, polygon), caps, 1);
+  assert.ok(sample([2.2, 0]) > 0 && sample([2.2, 0]) < 1);
+  assert.equal(sample([5, 2.49]), 1);
+  assert.equal(sample([5, 2.51]), 0);
+  assert.equal(capCoverage([2.2, 0], true, caps, 0), 1);
+});
+test("radius arcs feather inward, without adding light beyond the polygon", () => {
+  const sun = [0, 0];
+  const polygon = Array.from({ length: 96 }, (_, i) => [3 * Math.cos(i * Math.PI / 48), 3 * Math.sin(i * Math.PI / 48)]);
+  const caps = capEdges(polygon, sun);
+  assert.equal(caps.length, 96);
+  assert.equal(capCoverage([0, 0], true, caps, 1), 1);
+  const inside = capCoverage([2.8, 0], true, caps, 1);
+  assert.ok(inside > 0 && inside < 1);
+  assert.equal(capCoverage([3.2, 0], false, caps, 1), 0);
+});
+test("zero feather keeps binary coverage and positive feather leaves polygon geometry intact", () => {
+  const scene = createScene();
+  const hard = buildVisibility(scene, { edgeFeather: 0 }, 32, 20);
+  const soft = buildVisibility(scene, { edgeFeather: 2 }, 32, 20);
+  for (let i = 0; i < 3; i++) {
+    assert.deepEqual(hard.layers[i].polygon, soft.layers[i].polygon);
+    assert.deepEqual([...hard.layers[i].coverage], [...hard.layers[i].visible]);
+    assert.ok(soft.layers[i].coverage.every((value, index) => value >= 0 && value <= soft.layers[i].visible[index]));
+  }
+  assert.ok(soft.layers.some(l => l.coverage.some(v => v > 0 && v < 1)));
 });
