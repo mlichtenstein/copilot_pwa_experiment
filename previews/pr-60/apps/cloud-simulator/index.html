@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- Purpose: Rain experiment controls and field display. Consumers: browser.
-     Dependencies: style.css, app.js, manifest.json. -->
+     Dependencies: style.css, ../shared/presets.css, app.js (mounts the emoji rating bar), manifest.json. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -10,13 +10,15 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="../shared/presets.css">
 </head>
 <body class="experiment">
 <main class="experiment-layout">
   <header class="experiment-header"><p class="eyebrow">Cloud simulator / Experiment 01</p><h1>Rain study</h1>
-    <p>Two fields. One local rule. See what falls.</p><p>Rain study · <a href="sunset.html">Sunset study</a> · <a href="shafts.html">Light shafts</a></p></header>
-  <section class="viewport simulation-pane" aria-label="Vertical slice of the atmosphere">
-    <canvas id="sky" width="128" height="96" role="img" aria-label="Animated pixel grid showing atmospheric water; use the view menu for temperature or saturation."></canvas>
+    <p>Two fields. One local rule. See what falls.</p><p>Rain study · <a href="sunset.html">Sunset study</a> · <a href="convection.html">Convection study</a> · <a href="horizon.html">Horizon light</a> · <a href="shafts.html">Light shafts</a></p></header>
+  <section class="viewport simulation-pane with-presets" aria-label="Vertical slice of the atmosphere">
+    <div id="presets" role="group" aria-label="Rate these settings"></div>
+    <div class="canvas-fit"><canvas id="sky" style="--ar: 1.3333" width="128" height="96" role="img" aria-label="Animated pixel grid showing atmospheric water; use the view menu for temperature or saturation."></canvas></div>
     <div class="axis"><span>Cold upper air</span><span>Warm lower air ↓</span></div>
   </section>
   <div class="controls-pane" role="region" aria-label="Scrollable experiment controls" tabindex="0">
