@@ -7,6 +7,10 @@
 <section class="viewport simulation-pane" aria-label="Perspective light-shaft simulation"><canvas id="sky" width="128" height="80" style="aspect-ratio: 8 / 5" role="img" aria-label="Pixel sunset with geometric cloud shadows extending through the air."></canvas></section>
 <div class="controls-pane" role="region" aria-label="Scrollable experiment controls" tabindex="0">
 <div class="playback"><button id="play" type="button" aria-pressed="false">Play sun</button><button id="reset" type="button">Reset experiment</button></div>
+<fieldset><legend>Lighting strategy</legend>
+<label><span><input id="strategy-visibility" type="radio" name="strategy" value="visibility" checked> Visibility polygons</span></label>
+<label><span><input id="strategy-geometric" type="radio" name="strategy" value="geometric"> Geometric shadows</span></label>
+</fieldset>
 <p id="stats" class="stats"></p><section class="controls" aria-label="Sun, clouds and haze">
 <label><code>sunElevation</code><small>Sun height above the horizon, degrees.</small><output id="sunElevation-value"></output><input id="sunElevation" type="range" min="1" max="35" step="0.5" value="8"></label>
 <label><code>sunAzimuth</code><small>Sun position left/right, degrees.</small><output id="sunAzimuth-value"></output><input id="sunAzimuth" type="range" min="-40" max="40" step="0.5" value="-18"></label>
@@ -15,7 +19,11 @@
 <label><code>cloudSharpness</code><small>Changes cloud-mask contrast before the opaque silhouette cutoff. Visible cloud shading stays soft.</small><output id="cloudSharpness-value"></output><input id="cloudSharpness" type="range" min="1" max="16" step="0.5" value="1"></label>
 </section>
 <p>Cloud patterns</p><div class="playback"><button id="pattern-0" type="button">Change near</button><button id="pattern-1" type="button">Change middle</button><button id="pattern-2" type="button">Change far</button></div><p id="patterns" class="stats"></p>
-<details><summary>How the shadow shapes work</summary>
+<details><summary>How the lighting strategies work</summary>
+<p><strong>Visibility polygons:</strong> threshold each cloud field and extract its boundary edges. Project these edges and the sun into the camera plane. Cast rays just beside each endpoint, stopping at the nearest edge, then connect the hits into a lit polygon. A pixel is lit by a group of layers only when it is inside every layer’s visibility polygon.</p>
+<p>Front to back, the render order is: all-three light region → near cloud → middle-and-far light region → middle cloud → far-only light region → far cloud → sun/sky. The implementation composites this list in reverse. A translucent haze layer colors each lit region, including foreground air in front of the nearest cloud.</p>
+<p>This is a screen-space point-light approximation, not a 3D shadow volume. If the projected sun lies inside an opaque cloud silhouette, that layer has no exterior visible region. It can therefore darken all light overlays involving that layer. Try moving the sun or changing that cloud pattern. Visibility polygons are clipped by an expanded screen boundary. CloudSharpness and cloudOpacity use the same silhouette threshold as the geometric mode.</p>
+<p><strong>Geometric shadows:</strong> the preceding experiment remains available unchanged below.</p>
 <p>Three fixed cloud pictures sit at depths 22, 50 and 78, with 32×20, 64×40 and 96×60 cells. The camera has fixed 58° perspective. Each cell spans 4 world units.</p>
 <p>For the air between each pair of layers, opaque cloud cells farther toward the sun are extruded away from it. These rectangular shadow prisms extend across the whole gap. Perspective makes their projected boundaries change width with distance.</p>
 <p><code>shadowDensity = clamp((density − 0.35) × cloudSharpness + 0.35, 0, 2)</code><br><code>opaque = cloudOpacity × shadowDensity ≥ 0.5</code></p>
@@ -23,5 +31,5 @@
 <p><code>airLight(a, b) = exp(−haze × 0.04 × (a − gapNear)) − exp(−haze × 0.04 × (b − gapNear))</code></p>
 <p>Sum this contribution over unshadowed depth intervals and tint with the approximate sunset color. Blend far cloud, illuminated air, middle cloud, illuminated air and near cloud. Two 64×40 screen buffers store the final gap colors; they represent the full depth of each gap, not midpoint samples.</p>
 <p>Shadow edges stay crisp, using one camera ray per pixel. Cloud surfaces retain their prior soft, partially transmitting shading; their geometric air shadows deliberately use hard silhouettes. This is an artistic hybrid, not full physical transport. There is no multiple scattering, evolving density or illuminated foreground air ahead of the nearest layer.</p>
-<p>Only the sun moves during playback. Pattern buttons change one cloud field at a time; reset restores the original patterns and lighting.</p>
+<p>Only the sun moves during playback. Pattern buttons change one cloud field at a time; reset restores the original patterns and lighting while keeping your selected strategy.</p>
 </details><p id="status" role="status"></p><noscript>JavaScript is required.</noscript></div></main><script type="module" src="shafts.js"></script></body></html>
