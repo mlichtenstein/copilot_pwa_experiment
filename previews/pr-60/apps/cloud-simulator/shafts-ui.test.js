@@ -8,7 +8,7 @@ test("sun slider redraws; pattern buttons change one layer; reset restores the o
   let callback, pixels;
   const elements = new Map();
   const get = id => {
-    if (!elements.has(id)) elements.set(id, { value: String(defaults[id] ?? ""), checked: defaults[id] === true,
+    if (!elements.has(id)) elements.set(id, { value: String(defaults[id] ?? ""), checked: id === "strategy-visibility",
       textContent: "", listeners: {}, addEventListener(name, handler) { this.listeners[name] = handler; }, setAttribute() {} });
     return elements.get(id);
   };
@@ -21,6 +21,13 @@ test("sun slider redraws; pattern buttons change one layer; reset restores the o
   try {
     await import("./shafts.js"); callback(0);
     const first = pixels.slice(), originalPatterns = get("patterns").textContent;
+    get("strategy-visibility").checked = false; get("strategy-geometric").checked = true;
+    get("strategy-geometric").listeners.change(); callback(4);
+    assert.notDeepEqual(pixels, first);
+    assert.equal(get("patterns").textContent, originalPatterns);
+    get("strategy-visibility").checked = true; get("strategy-geometric").checked = false;
+    get("strategy-visibility").listeners.change(); callback(8);
+    assert.deepEqual(pixels, first);
     get("sunAzimuth").value = "20"; get("sunAzimuth").listeners.input(); callback(16);
     assert.notDeepEqual(pixels, first);
     get("pattern-0").listeners.click(); callback(32);
@@ -32,5 +39,6 @@ test("sun slider redraws; pattern buttons change one layer; reset restores the o
     assert.equal(get("patterns").textContent, originalPatterns);
     assert.deepEqual(pixels, first);
     assert.ok(!elements.has("slice"));
+    assert.equal(get("strategy-visibility").checked, true);
   } finally { globalThis.document = originalDocument; globalThis.requestAnimationFrame = originalRAF; }
 });
