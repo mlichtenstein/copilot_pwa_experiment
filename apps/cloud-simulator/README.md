@@ -24,7 +24,7 @@ This deliberately conflates vapor, condensation and falling liquid. It explores 
 
 ## Checks
 
-Run `node --test apps/cloud-simulator/simulation.test.js` from the repository root. For browser checks, serve the root with `python3 -m http.server 8000 --bind 127.0.0.1`, then open `/apps/cloud-simulator/`. Check playback, all views and controls, narrow layout, and offline reload after the service worker controls the page. Production and preview scopes should have separate caches.
+Run `node --test apps/cloud-simulator/*test.js` from the repository root. For browser checks, serve the root with `python3 -m http.server 8000 --bind 127.0.0.1`, then open `/apps/cloud-simulator/`. Check playback, all views and controls, narrow layout, and offline reload after the service worker controls the page. Production and preview scopes should have separate caches.
 
 ## Experiment 02: sunset study
 
@@ -34,6 +34,18 @@ Beer–Lambert attenuation and Henyey–Greenstein single scattering follow the 
 
 `extinction` is per density unit per pixel length, `slabDepth` is in pixel lengths; remaining radiometric quantities use relative units. Neither rain state nor density evolves in this experiment. The shared cloud service worker precaches sunset assets in the existing app scope; installation still opens Rain study, which links to Sunset study.
 
-Run `node --test apps/cloud-simulator/*test.js` for both experiments. Browser review: compare density before/after sun playback; scrub the sun toward the horizon; vary extinction/albedo/exposure and compare diagnostic views; check phone-width labels, pause/reset/new seed, and offline reload of both pages after worker activation. Browser verification must be recorded separately from model checks.
+Run `node --test apps/cloud-simulator/*test.js` for all experiments. Browser review: compare density before/after sun playback; scrub the sun toward the horizon; vary extinction/albedo/exposure and compare diagnostic views; check phone-width labels, pause/reset/new seed, and offline reload of both pages after worker activation. Browser verification must be recorded separately from model checks.
 
 Both experiment pages keep the field in a separate visible pane while controls and formulas scroll independently. Wide screens use side-by-side panes; phones stack the field above the controls. The controls region can receive keyboard focus for scrolling.
+
+## Experiment 03: convection study
+
+Open [convection.html](convection.html). A 128 × 96 closed box of moist air is heated at the floor and cooled at the lid. `convection-model.js` owns the rules and the pixel colors; `convection.js` owns UI and playback only. Each pixel holds temperature, vapor, liquid (cloud and rain) and vorticity; each floor column also holds a puddle.
+
+Per tick: the floor relaxes toward a hot temperature with a seeded per-column flicker, the lid toward cold. Puddles evaporate into the floor row. Vapor above an altitude-dependent capacity condenses and releases latent heat; liquid in subsaturated air evaporates and cools. Sideways differences in `temperature − 0.4 × liquid` spin the air (a 2D Boussinesq vorticity rule with drag and viscosity). A stream-function solve turns spin into divergence-free edge flows, capped at 0.24 pixels per tick. Heat, water and spin move by conservative upwind fluxes. Liquid above a small cloud threshold falls as rain; rain reaching the floor refills the puddles.
+
+The feedback loop keeps it going: warm floor air rises and condenses, latent heat makes the cloud more buoyant, the lid cools it, rain falls out and evaporative cooling below drives downdrafts, and the puddles re-wet the floor. Nothing drains, so vapor + liquid + puddles is conserved up to floating-point rounding. The seeded flicker stops the flow from locking into steady rolls; the same seed always reproduces the same run. The units are experimental; no calibrated meteorology is claimed.
+
+The default Lava lamp view shows buoyancy (warmer or cooler than the row average) with rain and thick cloud (liquid above the rain threshold) drawn in white. Water, temperature, buoyancy and relative humidity views isolate the fields with fixed color scales. Rule sliders affect the current run; `water` and seed changes reset it. Reduced-motion users start paused and background tabs do not accumulate catch-up. The shared service worker precaches the convection assets; installation still opens Rain study, which links to every experiment.
+
+Model checks in `convection-model.test.js` cover water conservation, seed determinism and sustained motion over several thousand ticks for several seeds. Browser review: watch blobs rise and fall for a minute, switch views, vary buoyancy and flicker, check pause/step/reset/new seed, phone-width layout and offline reload.
