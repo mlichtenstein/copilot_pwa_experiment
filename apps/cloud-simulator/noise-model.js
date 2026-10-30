@@ -3,19 +3,21 @@
  *   are slices of seeded 3D gradient noise moving through time and scrolling with one global
  *   wind; cloud forms where relative humidity, weighted by a cloud-layer band of height,
  *   crosses a threshold; charged cloud drops real rain that falls slowly, drifts with the
- *   wind, evaporates and collects; plus the views and the rain-streak layer that draw it.
+ *   wind, evaporates (fast once no cloud is left above it) and collects; plus the views and
+ *   the rain-streak layer that draws rain falling out of cloud bases.
  * Consumers: noise.js and noise-model.test.js.
  * Dependencies: none; values are dimensionless experimental units, not a weather model.
  */
 
-// The noise fields. Their shape (octaves, roughness, amplitude) is fixed; feature size and
-// change speed are shared sliders, scaled per field so they do not line up.
+// The noise fields. Their amplitude and bias are fixed; feature size and change speed are
+// shared sliders, scaled per field so they do not line up. Humidity's and temperature's
+// octaves and roughness come from the `texture` slider (see textureShape).
 export const FIELDS = ["humidity", "temperature", "pressure"];
 const FIELD_SHAPE = {
   // relative size, relative change speed, octaves, roughness, amplitude, bias (humidity's
   // bias is the `cloudiness` slider)
-  humidity: { size: 1, speed: 1, octaves: 3, roughness: 0.5, amplitude: 0.35 },
-  temperature: { size: 1.5, speed: 0.5, octaves: 2, roughness: 0.5, amplitude: 0.12, bias: 0.75 },
+  humidity: { size: 1, speed: 1, textured: true, amplitude: 0.35 },
+  temperature: { size: 1.5, speed: 0.5, textured: true, amplitude: 0.12, bias: 0.75 },
   pressure: { size: 2, speed: 0.4, octaves: 2, roughness: 0.5, amplitude: 1, bias: 0 }
 };
 
@@ -24,6 +26,8 @@ export const defaults = {
   // Sky: mean humidity, size of cloud features in pixels, how fast the fields change, and
   // the one global wind in pixels per tick (sign = direction, positive blows right).
   cloudiness: 0.45, featureSize: 32, changeSpeed: 0.012, wind: 0.1,
+  // Texture: 0 smooth blobs, 1 ragged, grainy edges (see textureShape).
+  texture: 0.65,
   // Cloud layer: clouds form only in a band of height (altitude 0 floor, 1 lid) centred on
   // `layerHeight`, `layerThickness` across. `layerAsymmetry` > 0 puts more of the band above
   // the centre (a sharper bottom); `layerSharpness` 2 is a Gaussian, higher is flatter
@@ -37,8 +41,17 @@ export const defaults = {
 export const RULES = {
   pressureLift: 0.3, cloudThreshold: 1, cloudGain: 8,
   charge: 0.02, discharge: 0.04, rainThreshold: 0.6,
-  rainEvaporation: 0.015, puddleEvaporation: 0.002
+  // Rain dries 1.5% per tick outside cloud while cloud is still overhead (a falling shaft),
+  // and 10% per tick once its column has no cloud above (the cloud it fell from is gone).
+  rainEvaporation: 0.015, orphanEvaporation: 0.1, puddleEvaporation: 0.002
 };
+
+// Texture → fractal shape: octaves 1 to 6 (fractional, so the slider is smooth) and
+// roughness 0.3 to 0.75. The default 0.65 gives about 4.25 octaves at roughness 0.59.
+export function textureShape(texture = defaults.texture) {
+  const t = Math.max(0, Math.min(1, texture));
+  return { octaves: 1 + 5 * t, roughness: 0.3 + 0.45 * t };
+}
 
 // Fixed slope of the capacity curve, as in the convection study: cold air holds
 // about e^-3 ≈ 5% of what hot air holds.
@@ -95,12 +108,15 @@ export function createNoise3(seed) {
 }
 
 // Fractal sum of octaves, each twice as fine and `roughness` times as strong, normalized
-// so the result stays in about [-1, 1] for any octave count.
+// so the result stays in about [-1, 1] for any octave count. A fractional octave count
+// fades the last octave in, so texture changes smoothly.
 export function fractal(noise, x, y, z, octaves = 1, roughness = 0.5) {
+  const count = Math.max(1, octaves);
   let sum = 0, weight = 1, total = 0, frequency = 1;
-  for (let octave = 0; octave < Math.max(1, Math.round(octaves)); octave++) {
-    sum += weight * noise(x * frequency, y * frequency, z * frequency + 17.3 * octave);
-    total += weight; weight *= roughness; frequency *= 2;
+  for (let octave = 0; octave < Math.ceil(count); octave++) {
+    const share = Math.min(1, count - octave);
+    sum += share * weight * noise(x * frequency, y * frequency, z * frequency + 17.3 * octave);
+    total += share * weight; weight *= roughness; frequency *= 2;
   }
   return sum / total;
 }
@@ -136,14 +152,17 @@ export const altitudeOf = (i, width, height) => 1 - Math.floor(i / width) / (hei
 export function sampleFields(simulation, options = {}) {
   const rules = { ...defaults, ...options };
   const { width, height, scroll, time } = simulation;
-  const noises = noisesFor(simulation.seed);
+  const noises = noisesFor(simulation.seed), textured = textureShape(rules.texture);
   for (const name of FIELDS) {
     const shape = FIELD_SHAPE[name], scale = Math.max(2, rules.featureSize * shape.size);
+    // Temperature gets one octave less than humidity, so its grain does not dominate.
+    const octaves = shape.textured ? Math.max(1, textured.octaves - (name === "humidity" ? 0 : 1)) : shape.octaves;
+    const roughness = shape.textured ? textured.roughness : shape.roughness;
     const bias = name === "humidity" ? rules.cloudiness : shape.bias, z = time * shape.speed;
     const values = simulation[name], noise = noises[name];
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
       // Raw Perlin rarely leaves ±0.5, so double it to use the full amplitude.
-      values[y * width + x] = bias + shape.amplitude * 2 * fractal(noise, (x - scroll) / scale, y / scale, z, shape.octaves, shape.roughness);
+      values[y * width + x] = bias + shape.amplitude * 2 * fractal(noise, (x - scroll) / scale, y / scale, z, octaves, roughness);
     }
   }
   for (let y = 0; y < height; y++) simulation.band[y] = layerBand(altitudeOf(y * width, width, height), rules);
@@ -187,22 +206,18 @@ export function step(simulation, options = {}) {
   // Charge belongs to the drifting cloud, so it moves with the wind.
   if (rules.wind) advect(charge, width, height, rules.wind, 0);
   sampleFields(simulation, rules);
-  const size = width * height;
-  // Cloud that stays together charges up; clear air lets the charge drain away. Charged
-  // cloud rains `rainAmount × density` per tick.
-  for (let i = 0; i < size; i++) {
-    if (cloud[i] > 0) charge[i] = Math.min(1, charge[i] + RULES.charge * cloud[i]);
-    else charge[i] *= 1 - RULES.discharge;
-    if (charge[i] >= RULES.rainThreshold) {
-      const drops = rules.rainAmount * cloud[i];
-      rain[i] += drops; simulation.rained += drops;
+  formRain(simulation, rules);
+  // Rain outside cloud dries: slowly in a shaft under cloud, fast once no cloud is left
+  // anywhere above it in its column, so rain never hangs in clear sky.
+  for (let x = 0; x < width; x++) {
+    let cloudAbove = false;
+    for (let y = 0; y < height; y++) {
+      const i = y * width + x;
+      if (cloud[i] > 0) { cloudAbove = true; continue; }
+      if (rain[i] <= 0) continue;
+      const loss = rain[i] * (cloudAbove ? RULES.rainEvaporation : RULES.orphanEvaporation);
+      rain[i] -= loss; simulation.evaporated += loss;
     }
-  }
-  // Rain outside cloud dries slowly (1.5% per tick), so a dissolved cloud's rain fades out.
-  for (let i = 0; i < size; i++) {
-    if (rain[i] <= 0 || cloud[i] > 0) continue;
-    const loss = rain[i] * RULES.rainEvaporation;
-    rain[i] -= loss; simulation.evaporated += loss;
   }
   // Fall and drift: all rain moves `fallSpeed` down and `wind` sideways, sub-pixel.
   advect(rain, width, height, rules.wind, fall, (x, amount) => { puddle[x] += amount; });
@@ -213,59 +228,125 @@ export function step(simulation, options = {}) {
   return simulation;
 }
 
+// Cloud that stays together charges up; clear air lets the charge drain away. Charged
+// cloud rains `rainAmount × density` per tick, so rain is only ever made inside cloud.
+// Returns the amount made at each pixel this tick.
+export function formRain(simulation, options = {}) {
+  const rules = { ...defaults, ...options };
+  const { cloud, charge, rain } = simulation, made = new Array(cloud.length).fill(0);
+  for (let i = 0; i < cloud.length; i++) {
+    if (cloud[i] > 0) charge[i] = Math.min(1, charge[i] + RULES.charge * cloud[i]);
+    else charge[i] *= 1 - RULES.discharge;
+    if (cloud[i] > 0 && charge[i] >= RULES.rainThreshold) {
+      made[i] = rules.rainAmount * cloud[i];
+      rain[i] += made[i]; simulation.rained += made[i];
+    }
+  }
+  return made;
+}
+
 // Rain created so far equals rain in the air + puddles + evaporated.
 export const airborneRain = simulation => simulation.rain.reduce((sum, value) => sum + value, 0);
 export const pooledRain = simulation => simulation.puddle.reduce((sum, value) => sum + value, 0);
 
 // ---- Rain streaks (display only) ----------------------------------------------------------
-// The Sunset view draws rain as thin, long, soft streaks: particles spawned where the rain
-// field is, sliding down at `fallSpeed` and sideways with the wind (so all lean the same
-// way), fading in and out over their life and along their length. They do not change the
-// simulation.
-export const STREAK = { length: [8, 18], life: [50, 110], alpha: 0.5, spawnTries: 40, max: 300, scale: 0.12 };
+// The Sunset view draws rain as thin, soft streaks. Each is born just under the base of a
+// raining cloud (the lowest cloud pixel in its column, with rain falling out of it), at a
+// random sub-pixel x and a random tick; birth is likelier where rain is heavier and where a
+// slow, wind-carried clumping noise is high, so streaks gather into uneven shafts. Lengths
+// are heavy-tailed (truncated power law, 3 to 30 px: mostly short, a few long), and each
+// streak gets its own speed (±20%), strength and, sometimes, a second pixel of width. A
+// streak never reaches above the row it was born on, so it grows out of the cloud base as
+// it falls, and fades out within a few ticks once no cloud is left above it. They do not
+// change the simulation.
+export const STREAK = { length: [3, 30], lengthPower: 0.7, life: [40, 170], speed: [0.8, 1.2],
+  alpha: 0.6, wide: 0.15, spawnTries: 40, max: 300, scale: 0.12, below: 3, clumpSize: 9,
+  orphanFade: 0.8 };
 export function createRainLayer(seed = 1) {
   let state = (seed ^ 0x5bd1e995) >>> 0;
   const random = () => (state = (Math.imul(1664525, state) + 1013904223) >>> 0) / 4294967296;
-  return { streaks: [], random };
+  return { streaks: [], random, clump: createNoise3((seed ^ 0x2545f491) >>> 0) };
+}
+
+// Lowest cloud row in each column (−1 if the column is clear).
+export function cloudBases(simulation) {
+  const { width, height, cloud } = simulation, bases = new Array(width).fill(-1);
+  for (let x = 0; x < width; x++) for (let y = height - 1; y >= 0; y--) if (cloud[y * width + x] > 0) { bases[x] = y; break; }
+  return bases;
+}
+
+// Highest cloud row in each column (−1 if the column is clear).
+export function cloudTops(simulation) {
+  const { width, height, cloud } = simulation, tops = new Array(width).fill(-1);
+  for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) if (cloud[y * width + x] > 0) { tops[x] = y; break; }
+  return tops;
+}
+
+// Truncated power law on [shortest, longest]: inverse-CDF sample of p(L) ∝ L^−(1 + power).
+function streakLength(u) {
+  const [shortest, longest] = STREAK.length, a = STREAK.lengthPower;
+  const low = Math.pow(shortest, -a), high = Math.pow(longest, -a);
+  return Math.pow(low - u * (low - high), -1 / a);
 }
 
 export function updateRainLayer(layer, simulation, options = {}) {
   const rules = { ...defaults, ...options };
   const { width, height, rain } = simulation, random = layer.random;
-  for (const streak of layer.streaks) { streak.age++; streak.y += rules.fallSpeed; streak.x += rules.wind; }
-  layer.streaks = layer.streaks.filter(streak => streak.age < streak.life && streak.y - streak.length < height);
+  const bases = cloudBases(simulation), tops = cloudTops(simulation), clump = layer.clump ?? (() => 0);
+  for (const streak of layer.streaks) {
+    streak.age++; streak.y += rules.fallSpeed * streak.speed; streak.x += rules.wind;
+    // Once no cloud is left above it (within a pixel either side), a streak fades out fast,
+    // so rain from a dissolved cloud does not hang in clear sky.
+    const column = Math.floor(streak.x);
+    let covered = false;
+    for (let dx = -1; dx <= 1; dx++) {
+      const top = tops[(((column + dx) % width) + width) % width];
+      if (top >= 0 && top <= streak.y) covered = true;
+    }
+    if (!covered) streak.fade = (streak.fade ?? 1) * STREAK.orphanFade;
+  }
+  layer.streaks = layer.streaks.filter(streak => streak.age < streak.life && streak.y - streak.length < height && (streak.fade ?? 1) > 0.05);
   for (let k = 0; k < STREAK.spawnTries && layer.streaks.length < STREAK.max; k++) {
-    const x = Math.floor(random() * width), y = Math.floor(random() * height);
-    const amount = rain[y * width + x] / STREAK.scale;
+    const x = random() * width, column = Math.floor(x), base = bases[column];
+    if (base < 0) continue;
+    // Rain falling out of the base: the base pixel and the two below it.
+    let falling = 0;
+    for (let row = base; row <= Math.min(height - 1, base + 2); row++) falling += rain[row * width + column];
+    const amount = falling / 3 / STREAK.scale;
+    // Clumping: slow noise carried by the wind; squared so gaps open between shafts.
+    const gather = Math.max(0, Math.min(1, 0.5 + 1.2 * clump((x - simulation.scroll) / STREAK.clumpSize, 0.5, simulation.tick * 0.015)));
     // Squared, so heavy rain under active cloud gets most streaks and fading rain few.
-    if (random() >= Math.min(1, amount * amount)) continue;
-    const [shortest, longest] = STREAK.length, [briefest, longestLife] = STREAK.life;
-    layer.streaks.push({ x: x + random(), y: y + random(), age: 0,
-      length: shortest + random() * (longest - shortest), life: briefest + random() * (longestLife - briefest),
-      strength: 0.6 + 0.4 * Math.min(1, amount) });
+    if (random() >= Math.min(1, amount * amount) * (0.15 + 1.6 * gather * gather)) continue;
+    const y = base + 0.5 + random() * STREAK.below, [briefest, longestLife] = STREAK.life, [slow, fast] = STREAK.speed;
+    layer.streaks.push({ x, y, top: y, age: 0, length: streakLength(random()),
+      life: briefest + random() * (longestLife - briefest), speed: slow + random() * (fast - slow),
+      strength: (0.45 + 0.55 * random()) * (0.6 + 0.4 * Math.min(1, amount)), wide: random() < STREAK.wide });
   }
   return layer;
 }
 
 // Opacity of each pixel from the streaks: lifetime envelope sin(π age/life) times a
 // sin(π t) profile along the streak (t = 0 tail, 1 head), antialiased across the two
-// nearest columns. Capped so heavy rain stays a veil.
+// nearest columns (plus a fainter third for wide streaks), and cut off above the row the
+// streak was born on. Capped so heavy rain stays a veil.
 export function rainAlpha(layer, simulation, options = {}) {
   const rules = { ...defaults, ...options };
   const { width, height } = simulation, alpha = new Float32Array(width * height);
-  // Lean = wind / fall speed (the streak points along its motion), capped so slow rain in
-  // strong wind does not lie flat.
-  const lean = rules.fallSpeed > 0 ? Math.max(-1.5, Math.min(1.5, rules.wind / rules.fallSpeed)) : 0;
   for (const streak of layer.streaks) {
-    const life = Math.sin(Math.PI * Math.min(1, streak.age / streak.life));
+    const life = Math.sin(Math.PI * Math.min(1, streak.age / streak.life)) * (streak.fade ?? 1);
     if (life <= 0) continue;
-    const top = Math.ceil(streak.y - streak.length), bottom = Math.floor(streak.y);
+    // Lean = wind / fall speed (the streak points along its motion), capped so slow rain in
+    // strong wind does not lie flat.
+    const speed = rules.fallSpeed * (streak.speed ?? 1);
+    const lean = speed > 0 ? Math.max(-1.5, Math.min(1.5, rules.wind / speed)) : 0;
+    const top = Math.max(Math.ceil(streak.y - streak.length), Math.ceil(streak.top ?? -Infinity)), bottom = Math.floor(streak.y);
     for (let row = Math.max(0, top); row <= Math.min(height - 1, bottom); row++) {
       const t = 1 - (streak.y - row) / streak.length;
       const value = STREAK.alpha * streak.strength * life * Math.sin(Math.PI * Math.max(0, Math.min(1, t)));
       const column = streak.x - lean * (streak.y - row), left = Math.floor(column), frac = column - left;
       alpha[row * width + ((left % width) + width) % width] += value * (1 - frac);
       alpha[row * width + (((left + 1) % width) + width) % width] += value * frac;
+      if (streak.wide) alpha[row * width + (((left + 2) % width) + width) % width] += 0.5 * value * frac + 0.3 * value * (1 - frac);
     }
   }
   for (let i = 0; i < alpha.length; i++) alpha[i] = Math.min(0.7, alpha[i]);

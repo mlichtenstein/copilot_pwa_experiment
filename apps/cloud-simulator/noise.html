@@ -29,6 +29,7 @@
     <fieldset><legend><b>Sky</b></legend>
       <label><span><code>cloudiness</code></span><small>More moisture: more and bigger clouds.</small> <output id="cloudiness-value"></output><input id="cloudiness" type="range" min="0.2" max="0.7" step="0.01" value="0.45" aria-label="Cloudiness"></label>
       <label><span><code>featureSize</code></span><small>Size of cloud clumps, in pixels.</small> <output id="featureSize-value"></output><input id="featureSize" type="range" min="8" max="96" step="1" value="32" aria-label="Feature size"></label>
+      <label><span><code>texture</code></span><small>Smooth to ragged: 0 gives soft round blobs, 1 frayed, grainy edges.</small> <output id="texture-value"></output><input id="texture" type="range" min="0" max="1" step="0.05" value="0.65" aria-label="Texture"></label>
       <label><span><code>changeSpeed</code></span><small>How fast clouds grow, shrink and reshape; 0 freezes them.</small> <output id="changeSpeed-value"></output><input id="changeSpeed" type="range" min="0" max="0.05" step="0.001" value="0.012" aria-label="Change speed"></label>
       <label><span><code>wind</code></span><small>Pixels per tick everything blows sideways; negative blows left, 0 is calm.</small> <output id="wind-value"></output><input id="wind" type="range" min="-0.5" max="0.5" step="0.01" value="0.1" aria-label="Wind"></label>
     </fieldset>

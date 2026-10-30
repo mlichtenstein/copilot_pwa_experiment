@@ -1,14 +1,15 @@
 /* Purpose: Check the noise weather experiment: repeatable, smooth noise; one global wind
  *   that moves every field and all rain alike; a cloud-layer band low at both ends and high in
  *   the middle, with asymmetry and sharpness; cloud only inside the band; slow rain that
- *   falls, drifts, dries and is conserved; rain streaks born only under rain; and weather
- *   that never stops moving, on random seeds.
+ *   falls, drifts, dries and is conserved; a texture slider from smooth to ragged; rain made
+ *   only in cloud; varied rain streaks born only just under cloud and fading once it is gone;
+ *   and weather that never stops moving, on random seeds.
  * Consumers: Node's test runner. Dependencies: node:test, node:assert and noise-model.js. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createNoise3, fractal, createWeather, step, sampleFields, renderWeather, airborneRain,
   pooledRain, defaults, RULES, FIELDS, layerBand, altitudeOf, createRainLayer, updateRainLayer,
-  rainAlpha } from "./noise-model.js";
+  rainAlpha, formRain, textureShape } from "./noise-model.js";
 
 // Seeds are incidental: every check runs on fresh random seeds.
 const randomSeeds = count => Array.from({ length: count }, () => Math.floor(Math.random() * 2 ** 32));
@@ -149,34 +150,111 @@ test("rain dries outside cloud, fills puddles and is conserved overall", () => {
   }
 });
 
-test("rain streaks are born only under rain, fade in, and lean with the wind", () => {
+test("texture runs from smooth to ragged: more fine detail in humidity as it rises", () => {
+  for (const seed of randomSeeds(2)) {
+    const roughness = texture => {
+      const simulation = createWeather({ seed });
+      sampleFields(simulation, { texture });
+      // Mean neighbor-to-neighbor change: fine detail.
+      let change = 0;
+      for (let i = 1; i < simulation.humidity.length; i++) if (i % simulation.width) change += Math.abs(simulation.humidity[i] - simulation.humidity[i - 1]);
+      return change;
+    };
+    const smooth = roughness(0), middle = roughness(defaults.texture), ragged = roughness(1);
+    assert.ok(smooth < middle && middle < ragged, `seed ${seed}: ${smooth.toFixed(1)} < ${middle.toFixed(1)} < ${ragged.toFixed(1)}`);
+    assert.ok(ragged > 1.5 * smooth);
+  }
+  assert.deepEqual(textureShape(0), { octaves: 1, roughness: 0.3 });
+  assert.ok(Math.abs(textureShape(1).octaves - 6) < 1e-12 && Math.abs(textureShape(1).roughness - 0.75) < 1e-12);
+});
+
+test("rain is made only inside cloud, and streaks are born only just under a cloud", () => {
+  for (const seed of randomSeeds(2)) {
+    const simulation = createWeather({ seed }), layer = createRainLayer(seed);
+    const { width } = simulation;
+    let made = 0, born = 0;
+    for (let k = 0; k < 600; k++) {
+      step(simulation);
+      // Charge everything so every pixel would rain if it could: only cloud does.
+      const charged = { ...simulation, charge: simulation.charge.map(() => 1), rain: simulation.rain.slice() };
+      formRain(charged).forEach((amount, i) => {
+        if (amount > 0) { made++; assert.ok(simulation.cloud[i] > 0, `rain made at clear pixel ${i}`); }
+      });
+      updateRainLayer(layer, simulation);
+      for (const streak of layer.streaks) {
+        if (streak.age) continue;
+        born++;
+        const column = Math.floor(streak.x), row = Math.floor(streak.y);
+        let cloudAbove = false;
+        for (let r = Math.max(0, row - 4); r <= row; r++) if (simulation.cloud[r * width + column] > 0) cloudAbove = true;
+        assert.ok(cloudAbove, `seed ${seed}: streak born at (${streak.x.toFixed(1)}, ${streak.y.toFixed(1)}) with no cloud within 4 px above`);
+      }
+    }
+    assert.ok(made > 0 && born > 0, `seed ${seed} rains (${made} pixels) and makes streaks (${born})`);
+  }
+});
+
+test("rain streaks grow out of the cloud base, lean with the wind, and fade once their cloud is gone", () => {
   const simulation = createWeather({ width: 48, height: 40, seed: randomSeeds(1)[0] });
   const options = { cloudiness: -1, wind: 0.2, fallSpeed: 0.25 };
   sampleFields(simulation, options);
   const layer = createRainLayer(randomSeeds(1)[0]);
-  updateRainLayer(layer, simulation, options);
-  assert.equal(layer.streaks.length, 0, "no rain, no streaks");
+  // Rain in clear air with no cloud above: no streaks.
   for (let y = 10; y < 14; y++) for (let x = 20; x < 24; x++) simulation.rain[y * 48 + x] = 1;
-  updateRainLayer(layer, simulation, options);
-  for (let k = 0; k < 20 && layer.streaks.length === 0; k++) updateRainLayer(layer, simulation, options);
+  for (let k = 0; k < 20; k++) updateRainLayer(layer, simulation, options);
+  assert.equal(layer.streaks.length, 0, "no cloud, no streaks");
+  // A cloud over it, base at row 9.
+  for (let y = 6; y < 10; y++) for (let x = 20; x < 24; x++) simulation.cloud[y * 48 + x] = 1;
+  for (let k = 0; k < 40 && layer.streaks.length === 0; k++) updateRainLayer(layer, simulation, options);
   assert.ok(layer.streaks.length > 0);
   const newest = layer.streaks.at(-1);
-  assert.ok(newest.x >= 20 && newest.x < 24 && newest.y >= 10 && newest.y < 14);
+  assert.ok(newest.x >= 20 && newest.x < 24 && newest.y >= 9.5 && newest.y <= 12.5 && newest.top === newest.y);
   // Just born: barely visible.
   assert.ok(Math.max(...rainAlpha({ streaks: [{ ...newest, age: 0 }] }, simulation, options)) < 0.01);
-  // Halfway through life: visible, and its tail sits upwind of its head.
-  const grown = { ...newest, age: newest.life / 2, y: 30, x: 24 };
+  // Halfway through life: visible, nothing above the row it was born on, and its tail sits
+  // upwind of its head.
+  const grown = { ...newest, age: newest.life / 2, y: 34, x: 24, length: 20, top: 11, wide: false };
   const alpha = rainAlpha({ streaks: [grown] }, simulation, options);
   assert.ok(Math.max(...alpha) > 0.2);
+  for (let i = 0; i < 11 * 48; i++) assert.equal(alpha[i], 0, "nothing above the birth row");
   const columnAt = row => { let x = 0, a = 0; for (let c = 0; c < 48; c++) { x += c * alpha[row * 48 + c]; a += alpha[row * 48 + c]; } return x / a; };
-  const head = 29, tail = Math.ceil(30 - grown.length) + 1;
-  assert.ok(columnAt(tail) < columnAt(head), "tail upwind (left) of head with wind to the right");
-  // Moves with fall speed and wind.
-  const before = { x: layer.streaks[0].x, y: layer.streaks[0].y };
+  assert.ok(columnAt(16) < columnAt(33), "tail upwind (left) of head with wind to the right");
+  // Moves with its own fall speed and the wind.
+  const first = layer.streaks[0], before = { x: first.x, y: first.y };
   updateRainLayer(layer, simulation, options);
-  if (layer.streaks[0].age > 1) {
-    assert.ok(Math.abs(layer.streaks[0].y - before.y - 0.25) < 1e-12 && Math.abs(layer.streaks[0].x - before.x - 0.2) < 1e-12);
+  assert.ok(Math.abs(first.y - before.y - 0.25 * first.speed) < 1e-12 && Math.abs(first.x - before.x - 0.2) < 1e-12);
+  // The cloud dissolves: every streak fades out within a few ticks, and no new ones start.
+  simulation.cloud.fill(0);
+  for (let k = 0; k < 20; k++) updateRainLayer(layer, simulation, options);
+  assert.equal(layer.streaks.length, 0);
+});
+
+test("rain streaks vary: heavy-tailed lengths from 3 to 30 px, uneven spacing, own speeds", () => {
+  const simulation = createWeather({ width: 96, height: 60, seed: randomSeeds(1)[0] });
+  const options = { cloudiness: -1, wind: 0 };
+  sampleFields(simulation, options);
+  // One wide, evenly raining cloud: any unevenness comes from the streaks themselves.
+  for (let y = 5; y < 10; y++) for (let x = 0; x < 96; x++) simulation.cloud[y * 96 + x] = 1;
+  for (let y = 9; y < 12; y++) for (let x = 0; x < 96; x++) simulation.rain[y * 96 + x] = 0.2;
+  const layer = createRainLayer(randomSeeds(1)[0]), births = [];
+  for (let k = 0; k < 400; k++) {
+    updateRainLayer(layer, simulation, options);
+    births.push(...layer.streaks.filter(streak => streak.age === 0));
   }
+  const lengths = births.map(streak => streak.length).sort((a, b) => a - b);
+  assert.ok(lengths.length > 200, `${lengths.length} streaks`);
+  assert.ok(lengths[0] >= 3 && lengths.at(-1) <= 30);
+  const median = lengths[lengths.length >> 1], mean = sum(lengths) / lengths.length;
+  assert.ok(median < mean, "heavy tail: mean above median");
+  assert.ok(lengths.filter(l => l < 6).length > 0.25 * lengths.length && lengths.filter(l => l > 20).length > 0.05 * lengths.length);
+  // Not on a grid: sub-pixel positions spread out, and births clump (counts per 8-px strip vary).
+  assert.ok(new Set(births.map(streak => (streak.x % 1).toFixed(2))).size > 50);
+  const strips = new Array(12).fill(0);
+  for (const streak of births) strips[Math.floor(streak.x / 8)]++;
+  const stripMean = sum(strips) / 12, spread = Math.sqrt(sum(strips.map(c => (c - stripMean) ** 2)) / 12);
+  assert.ok(spread / stripMean > 0.2, `clumped: strip counts ${strips.join(",")}`);
+  const speeds = births.map(streak => streak.speed);
+  assert.ok(Math.min(...speeds) >= 0.8 && Math.max(...speeds) <= 1.2 && Math.max(...speeds) - Math.min(...speeds) > 0.3);
 });
 
 test("the weather never stops moving and keeps raining", () => {
