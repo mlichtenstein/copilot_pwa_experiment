@@ -11,6 +11,7 @@ function render() {
   const layeredMode = element("strategy-layered").checked;
   const polygonMode = layeredMode || element("strategy-visibility").checked;
   element("sourceRadius").disabled = !polygonMode;
+  element("edgeFeather").disabled = !polygonMode;
   const image = context.createImageData(canvas.width, canvas.height);
   if (polygonMode) image.data.set(renderVisibility(scene, (layeredMode ? buildLayeredVisibility : buildVisibility)(scene, options, canvas.width, canvas.height)));
   else image.data.set(renderShafts(scene, buildLightMaps(scene, options), canvas.width, canvas.height));

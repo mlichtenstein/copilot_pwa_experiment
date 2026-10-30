@@ -59,3 +59,7 @@ Conceptual reference: [Red Blob Games, 2D Visibility](https://www.redblobgames.c
 ### Layered visibility bands
 
 The third radio option builds three independent sets of per-cloud visibility polygons over the same fields. Bright/middle/soft thresholds are 1.0/0.5/0.25; their source radii are 1.8/1.0/0.6 times sourceRadius; translucent opacity weights are 0.25/0.35/0.4 and brightness scales 1.2/1.0/0.8. Higher threshold and radius let the bright band penetrate thicker clouds. These fixed presets avoid adding a bank of sliders. The new mode and the single-band mode share the cloud-protecting two-pass composition. Geometric shadows remain unchanged. Three polygon passes cost more than one; timing is displayed and phone performance remains unmeasured.
+
+### Selective visibility-edge feathering
+
+edgeFeather defaults to 2 native image pixels (0–6), applies to both visibility strategies, and is disabled in geometric mode. Polygon edges aligned radially away from the sun are shaft sides and stay hard. Other visible boundaries are cloud/radius caps; distance to those segments produces an inward smoothstep alpha ramp. Coverage remains zero outside the original polygon, so this is not a blur of the full mask. Cloud fields and polygon geometry are unchanged. Layer-group coverage multiplies the per-layer ramps for both air veils and surface lighting; opaque cloud bodies still compose above all veils.

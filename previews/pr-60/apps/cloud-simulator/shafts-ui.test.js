@@ -27,6 +27,7 @@ test("sun slider redraws; pattern buttons change one layer; reset restores the o
     get("strategy-geometric").listeners.change(); callback(4);
     assert.notDeepEqual(pixels, first);
     assert.equal(get("sourceRadius").disabled, true);
+    assert.equal(get("edgeFeather").disabled, true);
     assert.equal(get("patterns").textContent, originalPatterns);
     get("strategy-visibility").checked = true; get("strategy-geometric").checked = false;
     get("strategy-visibility").listeners.change(); callback(8);
@@ -43,6 +44,11 @@ test("sun slider redraws; pattern buttons change one layer; reset restores the o
     get("strategy-visibility").listeners.change(); callback(9.75);
     assert.deepEqual(pixels, first);
     assert.equal(get("sourceRadius").disabled, false);
+    assert.equal(get("edgeFeather").disabled, false);
+    get("edgeFeather").value = "0"; get("edgeFeather").listeners.input(); callback(9.8);
+    assert.notDeepEqual(pixels, first);
+    get("edgeFeather").value = "2"; get("edgeFeather").listeners.input(); callback(9.9);
+    assert.deepEqual(pixels, first);
     get("sourceRadius").value = "0"; get("sourceRadius").listeners.input(); callback(10);
     assert.notDeepEqual(pixels, first);
     get("sourceRadius").value = "6"; get("sourceRadius").listeners.input(); callback(12);
