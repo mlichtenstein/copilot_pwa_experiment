@@ -33,6 +33,12 @@ const finite = value => typeof value === "number" && Number.isFinite(value);
 // One control per param, matching the hand-written markup the pages used before. Every
 // control is { element, read(), write(value), listen(fn), setDisabled(on), output?, input? }.
 function buildControl(doc, param, value) {
+  const control = buildInput(doc, param, value);
+  // wide: the control spans the whole controls grid row.
+  if (param.wide) control.element.setAttribute("style", "grid-column: 1 / -1");
+  return control;
+}
+function buildInput(doc, param, value) {
   const keyLabel = () => [make(doc, "code", { textContent: param.key }), make(doc, "small", { textContent: param.help ?? "" })];
   const single = (input, element, eventName) => ({
     element, input, read: () => input.value, write: next => { input.value = String(next); },
@@ -43,7 +49,6 @@ function buildControl(doc, param, value) {
       ...param.options.map(([option, text]) => make(doc, "option", { value: option, textContent: text })));
     select.value = value;
     const label = make(doc, "label", {}, param.label ?? param.key, ...(param.label && param.help ? [make(doc, "small", { textContent: param.help })] : []), select);
-    if (param.wide) label.setAttribute("style", "grid-column: 1 / -1");
     return single(select, label, "change");
   }
   if (param.kind === "select" || param.kind === "size") {
@@ -109,7 +114,7 @@ export function mountExperiment(experiment, {
     if (next.ready) {
       loading = true; lock(true);
       next.ready.then(() => { if (instance === next) { loading = false; lock(false); decorDirty = dirty = true; } },
-        error => { console.error(`${experiment.title} failed to load`, error); status(`${experiment.title} could not load its resources. Reload online to try again.`); });
+        error => { console.error(`${experiment.title} failed to load`, error); status(experiment.loadError ?? `${experiment.title} could not load its resources. Reload online to try again.`); });
     }
     dirty = decorDirty = true;
   }

@@ -30,6 +30,7 @@
  *   decorate({ doc, controlFor }) → refresh(params, instance)   add custom pieces next to
  *                 generated controls (previews); refresh runs after params change or load
  *   stats(params, frame, instance)    one-line status under the buttons
+ *   loadError     status line shown if an instance's ready promise rejects
  *   groupNotes    { group: note } bolds those groups' titles and adds the note ("" for none)
  * An instance is:
  *   update(params, { playing })  take a full, cleaned params object (rebuild what depends on it)
@@ -44,11 +45,12 @@
  * figure-eight, sized and placed by the host-owned sunPath* settings.
  */
 
-// Every kind takes { key, help?, group?, enabled?(params), hidden? }: group puts it in a
+// Every kind takes { key, help?, group?, enabled?(params), hidden?, wide? }: wide spans the
+// whole controls row, group puts it in a
 // fieldset with that legend, enabled greys it out when it does nothing, hidden keeps it in
 // params (saved, restored) with no visible input (a seed with only its "new" button).
 // range:  { min, max, step, default, drift? }        a slider; drifts unless drift: false
-// select: { label, options: [[value, label], …], default, display?: "menu" | "radio", wide? }
+// select: { label, options: [[value, label], …], default, display?: "menu" | "radio" }
 // toggle: { default: true | false }                  a checkbox
 // seed:   { default, newLabel, newTitle, random?, next?(value), buttonsIn? }
 //         integer 0 … 2³² − 1 with a "new" button: random (or next(value)); random: true also
