@@ -11,15 +11,16 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-<main>
-  <header><p class="eyebrow">Cloud simulator / Experiment 01</p><h1>Rain study</h1>
+<body class="experiment">
+<main class="experiment-layout">
+  <header class="experiment-header"><p class="eyebrow">Cloud simulator / Experiment 01</p><h1>Rain study</h1>
     <p>Two fields. One local rule. See what falls.</p><p>Rain study · <a href="sunset.html">Sunset study</a></p></header>
-  <section class="viewport" aria-label="Vertical slice of the atmosphere">
+  <section class="viewport simulation-pane" aria-label="Vertical slice of the atmosphere">
     <canvas id="sky" width="128" height="96" role="img" aria-label="Animated pixel grid showing atmospheric water; use the view menu for temperature or saturation."></canvas>
     <div class="axis"><span>Cold upper air</span><span>Warm lower air ↓</span></div>
   </section>
-  <div class="playback"><button id="play" type="button" aria-pressed="true">Pause</button>
+  <div class="controls-pane" role="region" aria-label="Scrollable experiment controls" tabindex="0">
+<div class="playback"><button id="play" type="button" aria-pressed="true">Pause</button>
     <button id="step" type="button">Step</button><button id="reset" type="button">Reset seed</button>
     <button id="new-seed" type="button">New seed</button></div>
   <p id="stats" class="stats"></p>
@@ -52,6 +53,7 @@
     <p>No replenishment, wind, evaporation, or separate droplets yet. Water eventually settles or drains.</p>
   </details>
   <p id="status" role="status"></p><noscript>This experiment needs JavaScript to run.</noscript>
+</div>
 </main>
 <script type="module" src="app.js"></script>
 </body>

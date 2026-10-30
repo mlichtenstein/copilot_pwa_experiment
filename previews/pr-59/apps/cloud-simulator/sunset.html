@@ -3,9 +3,10 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#111c30"><title>Cloud Simulator · Sunset study</title>
 <link rel="stylesheet" href="style.css"><link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg"></head>
-<body><main><header><p class="eyebrow">Cloud simulator / Experiment 02</p><h1>Sunset study</h1>
+<body class="experiment"><main class="experiment-layout"><header class="experiment-header"><p class="eyebrow">Cloud simulator / Experiment 02</p><h1>Sunset study</h1>
 <p>Fixed droplets. Moving sunlight. Follow the light to the camera.</p><p><a href="index.html">Rain study</a> · Sunset study</p></header>
-<section class="viewport" aria-label="Sunset light through a fixed cloud slab"><canvas id="sky" width="128" height="80" style="aspect-ratio: 8 / 5" role="img" aria-label="Pixel sunset; use diagnostic views to inspect fixed density and light transmission."></canvas></section>
+<section class="viewport simulation-pane" aria-label="Sunset light through a fixed cloud slab"><canvas id="sky" width="128" height="80" style="aspect-ratio: 8 / 5" role="img" aria-label="Pixel sunset; use diagnostic views to inspect fixed density and light transmission."></canvas></section>
+<div class="controls-pane" role="region" aria-label="Scrollable experiment controls" tabindex="0">
 <div class="playback"><button id="play" type="button" aria-pressed="false">Play sun</button><button id="reset" type="button">Reset sun</button><button id="new-seed" type="button">New density seed</button></div>
 <p id="stats" class="stats"></p>
 <section class="controls" aria-label="Lighting parameters">
@@ -31,4 +32,5 @@
 <p><code>Lcamera = Tcamera × Lbackground + Lcloud + ambient × (1 − Tcamera)</code><br><code>display = (1 − exp(−exposure × Lcamera))^(1/2.2)</code></p>
 <p>Cloud paths use six camera and eight sunlight samples. The sky gradient, sun disk and ambient term are approximations. No multiple scattering, refraction, evolving droplets or full spectral transport. Density never changes during playback. Playback moves 5 degrees/second from 170 to −8 and loops.</p>
 <p>Inspired by <a href="https://www.pbr-book.org/4ed/Volume_Scattering/Transmittance">PBRT transmittance</a> and <a href="https://www.pbr-book.org/4ed/Volume_Scattering/Phase_Functions">phase functions</a>.</p>
-</details><p id="status" role="status"></p><noscript>JavaScript is required.</noscript></main><script type="module" src="sunset.js"></script></body></html>
+</details><p id="status" role="status"></p><noscript>JavaScript is required.</noscript></div>
+</main><script type="module" src="sunset.js"></script></body></html>
