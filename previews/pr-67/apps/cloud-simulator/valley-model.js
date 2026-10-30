@@ -2,10 +2,10 @@
  * Consumers: valley.js and valley-model.test.js. Dependencies: valley-noise.js; no DOM or image decoding. */
 import { perlin3 } from "./valley-noise.js";
 export const defaults = { wind: 4, formationSpeed: 0.3, cloudY: 0.46,
-  bandWidth: 0.32, coverage: 0.55, maskSoftness: 0.16, mountainClearance: 0.06, textureScale: 1.1, opacity: 1.4, noiseScale: 3, noiseDrift: 0.2 };
+  bandWidth: 0.32, coverage: 0.55, maskSoftness: 0.16, windwardClearance: 0.025, leewardClearance: 0.09, textureScale: 1.1, opacity: 1.4, noiseScale: 3, noiseDrift: 0.2 };
 export const textureOptions = [
-  { id: "rose", name: "Rose & slate · photo", file: "textures/sunset-rose.jpg", photo: true },
-  { id: "embers", name: "Ember bands · photo", file: "textures/sunset-embers.jpg", photo: true },
+  { id: "rose", name: "Sculpted bank · photo mask", file: "textures/sunset-rose.jpg", profile: "rose" },
+  { id: "embers", name: "Layered wisps · photo mask", file: "textures/sunset-embers.jpg", profile: "embers" },
   { id: "bank", name: "Soft bank", file: "textures/FX_CloudAlpha01.jpg" },
   { id: "broken", name: "Broken puffs", file: "textures/FX_CloudAlpha06.jpg" },
   { id: "veil", name: "Thin veil", file: "textures/FX_CloudAlpha08.jpg" }
@@ -22,16 +22,30 @@ export function mountainRidge(x, layer, horizon = "valley") {
   return [0.36, 0.31, 0.27][layer] + [0.45, 0.57, 0.7][layer] * Math.exp(-((x / width) ** 2))
     + 0.025 * Math.sin(x * 11 + layer * 2) + 0.012 * Math.sin(x * 27 - layer);
 }
-export function sampleTexture(texture, u, v) {
+export function sampleTexture(texture, u, v, pixels = texture.pixels) {
   if (v < 0 || v > 1) return 0;
   u = ((u % 1) + 1) % 1;
   const x = Math.min(texture.width - 1, Math.floor(u * texture.width));
   const y = Math.min(texture.height - 1, Math.floor(v * texture.height));
-  return texture.pixels[y * texture.width + x];
+  return pixels[y * texture.width + x];
 }
-export function revealFields(x, y, time, options = {}, shape = "combined", layer = 0, noiseValue) {
+export function terrainProfile(x, options = {}, layer = 0) {
   const s = { ...defaults, ...options }, ridge = mountainRidge(x, layer, s.horizon);
-  const clearance = smoothstep(0, s.mountainClearance, ridge - y);
+  const rise = -(mountainRidge(x + 0.01, layer, s.horizon) - mountainRidge(x - 0.01, layer, s.horizon)) / 0.02;
+  // Screen y points down. Positive rise along the wind is an uphill, windward slope.
+  const direction = Math.sign(s.wind), facing = rise * direction;
+  const exposure = smoothstep(0.02, 0.3, Math.abs(rise));
+  // Patchy slope pockets prevent an uninterrupted ridge outline. Peaks/flats retain clouds.
+  const pocket = smoothstep(0.32, 0.68, perlin3(x * 4.3 + layer * 2.1, ridge * 5.7, 2.37, 421));
+  const windward = direction ? smoothstep(0, 0.15, facing) : 0;
+  const leeward = direction ? smoothstep(0, 0.15, -facing) : 0;
+  const width = exposure * pocket * (windward * s.windwardClearance + leeward * s.leewardClearance);
+  return { ridge, width, windward, leeward };
+}
+export function revealFields(x, y, time, options = {}, shape = "combined", layer = 0, noiseValue, terrain) {
+  const s = { ...defaults, ...options };
+  const { ridge, width } = terrain ?? terrainProfile(x, s, layer);
+  const clearance = y >= ridge ? 0 : width > 0 ? smoothstep(0, width, ridge - y) : 1;
   const center = layerCenter(s, layer);
   const band = s.placement === "full" ? 1 : Math.exp(-Math.pow((y - center) / Math.max(0.03, s.bandWidth), 4));
   const phase = time * s.formationSpeed;
@@ -69,6 +83,7 @@ function layerCenter(s, layer) {
 export function renderValley(texture, time = 0, options = {}, shape = "combined", width = 192, height = 120) {
   const s = { ...defaults, ...options }, pixels = new Uint8ClampedArray(width * height * 4);
   const grids = shape === "noise" ? [0, 1, 2].map(layer => noiseGrid(time, s, layer)) : [];
+  const terrain = [0, 1, 2].map(layer => Array.from({ length: width }, (_, px) => terrainProfile(2 * (px + 0.5) / width - 1, s, layer)));
   for (let py = 0; py < height; py++) for (let px = 0; px < width; px++) {
     const x = 2 * (px + 0.5) / width - 1, y = (py + 0.5) / height;
     const horizon = Math.pow(y, 1.8);
@@ -84,17 +99,18 @@ export function renderValley(texture, time = 0, options = {}, shape = "combined"
         // A narrow reflected river threads the central valley floor.
         if (s.horizon !== "open" && layer === 2 && Math.abs(x - 0.015 * Math.sin(y * 25)) < 0.006 + Math.max(0, y - 0.8) * 0.02 && y > 0.8) color = [0.46, 0.45, 0.4];
       }
-      const fields = revealFields(x, y, time, s, shape, layer, grids[layer]?.(x, y));
+      const fields = revealFields(x, y, time, s, shape, layer, grids[layer]?.(x, y), terrain[layer][px]);
       if (fields.mask < 0.001) continue;
       let u = (x + 1) * 0.5 * s.textureScale - time * s.wind / 192 * [0.5, 0.75, 1][layer] + layer * 0.27;
       const center = layerCenter(s, layer);
-      const v = texture.rgb ? clamp((y - 0.5) * s.textureScale + 0.5) : (y - center) / ((s.placement === "full" ? 1.5 : 0.55) / s.textureScale) + 0.5;
+      const v = texture.mirrored ? clamp((y - 0.5) * s.textureScale + 0.5) : (y - center) / ((s.placement === "full" ? 1.5 : 0.55) / s.textureScale) + 0.5;
       // Mirror photograph coordinates at borders: no hard wrap seam or duplicated sun disc.
-      if (texture.rgb) { u = ((u % 2) + 2) % 2; if (u > 1) u = 2 - u; }
+      if (texture.mirrored) { u = ((u % 2) + 2) % 2; if (u > 1) u = 2 - u; }
       const detail = sampleTexture(texture, u, v);
-      const alpha = clamp((texture.rgb ? [0.9, 0.35, 0.25][layer] : detail) * s.opacity * fields.mask);
-      const index = (Math.min(texture.height - 1, Math.floor(v * texture.height)) * texture.width + Math.min(texture.width - 1, Math.floor(u * texture.width))) * 3;
-      const tint = texture.rgb ? Array.from(texture.rgb.subarray(index, index + 3), v => v / 255) : [0.92 - detail * 0.28, 0.8 - detail * 0.3, 0.72 - detail * 0.22];
+      const alpha = clamp(detail * s.opacity * fields.mask);
+      const shade = texture.shading ? sampleTexture(texture, u, v, texture.shading) : 1 - detail;
+      // Existing renderer palette owns color; photographs supply only scalar shading/opacity.
+      const tint = [0.64 + shade * 0.28, 0.5 + shade * 0.3, 0.5 + shade * 0.22];
       color = color.map((value, c) => value * (1 - alpha) + tint[c] * alpha);
     }
     pixels.set([...color.map(v => clamp(v) * 255), 255], (py * width + px) * 4);

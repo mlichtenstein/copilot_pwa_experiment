@@ -3,7 +3,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { defaults, sampleTexture, revealFields, mountainRidge, renderValley, textureOptions } from "./valley-model.js";
+import { defaults, sampleTexture, revealFields, mountainRidge, terrainProfile, renderValley, textureOptions } from "./valley-model.js";
+import { decodeCloudTexture } from "./valley-textures.js";
 function texture(seed) {
   let state = seed;
   return { width: 32, height: 32, pixels: Float32Array.from({ length: 1024 }, () => {
@@ -17,12 +18,23 @@ test("texture sampling wraps horizontally in either direction and is empty outsi
   assert.equal(sampleTexture(image, 0.5, -0.01), 0);
   assert.equal(sampleTexture(image, 0.5, 1.01), 0);
 });
-test("terrain clearance carves out mountains and fades above their edges", () => {
-  const x = 0.5, ridge = mountainRidge(x, 1);
-  assert.equal(revealFields(x, ridge + 0.01, 0, {}, "combined", 1).clearance, 0);
-  const edge = revealFields(x, ridge - defaults.mountainClearance / 2, 0, {}, "combined", 1).clearance;
-  assert.ok(edge > 0 && edge < 1);
-  assert.equal(revealFields(x, ridge - defaults.mountainClearance - 0.01, 0, {}, "combined", 1).clearance, 1);
+test("slope pockets swap with wind, stay partial and let zero-clearance clouds reach terrain", () => {
+  let active = 0, untouched = 0;
+  for (let i = 0; i < 100; i++) {
+    const x = -1 + i * 0.02, opts = { wind: 4, windwardClearance: 0.15, leewardClearance: 0 };
+    const a = terrainProfile(x, opts, 1), b = terrainProfile(x, { ...opts, wind: -4, windwardClearance: 0, leewardClearance: 0.15 }, 1);
+    assert.ok(Math.abs(a.width - b.width) < 1e-12);
+    if (a.width > 0.001) {
+      active++;
+      const f = revealFields(x, a.ridge - a.width / 2, 0, opts, "combined", 1);
+      assert.ok(f.clearance > 0 && f.clearance < 1);
+    } else untouched++;
+    assert.equal(revealFields(x, a.ridge + 0.01, 0, opts, "combined", 1).clearance, 0);
+    assert.equal(revealFields(x, a.ridge - 0.00001, 0, { ...opts, windwardClearance: 0, leewardClearance: 0 }, "combined", 1).clearance, 1);
+    assert.equal(terrainProfile(x, { ...opts, wind: 0 }, 1).width, 0);
+    assert.equal(terrainProfile(x, { ...opts, horizon: "open" }, 1).width, 0);
+  }
+  assert.ok(active > 0 && untouched > 0);
 });
 test("wind and formation can be stopped independently without altering any texture", () => {
   for (const seed of [123, 5821, 93473]) {
@@ -40,7 +52,7 @@ test("zero coverage or opacity removes cloud influence and reveal shapes produce
 });
 test("all extreme masks stay bounded and selected JPEG sources exist", () => {
   for (const shape of ["combined", "ribbon", "pockets"]) for (const x of [-1, 0, 1]) for (const y of [0, 0.5, 1]) {
-    const fields = revealFields(x, y, 10000, { mountainClearance: 0, maskSoftness: 0.02, bandWidth: 0.08 }, shape);
+    const fields = revealFields(x, y, 10000, { windwardClearance: 0, leewardClearance: 0, maskSoftness: 0.02, bandWidth: 0.08 }, shape);
     assert.ok(Object.values(fields).every(v => Number.isFinite(v) && v >= 0 && v <= 1));
   }
   for (const option of textureOptions) {
@@ -67,10 +79,17 @@ test("Perlin product evolves smoothly, freezes with formationSpeed=0, and reveal
   assert.ok(mountainRidge(1, 2, "hills") > mountainRidge(1, 2, "valley"));
   assert.ok(revealFields(0, 0.2, 0, { placement: "high" }).band > revealFields(0, 0.2, 0, { placement: "low" }).band);
 });
-test("photograph colors survive the mask, including dark clouds, without changing RGB sources", () => {
-  const image = { width: 2, height: 2, pixels: new Float32Array(4).fill(0.2), rgb: new Uint8Array([255, 10, 0, 255, 10, 0, 255, 10, 0, 255, 10, 0]) };
-  const before = image.rgb.slice(), opts = { horizon: "open", placement: "full", coverage: 1, opacity: 2, wind: 0 };
-  const pixels = renderValley(image, 0, opts, "noise", 32, 20);
-  assert.ok(pixels[0] > pixels[1] * 2); assert.deepEqual(image.rgb, before);
-  assert.deepEqual(renderValley(image, 0, { ...opts, opacity: 0 }, "noise", 32, 20), renderValley(texture(8), 0, { ...opts, opacity: 0 }, "noise", 32, 20));
+test("photo processing removes sky, retains cloud shading and never passes RGB to rendering", () => {
+  for (const [profile, cloud, sky] of [["rose", [90,90,90], [70,120,190]], ["embers", [35,30,25], [255,140,40]]]) {
+    const source = new Uint8ClampedArray([...cloud,255,...sky,255,...cloud,0]), before = source.slice();
+    const decoded = decodeCloudTexture(source, 3, 1, profile);
+    assert.equal(decoded.pixels[0], 1); assert.equal(decoded.pixels[1], 0); assert.equal(decoded.pixels[2], 0);
+    assert.equal(decoded.rgb, undefined); assert.ok(decoded.shading[0] > 0); assert.deepEqual(source, before);
+  }
+  const empty = decodeCloudTexture(new Uint8ClampedArray([70,120,190,255]), 1, 1, "rose");
+  const opts = { horizon: "open", placement: "full", coverage: 1 };
+  assert.deepEqual(renderValley(empty, 0, opts, "noise", 32, 20), renderValley(texture(8), 0, { ...opts, opacity: 0 }, "noise", 32, 20));
+  // Different source hues with identical grayscale + alpha have identical rendered output.
+  const a = { width: 1, height: 1, pixels: new Float32Array([1]), shading: new Float32Array([0.4]), mirrored: true };
+  assert.deepEqual(renderValley({ ...a, rgb: new Uint8Array([255,0,0]) }, 0, opts, "noise", 32, 20), renderValley({ ...a, rgb: new Uint8Array([0,0,255]) }, 0, opts, "noise", 32, 20));
 });

@@ -26,14 +26,14 @@ SHA-256 of the unmodified JPEGs:
 
 ## Real sunset photographs
 
-Both derivatives are CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/), locally hosted; no external image requests at runtime. RGB color is preserved. These are sky patches, not extracted cloud alpha masks. The originals are not bundled.
+Both derivatives are CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/), locally hosted; no external image requests at runtime. The JPEG crop sources retain their original RGB on disk; the renderer never receives it. On load, valley-textures.js extracts scalar grayscale shading and soft cloud opacity. The originals are not bundled.
 
 | Derivative | Original / photographer | Source | Preparation |
 | --- | --- | --- | --- |
 | sunset-rose.jpg | Colorful Sunset Clouds / Free Nature Stock | https://commons.wikimedia.org/wiki/File:Colorful_Sunset_Clouds.jpg (original source: https://isorepublic.com/photo/colorful-sunset-clouds/) | Original 3648×5472; crop (0,1200)–(3648,3480), resize to 768×480, JPEG quality 91. |
 | sunset-embers.jpg | Sun behind the clouds during beautiful sunset / George Becker | https://commons.wikimedia.org/wiki/File:Sun_behind_the_clouds_during_beautiful_sunset.jpg (original: https://www.pexels.com/photo/silhouette-photo-of-clouds-113570/) | Original 5456×3632; crop (400,0)–(5456,2400) excludes sun disc and ground; resize to 768×365, JPEG quality 91. Commons explicitly records the pre-2018 CC0 release, not the current Pexels license. |
 
-Downloaded and license pages checked 2026-10-30. Coordinates are source-image pixels. Runtime resamples to a 512×512 RGB buffer and remaps normalized coordinates to the viewport, so aspect can be artistically stretched. No synthesized image content or recoloring is baked into these derivatives.
+Downloaded and license pages checked 2026-10-30. Coordinates are source-image pixels. Runtime briefly decodes a 512×512 RGBA buffer, then discards it after extracting scalar fields, and remaps normalized coordinates to the viewport, so aspect can be artistically stretched. No synthesized image content or recoloring is baked into these derivatives.
 
 SHA-256 records:
 
@@ -44,3 +44,7 @@ SHA-256 records:
 - Downloaded original `colorful`: `889a60ced430f696651e6dd4c6a68af7a9d8af5e94f803d11bcbd42b972c4957`
 
 - Downloaded original `becker`: `e15df76c0f6cb69c10909572735a4bd651dec1db6bc2c926e392e64a0ed0b781`
+
+### Runtime sky mattes
+
+Sculpted bank (`rose`) uses `alpha = 1 − smoothstep(0.015, 0.12, blue − red)` to remove blue clear-sky gaps. Layered wisps (`embers`) uses `alpha = 1 − smoothstep(0.35, 0.7, red)` to remove red-bright open sky and retain dark cloud banks. Input channels are normalized to 0–1; original alpha multiplies the result. Shading is grayscale `0.2126·red + 0.7152·green + 0.0722·blue`. No source RGB reaches the renderer; its palette supplies all color. These are source-specific approximate mattes: clouds sharing the keyed sky color may vanish, and similar-colored sky may remain. They are not semantic segmentation or physical density estimates. The original grayscale maps retain their intensity-as-opacity behavior.

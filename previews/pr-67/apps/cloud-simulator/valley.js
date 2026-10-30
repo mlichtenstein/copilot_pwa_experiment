@@ -1,6 +1,7 @@
 /* Purpose: Load sourced bitmaps and connect valley texture controls to a simulation clock.
- * Consumers: valley.html. Dependencies: valley-model.js, DOM IDs, Image/Canvas and service worker APIs. */
+ * Consumers: valley.html. Dependencies: valley-model.js, DOM IDs, valley-textures.js, Image/Canvas and service worker APIs. */
 import { defaults, textureOptions, renderValley } from "./valley-model.js";
+import { decodeCloudTexture } from "./valley-textures.js";
 const element = id => document.getElementById(id), canvas = element("sky"), context = canvas.getContext("2d");
 let textures, time = 0, playing = false, previous, elapsed = 0, dirty = true;
 function selectedTexture() { return textureOptions.find(option => element("texture-" + option.id).checked) ?? textureOptions[0]; }
@@ -39,8 +40,7 @@ async function loadTexture(option) {
   const scratch = document.createElement("canvas"); scratch.width = scratch.height = 512;
   const ctx = scratch.getContext("2d", { willReadFrequently: true }); ctx.drawImage(image, 0, 0, 512, 512);
   const rgba = ctx.getImageData(0, 0, 512, 512).data;
-  const rgb = option.photo ? Uint8Array.from({ length: 512 * 512 * 3 }, (_, i) => rgba[Math.floor(i / 3) * 4 + i % 3]) : undefined;
-  return [option.id, { rgb, width: 512, height: 512, pixels: Float32Array.from({ length: 512 * 512 }, (_, i) => (rgba[i * 4] + rgba[i * 4 + 1] + rgba[i * 4 + 2]) / (3 * 255)) }];
+  return [option.id, decodeCloudTexture(rgba, 512, 512, option.profile)];
 }
 export const ready = Promise.all(textureOptions.map(loadTexture)).then(entries => {
   textures = Object.fromEntries(entries);
