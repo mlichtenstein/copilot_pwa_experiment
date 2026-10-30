@@ -4,7 +4,7 @@ Consumers: contributors and experimenters. Dependencies: experiment pages, model
 
 Open the folder (its `index.html`) through an HTTP server, or use the PR's Review deployments link. `index.html` only forwards to [Noise weather](noise.html), so the app's start URL, installs and old links to the folder land there; every page links to the others. The app is a standalone PWA with relative paths and scope-isolated offline caching. (The first experiment, a threshold-cascade rain study, was removed once Noise weather did rain better.)
 
-**Seeds are incidental.** In every experiment, no specific seed is meant to matter: behavior should look alike on any seed, and a result that only shows up on a hand-picked seed is a bug. Seeds exist only so a run can be reproduced and tested. Tests should check several random seeds rather than favorites.
+**Seeds are incidental.** In every experiment, no specific seed is meant to matter: behavior should look alike on any seed, and a result that only shows up on a hand-picked seed is a bug. Seeds exist only so a run can be reproduced and tested. Tests should check several random seeds rather than favorites. Do not expose numeric seed entry fields: offer fresh weather/shape buttons instead. Keep seeds internal for repeatable tests and saved links, and make generation work across seeds.
 
 ## Exploring
 
@@ -132,6 +132,8 @@ Brush maps use stable world-grid stamps with seeded position jitter, independent
 
 ## Next round: Lightning and a shared scene contract
 
-[lightning.html](lightning.html) is the first architecture-driven study under #69. It grows a seeded branching channel, identifies the connected path on reaching terrain, flashes and lights surrounding haze, then waits before the next strike. Eight parameters control geometry, growth and illumination. Starts paused on a dim preview; Grow strike plays a new discharge. This is stylized growth, not a physical electrical solver.
+[lightning.html](lightning.html) is the first architecture-driven study under #69. It grows a seeded branching channel, identifies the connected path on reaching terrain, flashes and lights surrounding haze, then waits before the next strike. Eight parameters control geometry, growth and illumination. Starts paused at peak brightness on a randomly generated shape. Next shape chooses a fresh setup at that peak; Before strike chooses a fresh setup just before leader growth. Step from peak fades the same channel; Step from Before strike starts growth. Numeric seeds stay internal. This is stylized growth, not a physical electrical solver.
 
 [experiment-architecture.md](experiment-architecture.md) defines the scene/session/host contract: pure model module, JSON state, read-only pixel renderer, canonical parameter schema and generic fixed-step browser host. Existing experiments stay independent. Presets/links restore seed and parameters, restarting the sequence. Model/session/host checks: `node --test apps/cloud-simulator/lightning-model.test.js apps/cloud-simulator/experiment-*.test.js`. Browser, phone and offline verification must be reported separately.
+
+Lightning timing is an explicit state machine: ready → leader → flash → quiet → leader. The leader advances at `leaderSpeed` main-channel steps/second; reaching terrain triggers the flash. Flash brightness decays exponentially, and after `flashDuration` seconds a quiet timer starts. `interval` is the quiet duration after the flash, not a fixed delay between flash peaks. There is no simulated charge buildup yet. Scene-defined starting modes let the shared host present phase-specific fresh setups without knowing lightning's phases. Presets/links retain the internal seed, parameters and starting mode; old links without a mode open at peak.
