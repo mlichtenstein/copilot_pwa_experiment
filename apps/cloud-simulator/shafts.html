@@ -12,12 +12,15 @@
 <label><code>sunAzimuth</code><small>Sun position left/right, degrees.</small><output id="sunAzimuth-value"></output><input id="sunAzimuth" type="range" min="-40" max="40" step="0.5" value="-18"></label>
 <label><code>cloudOpacity</code><small>How strongly droplets block sunlight and the background; 0 makes clouds transparent.</small><output id="cloudOpacity-value"></output><input id="cloudOpacity" type="range" min="0" max="3" step="0.1" value="1.2"></label>
 <label><code>haze</code><small>Amount of illuminated air between cloud pictures; 0 removes it.</small><output id="haze-value"></output><input id="haze" type="range" min="0" max="1" step="0.05" value="0.35"></label>
+<label><code>cloudSharpness</code><small>Steepens shadow-casting cloud edges; 1 keeps the original mask. Visible cloud shading stays soft.</small><output id="cloudSharpness-value"></output><input id="cloudSharpness" type="range" min="1" max="16" step="0.5" value="1"></label>
+<label><span><input id="shadowSmoothing" type="checkbox" checked> <code>shadowSmoothing</code></span><small>On blends neighboring density cells for shadows; off uses the nearest cell for crisp pixel edges.</small></label>
 </section>
 <p>Cloud patterns</p><div class="playback"><button id="pattern-0" type="button">Change near</button><button id="pattern-1" type="button">Change middle</button><button id="pattern-2" type="button">Change far</button></div><p id="patterns" class="stats"></p>
 <details><summary>How the pictures combine</summary>
 <p>Three fixed cloud pictures sit at depths 22, 50 and 78, with 32×20, 64×40 and 96×60 cells. Farther pictures cover more world space. The camera uses fixed perspective (58°); each density cell spans 4 world units.</p>
-<p>Between each pair is one 64×40 air picture. For each of its pixels, project toward the sun onto the farther cloud pictures. Their densities determine how much sunlight gets through:</p>
-<p><code>sunTransmission = product(exp(−cloudOpacity × density / sunDirection.z))</code></p>
+<p>Between each pair is one 64×40 air picture. For each of its pixels, project toward the sun onto the farther cloud pictures. For shadows, cloudSharpness steepens sampled density around a fixed edge level of 0.35. shadowSmoothing chooses blended neighboring cells or the nearest cell. Visible cloud pictures always keep their original smooth density. The shadow density determines how much sunlight gets through:</p>
+<p><code>shadowDensity = clamp((sampledDensity − 0.35) × cloudSharpness + 0.35, 0, 2)</code></p>
+<p><code>sunTransmission = product(exp(−cloudOpacity × shadowDensity / sunDirection.z))</code></p>
 <p>Use that light to color the air picture, then blend everything from far to near:</p>
 <p><code>airTransmission = exp(−haze × gapDepth × 0.04)</code><br><code>airColor = (1 − airTransmission) × sunTransmission × sunColor</code><br><code>color = background × airTransmission + airColor</code></p>
 <p>Cloud pictures similarly use <code>cloudTransmission = exp(−cloudOpacity × density)</code> to blend their lit color over what is behind them. Low sunlight uses the previous experiment’s approximate RGB atmospheric attenuation.</p>

@@ -40,10 +40,12 @@ Both experiment pages keep the field in a separate visible pane while controls a
 
 ## Experiment 03: layered light shafts
 
-[shafts.html](shafts.html) uses three fixed cloud pictures (32×20, 64×40, 96×60) at depths 22/50/78 and two 64×40 illuminated-air pictures, one between each pair. The camera has fixed 58° perspective. `shafts-model.js` owns cloud generation, projected shadows, air pictures and back-to-front compositing; `shafts.js` owns four sliders, pattern buttons and paused sun playback. Simulation and controls retain separate panes.
+[shafts.html](shafts.html) uses three fixed cloud pictures (32×20, 64×40, 96×60) at depths 22/50/78 and two 64×40 illuminated-air pictures, one between each pair. The camera has fixed 58° perspective. `shafts-model.js` owns cloud generation, projected shadows, air pictures and back-to-front compositing; `shafts.js` owns five sliders, a shadow-smoothing toggle, pattern buttons and paused sun playback. Simulation and controls retain separate panes.
 
 Each air pixel projects toward the sun onto farther cloud pictures and multiplies their Beer–Lambert transmissions. Its color is sunlight times the blocked fraction of the haze slab. Background, clouds and air are composited far to near. There is no 3D lighting grid, depth slice, phase function control or volume march. This is an artistic layered approximation, not a volumetric transport solution: midpoint air lighting, fixed cloud illumination scale, approximate solar RGB and sky, and fixed display tone mapping are deliberate simplifications.
 
-Controls are sunElevation/sunAzimuth, cloudOpacity and haze, with descriptions and formulas on-page. Pattern buttons increment one layer’s seed; displayed seeds identify the current patterns. Reset restores all original patterns and lighting. Haze=0 removes the air pictures; cloudOpacity=0 removes both cloud occlusion and shadows.
+Controls are sunElevation/sunAzimuth, cloudOpacity, haze, cloudSharpness and shadowSmoothing, with descriptions and formulas on-page. Pattern buttons increment one layer’s seed; displayed seeds identify the current patterns. Reset restores all original patterns and lighting. Haze=0 removes the air pictures; cloudOpacity=0 removes both cloud occlusion and shadows.
 
 Run `node --test apps/cloud-simulator/*test.js`. Review sun movement, zero haze/opacity, independent pattern changes, reset, phone scrolling and offline navigation after worker activation. Browser checks remain separate from model and GUI-harness checks.
+
+Shadow controls: cloudSharpness=1 preserves the mask; larger values increase density contrast around 0.35, clipped to 0–2. shadowSmoothing chooses bilinear (default) or nearest-cell sampling for projected shadows only. Visible cloud surfaces retain smooth density. Reset restores sharpness=1 and smoothing on. The two 64×40 air pictures remain unchanged in resolution.
