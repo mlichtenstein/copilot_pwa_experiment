@@ -2,7 +2,7 @@
  * Consumers: Node test runner. Dependencies: node:test, node:assert and shafts-model.js. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { defaults, createScene, createLayer, buildLightMaps, renderShafts, lightAt, sampleCloud, sharpenDensity } from "./shafts-model.js";
+import { defaults, createScene, createLayer, buildLightMaps, renderShafts, lightAt, sampleCloud, sharpenDensity, shadowInterval, mergeIntervals, illuminatedAir, cloudPrisms } from "./shafts-model.js";
 test("three repeatable pictures grow with distance and produce only two air maps", () => {
   const scene = createScene();
   assert.deepEqual(scene, createScene());
@@ -59,4 +59,28 @@ test("sharper unsmoothed shadows change the light maps without changing cloud fi
   const original = buildLightMaps(scene), sharp = buildLightMaps(scene, { cloudSharpness: 8, shadowSmoothing: false });
   assert.notDeepEqual(original.gaps[0].pixels, sharp.gaps[0].pixels);
   scene.layers.forEach((layer, i) => assert.deepEqual(layer.density, copy[i]));
+});
+
+test("extruded cloud cell intersects perspective rays over a continuous depth interval", () => {
+  const prism = { x0: -1, x1: 1, y0: -1, y1: 1, depth: 10 };
+  assert.deepEqual(shadowInterval(prism, 0, 0, [0, 0, 1], 0, 10), [0, 10]);
+  const interval = shadowInterval(prism, 0.05, 0, [0, 0, 1], 0, 10);
+  assert.ok(Math.abs(interval[0]) < 1e-10 && Math.abs(interval[1] - 8) < 1e-10);
+  assert.equal(shadowInterval(prism, 0.2, 0, [0, 0, 1], 0, 10), null);
+  assert.deepEqual(shadowInterval(prism, 0, 0, [0.5, 0, 1], 0, 10), [8, 10]);
+});
+test("overlapping extrusions are unioned so air is not shadowed twice", () => {
+  assert.deepEqual(mergeIntervals([[3, 6], [2, 4], [8, 9]]), [[2, 6], [8, 9]]);
+  const rate = 0.5 * 0.04;
+  const expected = 1 - Math.exp(-rate * 2) + Math.exp(-rate * 6) - Math.exp(-rate * 10);
+  assert.ok(Math.abs(illuminatedAir([[2, 4], [3, 6]], 0, 10, 0.5) - expected) < 1e-10);
+  assert.equal(illuminatedAir([[0, 10]], 0, 10, 0.5), 0);
+  assert.equal(illuminatedAir([], 0, 10, 0), 0);
+});
+test("partial shadow length gives partial air light rather than a midpoint on/off cutout", () => {
+  const full = illuminatedAir([], 0, 10, 0.5);
+  const partial = illuminatedAir([[0, 8]], 0, 10, 0.5);
+  assert.ok(partial > 0 && partial < full);
+  const scene = createScene();
+  assert.equal(cloudPrisms(scene, { ...defaults, cloudOpacity: 0 }, 22).length, 0);
 });
