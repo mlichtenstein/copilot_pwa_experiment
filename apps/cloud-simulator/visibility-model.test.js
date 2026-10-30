@@ -34,18 +34,21 @@ test("layer-group visibility is intersection in the requested composition order"
   layers[1].visible[0] = 0;
   assert.equal(combinedVisibility(layers, 1, 0), false);
   assert.equal(combinedVisibility(layers, 2, 0), true);
-  assert.deepEqual(visibilityOrder, ["sun", "far-light", "far-cloud", "middle-far-light", "middle-cloud", "all-light", "near-cloud"]);
+  assert.deepEqual(visibilityOrder, ["sun", "far-light", "middle-far-light", "all-light", "far-cloud", "middle-cloud", "near-cloud"]);
 });
-test("opaque near cloud remains visible over the light veil in both visibility modes", () => {
-  const scene = createScene(); scene.layers[0].density.fill(100);
-  for (const build of [buildVisibility, buildLayeredVisibility]) {
+test("every opaque cloud body covers all light veils in both visibility modes", () => {
+  for (const cloudIndex of [0, 1, 2]) for (const build of [buildVisibility, buildLayeredVisibility]) {
+    const scene = createScene();
+    for (const layer of scene.layers) layer.density.fill(0);
+    scene.layers[cloudIndex].density.fill(100);
     const view = build(scene, { sunAzimuth: 20, cloudOpacity: 3, haze: 1 }, 16, 10);
     const bands = view.bands ?? [view];
     for (const band of bands) for (const layer of band.layers) layer.visible.fill(1);
     const lit = renderVisibility(scene, view);
     for (const band of bands) band.layers[0].visible.fill(0);
     const unlit = renderVisibility(scene, view);
-    // Changing only foreground haze cannot paint over an opaque near cloud.
+    // The all-layer veil changes, but no cloud's surface lighting does.
+    // Even an opaque far cloud must cover that foreground veil.
     assert.deepEqual(lit, unlit);
   }
 });

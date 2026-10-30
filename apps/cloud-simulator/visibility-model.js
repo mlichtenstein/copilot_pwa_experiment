@@ -137,8 +137,8 @@ export function buildLayeredVisibility(scene, options = {}, width = 128, height 
     cloudThreshold: band.threshold, sourceRadius: radius * band.radiusScale }, width, height), ...band }));
   return { ...bands[1], bands };
 }
-// Each cloud covers the light veil at its own depth, keeping its silhouette legible.
-export const visibilityOrder = ["sun", "far-light", "far-cloud", "middle-far-light", "middle-cloud", "all-light", "near-cloud"];
+// All light veils precede the cloud-body pass, so even far clouds cover every veil.
+export const visibilityOrder = ["sun", "far-light", "middle-far-light", "all-light", "far-cloud", "middle-cloud", "near-cloud"];
 export function renderVisibility(scene, visibility) {
   const { settings, width, height, color, sun } = visibility;
   const bands = visibility.bands ?? [{ ...visibility, weight: 1, brightness: 1 }];
@@ -151,15 +151,19 @@ export function renderVisibility(scene, visibility) {
     let rgb = [0.035, 0.065, 0.14].map((v, c) => v + color[c] * (disk + Math.exp(-Math.abs(ry) * 6) * 0.09));
     for (let i = 2; i >= 0; i--) {
       const layer = scene.layers[i];
-      const density = sampleCloud(layer, rx * (layer.depth + 12), ry * (layer.depth + 12));
-      const transmission = Math.exp(-settings.cloudOpacity * density);
       const span = layer.depth - (i === 0 ? 0 : scene.layers[i - 1].depth);
-      // Restrained translucent veils first; then this cloud's soft body covers them.
+      // First pass: collect the light veils without painting over any cloud bodies.
       const alpha = (1 - Math.exp(-settings.haze * span * 0.04)) * 0.55;
       for (const band of bands) if (combinedVisibility(band.layers, i, index)) {
         const opacity = alpha * band.weight;
         rgb = rgb.map((v, c) => v * (1 - opacity) + opacity * color[c] * band.brightness);
       }
+    }
+    // Second pass: clouds retain their depth order but cover every light/shadow veil.
+    for (let i = 2; i >= 0; i--) {
+      const layer = scene.layers[i];
+      const density = sampleCloud(layer, rx * (layer.depth + 12), ry * (layer.depth + 12));
+      const transmission = Math.exp(-settings.cloudOpacity * density);
       let litSurface = 0;
       for (const band of bands) if (combinedVisibility(band.layers, i + 1, index)) litSurface += band.weight * band.brightness;
       // Neutral-blue body fill preserves clouds in shadow; sunlight gives their warm face.
