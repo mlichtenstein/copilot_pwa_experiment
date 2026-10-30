@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createConvection, step, totalWater, saturation, renderConvection, RAIN_SCALE,
-  cloudDepth, opacity, rainOpacity, sunsetSky, cloudColor } from "./convection-model.js";
+  cloudCover, billows, haze, facing, HAZE_OPACITY, rainOpacity, sunsetSky, cloudColor } from "./convection-model.js";
 
 const allFinite = simulation => ["temperature", "vapor", "liquid", "rain", "vorticity"]
   .every(name => simulation[name].every(Number.isFinite));
@@ -97,17 +97,30 @@ test("every view renders opaque pixels without changing the state", () => {
   assert.deepEqual(simulation, snapshot);
 });
 
-test("sunset mapping: clear dry air, haze near saturation, opaque cloud, see-through rain", () => {
-  assert.equal(cloudDepth(0, 0.5), 0);
-  assert.equal(cloudDepth(0, 0.9), 0);
-  const haze = opacity(cloudDepth(0, 0.99)), thin = opacity(cloudDepth(0.002, 1)), thick = opacity(cloudDepth(0.006, 1));
-  assert.ok(haze > 0 && haze < 0.2, `haze ${haze}`);
-  assert.ok(haze < thin && thin < thick && thick < 1);
+test("sunset cloud: buoyant cloudy masses turn solid, thin streamers and still cloud do not", () => {
+  const width = 128, height = 96, size = width * height;
+  const disc = (cx, cy, r) => Float64Array.from({ length: size }, (_, i) => ((i % width - cx) ** 2 + (Math.floor(i / width) - cy) ** 2 <= r * r ? 0.005 : 0));
+  const warm = new Float64Array(size).fill(0.1), still = new Float64Array(size);
+  const puff = cloudCover(disc(64, 48, 15), warm, width, height);
+  assert.ok(puff[48 * width + 64] > 0.99, "a warm cloudy mass is opaque inside");
+  assert.equal(puff[48 * width + 100], 0, "clear air outside it");
+  assert.ok(Math.max(...cloudCover(disc(64, 48, 15), still, width, height)) === 0, "non-buoyant cloud water stays a veil");
+  const streamer = Float64Array.from({ length: size }, (_, i) => (i % width === 64 ? 0.005 : 0));
+  assert.ok(Math.max(...cloudCover(streamer, warm, width, height)) < 0.05, "a one-pixel streamer fades");
+  const lobes = billows(width, height);
+  assert.ok(Math.min(...lobes) >= -1 && Math.max(...lobes) <= 1 && lobes === billows(width, height));
+  // A surface sloping toward the low sun at the lower right is brighter than one facing away.
+  assert.ok(facing(-0.1, -0.05) > facing(0, 0) && facing(0, 0) > facing(0.1, 0.05));
+});
+
+test("sunset colors: haze near saturation only, see-through rain, gold floor, indigo lid", () => {
+  assert.equal(haze(0.5), 0);
+  assert.equal(haze(0.9), 0);
+  assert.ok(haze(0.97) > 0 && haze(0.97) < haze(1) && haze(1.2) <= HAZE_OPACITY);
   assert.equal(rainOpacity(0), 0);
   assert.ok(rainOpacity(RAIN_SCALE / 2) < rainOpacity(RAIN_SCALE));
   assert.equal(rainOpacity(10 * RAIN_SCALE), rainOpacity(RAIN_SCALE));
   assert.ok(rainOpacity(10 * RAIN_SCALE) <= 0.5);
-  // Gold floor, indigo lid; lit cloud is brighter than shaded cloud.
   const [floor, lid] = [sunsetSky(0), sunsetSky(1)];
   assert.ok(floor[0] > floor[2] && lid[2] > lid[0]);
   const brightness = rgb => rgb[0] + rgb[1] + rgb[2];

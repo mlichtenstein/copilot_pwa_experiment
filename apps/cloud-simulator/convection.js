@@ -12,7 +12,7 @@ const image = context.createImageData(canvas.width, canvas.height);
 // Sliders whose id matches a model rule; the remaining rules keep their defaults.
 const liveRules = ["buoyancy", "viscosity", "heating", "cooling", "latentHeat", "expansion", "evaporation", "autoconversion", "fallSpeed", "flicker"];
 const legends = {
-  sunset: "Sunset: cloud and near-saturated haze over a dusk sky, lit peach and pink from a low sun at lower right, grey-violet in their own shadow; soft curtains = falling rain.",
+  sunset: "Sunset: puffy clouds = cloudy air that is still rising warm, lit peach and pink from a low sun at lower right and grey-violet in their own shadow; faint veil = still cloud and near-saturated haze; soft curtains = falling rain.",
   lamp: "Lava lamp: orange = warmer than the row average (rising), blue = cooler (sinking), pale cyan = falling rain (cloud is hidden here; see Cloud and rain).",
   water: "Cloud and rain: dark air, blue tint = vapor, gray-white = cloud, pale cyan = falling rain. Fixed color scale; no decorative trails.",
   temperature: "Temperature: blue = cold, red = warm. The floor is heated and the lid is cooled.",
