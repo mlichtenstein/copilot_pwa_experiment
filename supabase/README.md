@@ -43,7 +43,7 @@ Anonymous sign-ins are on. This is an auth setting, not SQL, so it was switched 
 | Column | What it holds |
 | --- | --- |
 | `id` | uuid |
-| `app_id` | the page, for example `cloud-simulator/convection`, `cloud-simulator/rain`, `cloud-simulator/sunset`, `cloud-simulator/horizon` or `cloud-simulator/noise` (1-80 characters) |
+| `app_id` | the page, for example `cloud-simulator/convection`, `cloud-simulator/sunset`, `cloud-simulator/horizon` or `cloud-simulator/noise` (1-80 characters) |
 | `display_name` | the name the visitor typed (1-80 characters) |
 | `rating` | `love` ❤️, `beautiful` 🎨, `gross` 🤮 or `boring` ⬜ |
 | `params` | a JSON object with every setting, including the seed, view and resolution (at most 8 KB) |

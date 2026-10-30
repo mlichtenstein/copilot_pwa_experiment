@@ -9,7 +9,7 @@ One UI guideline worth knowing up front: **explanatory text sits next to the thi
 
 ## Apps
 
-- [Cloud simulator · Rain study](apps/cloud-simulator/)
+- [Cloud simulator · Noise weather](apps/cloud-simulator/)
 
 - [Counter](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/counter/)
 - [Dice roll / coin flip](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/dice/)
@@ -40,7 +40,7 @@ The app itself is deliberately trivial: it says "Hello World!" and has a button 
 | `app/sw.js` | Service worker: offline caching, required for installability |
 | `app/icons/` | App icons (192 and 512 px) |
 | `.github/workflows/deploy.yml` | The deployment automation |
-| `apps/cloud-simulator/` | Temperature/water cellular rain experiment; see its [guide](apps/cloud-simulator/README.md) |
+| `apps/cloud-simulator/` | Cloud and weather experiments (noise weather, sunset, convection, horizon); see its [guide](apps/cloud-simulator/README.md) |
 | `apps/counter/` | A standalone counter PWA |
 | `apps/dice/` | Dice roller and coin flip PWA |
 | `apps/adventure/` | Button-driven, three-room text adventure |

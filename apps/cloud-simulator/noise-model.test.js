@@ -1,17 +1,19 @@
 /* Purpose: Check the noise weather experiment: repeatable, smooth noise; one global wind
  *   that moves every field and all rain alike; a cloud-layer band low at both ends and high in
- *   the middle, with asymmetry and sharpness; cloud forcing only inside the band; stored
- *   cloud water that forms fast, fades slowly and drifts with the wind; slow rain that falls,
+ *   the middle, with asymmetry and a fixed soft edge (no sharpness setting); cloud forcing
+ *   only inside the band; stored cloud water that forms fast, fades slowly from the edges in
+ *   and drifts with the wind; slow rain that falls,
  *   drifts, dries and is conserved; a texture slider from smooth to ragged; rain made only in
- *   dense, lasting cloud that stays while it rains; varied rain streaks born only under a
- *   raining cloud and fading once it is gone; and weather that never stops moving, on random
+ *   dense, lasting cloud that stays while it rains; varied rain streaks born inside a raining
+ *   cloud and a smooth curtain from inside the cloud past its base, both fading once it is gone; and weather that never stops moving, on random
  *   seeds.
  * Consumers: Node's test runner. Dependencies: node:test, node:assert and noise-model.js. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createNoise3, fractal, createWeather, step, sampleFields, renderWeather, airborneRain,
   pooledRain, defaults, RULES, FIELDS, layerBand, altitudeOf, createRainLayer, updateRainLayer,
-  rainAlpha, formRain, textureShape, condense, dissipation, startCloud } from "./noise-model.js";
+  rainAlpha, curtainAlpha, cloudBases, formRain, textureShape, condense, dissipation, startCloud,
+  exposure } from "./noise-model.js";
 
 // Seeds are incidental: every check runs on fresh random seeds.
 const randomSeeds = count => Array.from({ length: count }, () => Math.floor(Math.random() * 2 ** 32));
@@ -63,10 +65,10 @@ test("one global wind scrolls every field sideways together", () => {
   }
 });
 
-test("the cloud-layer band is low at both ends, 1 in the middle, with asymmetry and sharpness", () => {
-  const rules = { ...defaults, layerHeight: 0.5, layerThickness: 0.3, layerAsymmetry: 0, layerSharpness: 4 };
+test("the cloud-layer band is low at both ends, 1 in the middle, with asymmetry and a fixed soft edge", () => {
+  const rules = { ...defaults, layerHeight: 0.5, layerThickness: 0.3, layerAsymmetry: 0 };
   assert.equal(layerBand(0.5, rules), 1);
-  assert.ok(layerBand(0, rules) < 1e-6 && layerBand(1, rules) < 1e-6);
+  assert.ok(layerBand(0, rules) < 0.01 && layerBand(1, rules) < 0.01);
   // Rises monotonically to the middle and falls after it.
   for (let a = 0; a < 0.5; a += 0.01) assert.ok(layerBand(a, rules) <= layerBand(a + 0.01, rules) + 1e-12);
   for (let a = 0.5; a < 0.99; a += 0.01) assert.ok(layerBand(a, rules) >= layerBand(a + 0.01, rules) - 1e-12);
@@ -75,10 +77,11 @@ test("the cloud-layer band is low at both ends, 1 in the middle, with asymmetry 
   const up = { ...rules, layerAsymmetry: 0.5 }, down = { ...rules, layerAsymmetry: -0.5 };
   assert.ok(layerBand(0.4, up) < layerBand(0.6, up));
   assert.ok(layerBand(0.4, down) > layerBand(0.6, down));
-  // Higher sharpness: flatter inside the band, lower outside it (crisper edges).
-  const soft = { ...rules, layerSharpness: 2 }, sharp = { ...rules, layerSharpness: 10 };
-  assert.ok(layerBand(0.55, sharp) > layerBand(0.55, soft));
-  assert.ok(layerBand(0.7, sharp) < layerBand(0.7, soft));
+  // No sharpness setting: the exponent is fixed, so an old saved layerSharpness changes nothing.
+  assert.ok(!("layerSharpness" in defaults));
+  for (const a of [0.3, 0.45, 0.6, 0.8]) assert.equal(layerBand(a, { ...rules, layerSharpness: 10 }), layerBand(a, rules));
+  // Soft edge: already well below 1 a little way from the middle (no flat top).
+  assert.ok(layerBand(0.6, rules) < 0.8);
   // Thickness widens it.
   assert.ok(layerBand(0.7, { ...rules, layerThickness: 0.6 }) > layerBand(0.7, rules));
 });
@@ -196,7 +199,7 @@ test("rain is made only in dense cloud water, and streaks are born only just und
   }
 });
 
-test("rain streaks grow out of the cloud base, lean with the wind, and fade once their cloud is gone", () => {
+test("rain streaks grow out of the raining cloud, lean with the wind, and fade once their cloud is gone", () => {
   const simulation = createWeather({ width: 48, height: 40, seed: randomSeeds(1)[0] });
   const options = { cloudiness: -1, wind: 0.2, fallSpeed: 0.25 };
   sampleFields(simulation, options); startCloud(simulation);
@@ -209,12 +212,13 @@ test("rain streaks grow out of the cloud base, lean with the wind, and fade once
   for (let y = 6; y < 10; y++) for (let x = 20; x < 24; x++) simulation.cloud[y * 48 + x] = 0.5;
   for (let k = 0; k < 20; k++) updateRainLayer(layer, simulation, options);
   assert.equal(layer.streaks.length, 0, "thin cloud, no streaks");
-  // A dense, charged cloud over it, base at row 9.
+  // A dense, charged cloud over it, rows 6-9 (base at row 9): streaks are born inside it,
+  // from the top of its raining core to just under its base.
   for (let y = 6; y < 10; y++) for (let x = 20; x < 24; x++) { simulation.cloud[y * 48 + x] = 1; simulation.charge[y * 48 + x] = 1; }
   for (let k = 0; k < 40 && layer.streaks.length === 0; k++) updateRainLayer(layer, simulation, options);
   assert.ok(layer.streaks.length > 0);
   const newest = layer.streaks.at(-1);
-  assert.ok(newest.x >= 20 && newest.x < 24 && newest.y >= 9.5 && newest.y <= 12.5 && newest.top === newest.y);
+  assert.ok(newest.x >= 20 && newest.x < 24 && newest.y >= 6 && newest.y <= 11 && newest.top === newest.y, `born at y ${newest.y}`);
   // Just born: barely visible.
   assert.ok(Math.max(...rainAlpha({ streaks: [{ ...newest, age: 0 }] }, simulation, options)) < 0.01);
   // Halfway through life: visible, nothing above the row it was born on, and its tail sits
@@ -297,9 +301,33 @@ test("cloud water forms fast, fades slowly (slower with persistence) and drifts 
   // Wind: an isolated, unforced cloud moves 10 px right over 100 ticks at wind 0.1.
   const carried = createWeather({ width: 40, height: 10, seed: 1 }), options = { cloudiness: -1, wind: 0.1, persistence: 1, rainAmount: 0 };
   sampleFields(carried, options); startCloud(carried);
-  carried.cloud[5 * 40 + 10] = 1;
+  // (A 5×5 block, since a lone pixel is all edge and erodes away.)
+  for (let y = 3; y < 8; y++) for (let x = 8; x < 13; x++) carried.cloud[y * 40 + x] = 1;
   for (let k = 0; k < 100; k++) step(carried, options);
   assert.ok(carried.cloud[5 * 40 + 20] > 0.8 && carried.cloud[5 * 40 + 10] === 0);
+});
+
+test("clouds fade from the edges in: edge pixels evaporate before the interior", () => {
+  // Uniform cloud has no edges, a lone pixel is all edge, a straight edge is in between.
+  const width = 20, height = 12;
+  const field = new Float32Array(width * height).fill(1);
+  assert.ok(exposure(field, width, height).every(e => Math.abs(e) < 1e-9), "full cover: no edges (sides wrap, lid and floor are not edges)");
+  field.fill(0); field[5 * width + 5] = 1;
+  assert.ok(Math.abs(exposure(field, width, height)[5 * width + 5] - 1) < 1e-9);
+  // A 10×6 block losing its forcing: its rim thins long before its core, the core is still
+  // dense when the rim is gone, and the cloud shrinks rather than fading evenly.
+  for (const persistence of [0, defaults.persistence, 1]) {
+    const simulation = createWeather({ width: 30, height: 16, seed: 1 }), at = (x, y) => simulation.cloud[y * 30 + x];
+    for (let y = 5; y < 11; y++) for (let x = 10; x < 20; x++) simulation.cloud[y * 30 + x] = 1;
+    simulation.potential.fill(0);
+    let rimGone = -1, coreAtRimGone = 0;
+    for (let k = 0; k < 20000 && rimGone < 0; k++) {
+      condense(simulation, { persistence });
+      if (at(10, 5) === 0) { rimGone = k; coreAtRimGone = at(15, 8); }
+    }
+    assert.ok(rimGone > 0, `persistence ${persistence}: the corner evaporates`);
+    assert.ok(coreAtRimGone > 0.6, `persistence ${persistence}: core still dense (${coreAtRimGone.toFixed(2)}) when the corner is gone`);
+  }
 });
 
 test("a raining cloud stays above its rain, and stops raining before it fades", () => {
@@ -368,4 +396,30 @@ test("every view renders opaque pixels", () => {
     assert.equal(pixels.length, 128 * 96 * 4);
     for (let p = 3; p < pixels.length; p += 4) assert.equal(pixels[p], 255);
   }
+});
+
+test("rain starts inside the cloud: a smooth curtain from inside the cloud past its base, with no gap", () => {
+  const width = 48, height = 40, simulation = createWeather({ width, height, seed: randomSeeds(1)[0] });
+  const options = { cloudiness: -1, wind: 0, fallSpeed: 0.25 };
+  sampleFields(simulation, options); startCloud(simulation);
+  const layer = createRainLayer(randomSeeds(1)[0]);
+  for (let y = 6; y < 12; y++) for (let x = 14; x < 30; x++) { simulation.cloud[y * width + x] = 1; simulation.charge[y * width + x] = 1; }
+  for (let y = 6; y < 14; y++) for (let x = 14; x < 30; x++) simulation.rain[y * width + x] = 0.2;
+  const births = [];
+  // (Copies: a streak object keeps moving after it is born.)
+  for (let k = 0; k < 200; k++) { updateRainLayer(layer, simulation, options); births.push(...layer.streaks.filter(streak => streak.age === 0).map(streak => ({ ...streak }))); }
+  // Base at row 11: many streaks start above it, inside the cloud, none above the cloud top.
+  assert.equal(cloudBases(simulation)[20], 11);
+  assert.ok(births.filter(streak => streak.y < 11).length > 0.3 * births.length, "streaks born inside the cloud");
+  assert.ok(births.every(streak => streak.y >= 6));
+  // The curtain: in a middle column it is visible above the base, across it and well below
+  // it, with no empty row between cloud and rain, and it fades toward its foot.
+  const alpha = curtainAlpha(layer, simulation), column = y => alpha[y * width + 22];
+  assert.ok(column(9) > 0 && column(11) > 0.2);
+  for (let y = 9; y < 26; y++) assert.ok(column(y) > 0, `curtain row ${y} not empty`);
+  assert.ok(column(30) < column(14));
+  // No cloud, no curtain: it thins away within a few ticks.
+  simulation.cloud.fill(0);
+  for (let k = 0; k < 20; k++) updateRainLayer(layer, simulation, options);
+  assert.ok(curtainAlpha(layer, simulation).every(a => a === 0));
 });

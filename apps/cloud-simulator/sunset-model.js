@@ -1,7 +1,15 @@
 /* Purpose: Fixed droplet fields and single-scattered sunset light, independent of GUI.
  * Consumers: sunset.js and sunset-model.test.js.
- * Dependencies: randomFromSeed in simulation.js; no browser APIs. */
-import { randomFromSeed } from "./simulation.js";
+ * Dependencies: none; no browser APIs. */
+
+// Seeded linear congruential generator in [0, 1), so density fields repeat per seed.
+export function randomFromSeed(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(1664525, state) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
 
 export const defaults = { sunAngle: 24, extinction: 0.12, slabDepth: 12,
   albedo: 0.95, g: 0.55, airOpticalDepth: 0.12, ambient: 0.035, exposure: 1.4 };
