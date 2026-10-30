@@ -1,12 +1,14 @@
 /* Purpose: Verify reproducible growth, ground connectivity, read-only rendering and timing.
  * Consumers: Node test runner. Dependencies: node:test, node:assert, lightning-model.js, experiment-session.js. */
+import { randomInt } from "node:crypto";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {lightningScene,groundAt} from "./lightning-model.js";
 import {createSession} from "./experiment-session.js";
-function grow(session){session.action("strike");for(let i=0;i<3000&&session.state.phase==="leader";i++)session.step();assert.equal(session.state.phase,"flash");}
-test("seeded channels reach terrain and every return-path node has a valid ancestor",()=>{
-  for(const seed of [1,42,719,99999]){
+const seeds = process.env.LIGHTNING_SEEDS ? process.env.LIGHTNING_SEEDS.split(",").map(Number) : Array.from({length:4},()=>randomInt(0,4294967296));
+function grow(session){session.reset(session.seed,"before");for(let i=0;i<3000&&["ready","leader"].includes(session.state.phase);i++)session.step();assert.equal(session.state.phase,"flash");}
+test(`channels reach terrain with valid ancestors (fresh seeds ${seeds.join(",")})`,()=>{
+  for(const seed of seeds){
     const s=createSession(lightningScene,seed);grow(s);const state=s.state;
     assert.ok(state.nodes.length<800);assert.equal(state.nodes[state.head].y,groundAt(state.nodes[state.head].x));
     for(let i=1;i<state.nodes.length;i++){const n=state.nodes[i];assert.ok(n.parent>=0&&n.parent<i);assert.ok(n.x>=0&&n.x<=1&&n.y>=0&&n.y<=1);}
@@ -33,4 +35,22 @@ test("a connected flash fades, waits, then starts another leader",()=>{
   const s=createSession(lightningScene,42,{flashDuration:.2,interval:3});grow(s);const strikes=s.state.strikes;
   for(let i=0;i<14;i++)s.step();assert.equal(s.state.phase,"quiet");
   for(let i=0;i<200;i++)s.step();assert.ok(s.state.strikes>strikes);
+});
+
+test("peak and before-growth starts describe the same strike, and Step never replaces a peak shape",()=>{
+  for(const seed of seeds){
+    const peak=createSession(lightningScene,seed),before=createSession(lightningScene,seed);
+    assert.equal(peak.state.phase,"flash");assert.equal(peak.state.age,0);
+    const nodes=structuredClone(peak.state.nodes);peak.step();assert.equal(peak.state.phase,"flash");assert.deepEqual(peak.state.nodes,nodes);assert.ok(peak.state.age>0);
+    before.reset(seed,"before");assert.equal(before.state.phase,"ready");assert.equal(before.state.nodes.length,0);
+    before.step();assert.equal(before.state.phase,"leader");assert.ok(before.state.nodes.length>0);
+    while(before.state.phase==="leader")before.step();assert.deepEqual(before.state.nodes,nodes);
+    assert.equal(before.state.age,0);assert.equal(before.state.phase,"flash");
+  }
+});
+test("starting mode survives parameter links, and old links default to peak",()=>{
+  const a=createSession(lightningScene,19);a.reset(19,"before");const settings=a.getParams();assert.equal(settings.start,"before");
+  const b=createSession(lightningScene);assert.equal(b.applyParams(settings),true);assert.equal(b.state.phase,"ready");
+  delete settings.start;assert.equal(b.applyParams(settings),true);assert.equal(b.state.phase,"flash");
+  assert.equal(b.applyParams({...settings,start:"unknown"}),false);
 });

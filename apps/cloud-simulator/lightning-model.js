@@ -42,27 +42,27 @@ function grow(state, params) {
     state.phase="flash";state.age=0;
   }
 }
-export function createLightning({seed,params}) {
-  const state={seed:seed>>>0,rng:seed>>>0,time:0,age:0,phase:"preview",nodes:[],returnPath:[],head:0,growth:0,strikes:0,clouds:[]};
+export function createLightning({seed,params,start="peak"}) {
+  const state={seed:seed>>>0,rng:seed>>>0,time:0,age:0,phase:"ready",nodes:[],returnPath:[],head:0,growth:0,strikes:0,clouds:[]};
   for(let y=0;y<height;y++)for(let x=0;x<width;x++) state.clouds.push(clamp((perlin3(x/width*5,y/height*9,seed%997,13)-0.25)*2)*Math.exp(-(((y/height-0.21)/0.22)**4)));
-  beginStrike(state);while(state.phase==="leader")grow(state,params);state.phase="preview";
+  if(start==="peak"){beginStrike(state);while(state.phase==="leader")grow(state,params);}
   return state;
 }
 export function stepLightning(state,dt,params) {
   state.time+=dt;
-  if(state.phase==="preview")beginStrike(state);
+  if(state.phase==="ready")beginStrike(state);
   if(state.phase==="leader") {
     state.growth+=dt*params.leaderSpeed;
     while(state.growth>=1 && state.phase==="leader"){state.growth--;grow(state,params);}
   } else {
     state.age+=dt;
-    if(state.phase==="flash" && state.age>=params.flashDuration){state.phase="quiet";state.age=0;}
-    else if(state.phase==="quiet" && state.age>=params.interval)beginStrike(state);
+    if(state.phase==="flash" && state.age+1e-10>=params.flashDuration){state.phase="quiet";state.age=0;}
+    else if(state.phase==="quiet" && state.age+1e-10>=params.interval)beginStrike(state);
   }
 }
 export function renderLightning(state,params) {
   const light=new Float32Array(width*height), cores=new Float32Array(width*height), path=new Set(state.returnPath);
-  const power=state.phase==="preview"?0.6*params.flashStrength:state.phase==="flash"?params.flashStrength*Math.exp(-state.age/Math.max(0.05,params.flashDuration*0.3)):state.phase==="leader"?0.09:0;
+  const power=state.phase==="flash"?params.flashStrength*Math.exp(-state.age/Math.max(0.05,params.flashDuration*0.3)):state.phase==="leader"?0.09:0;
   for(let i=1;i<state.nodes.length && power>0;i++) {
     const b=state.nodes[i],a=state.nodes[b.parent], ax=a.x*width,ay=a.y*height,bx=b.x*width,by=b.y*height;
     const energy=power*(path.has(i)?1:b.branch?0.3:0.6), radius=3+params.haze*10;
@@ -84,4 +84,7 @@ export function renderLightning(state,params) {
   return pixels;
 }
 export const lightningScene={id:"lightning",title:"Lightning",width,height,dt:1/60,parameters,create:createLightning,step:stepLightning,render:renderLightning,
-  actions:[{id:"strike",label:"Grow strike",description:"Start a newly seeded channel and play its growth and flash.",play:true,run:beginStrike}]};
+  defaultStart:"peak", starts:[
+    {id:"peak",label:"Next shape",description:"Generate a fresh lightning shape, paused at peak brightness. Step fades this same channel."},
+    {id:"before",label:"Before strike",description:"Generate a fresh setup paused just before growth. Step starts the leader; Play runs the whole strike."}
+  ]};
