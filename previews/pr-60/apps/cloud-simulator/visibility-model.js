@@ -15,7 +15,7 @@ export function projectedSun(settings, width, height) {
     (1 - direction[1] / direction[2] / SCALE) * height / 2];
 }
 export function thresholdMask(layer, settings) {
-  return Uint8Array.from(layer.density, density => settings.cloudOpacity * sharpenDensity(density, settings.cloudSharpness) >= 0.5 ? 1 : 0);
+  return Uint8Array.from(layer.density, density => settings.cloudOpacity * sharpenDensity(density, settings.cloudSharpness) >= (settings.cloudThreshold ?? 0.5) ? 1 : 0);
 }
 // Only exterior/hole boundary edges survive. Adjacent collinear edges form one segment.
 export function silhouetteSegments(layer, mask, width, height) {
@@ -125,10 +125,23 @@ export function combinedVisibility(layers, first, index) {
   for (let i = first; i < layers.length; i++) if (!layers[i].visible[index]) return false;
   return true;
 }
-// Each entry is a distinct rendered layer, listed back to front.
-export const visibilityOrder = ["sun", "far-cloud", "far-light", "middle-cloud", "middle-far-light", "near-cloud", "all-light"];
+// Bright light pierces denser clouds and starts farther from the projected sun.
+export const visibilityBands = [
+  { name: "bright", threshold: 1, radiusScale: 1.8, weight: 0.25, brightness: 1.2 },
+  { name: "middle", threshold: 0.5, radiusScale: 1, weight: 0.35, brightness: 1 },
+  { name: "soft", threshold: 0.25, radiusScale: 0.6, weight: 0.4, brightness: 0.8 }
+];
+export function buildLayeredVisibility(scene, options = {}, width = 128, height = 80) {
+  const radius = options.sourceRadius ?? visibilityDefaults.sourceRadius;
+  const bands = visibilityBands.map(band => ({ ...buildVisibility(scene, { ...options,
+    cloudThreshold: band.threshold, sourceRadius: radius * band.radiusScale }, width, height), ...band }));
+  return { ...bands[1], bands };
+}
+// Each cloud covers the light veil at its own depth, keeping its silhouette legible.
+export const visibilityOrder = ["sun", "far-light", "far-cloud", "middle-far-light", "middle-cloud", "all-light", "near-cloud"];
 export function renderVisibility(scene, visibility) {
   const { settings, width, height, color, sun } = visibility;
+  const bands = visibility.bands ?? [{ ...visibility, weight: 1, brightness: 1 }];
   const pixels = new Uint8ClampedArray(width * height * 4);
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     const index = y * width + x;
@@ -140,12 +153,17 @@ export function renderVisibility(scene, visibility) {
       const layer = scene.layers[i];
       const density = sampleCloud(layer, rx * (layer.depth + 12), ry * (layer.depth + 12));
       const transmission = Math.exp(-settings.cloudOpacity * density);
-      const litSurface = combinedVisibility(visibility.layers, i + 1, index) ? 1 : 0;
-      rgb = rgb.map((v, c) => v * transmission + (1 - transmission) * (0.025 + color[c] * litSurface * 0.65));
       const span = layer.depth - (i === 0 ? 0 : scene.layers[i - 1].depth);
-      const alpha = 1 - Math.exp(-settings.haze * span * 0.04);
-      const illuminated = combinedVisibility(visibility.layers, i, index);
-      rgb = rgb.map((v, c) => v * (1 - alpha) + (illuminated ? alpha * color[c] : 0));
+      // Restrained translucent veils first; then this cloud's soft body covers them.
+      const alpha = (1 - Math.exp(-settings.haze * span * 0.04)) * 0.55;
+      for (const band of bands) if (combinedVisibility(band.layers, i, index)) {
+        const opacity = alpha * band.weight;
+        rgb = rgb.map((v, c) => v * (1 - opacity) + opacity * color[c] * band.brightness);
+      }
+      let litSurface = 0;
+      for (const band of bands) if (combinedVisibility(band.layers, i + 1, index)) litSurface += band.weight * band.brightness;
+      // Neutral-blue body fill preserves clouds in shadow; sunlight gives their warm face.
+      rgb = rgb.map((v, c) => v * transmission + (1 - transmission) * ([0.045, 0.055, 0.075][c] + color[c] * litSurface * 0.42));
     }
     pixels.set([...rgb.map(v => 255 * Math.pow(1 - Math.exp(-v * 1.3), 1 / 2.2)), 255], index * 4);
   }

@@ -4,7 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createScene, defaults } from "./shafts-model.js";
 import { silhouetteSegments, visibilityPolygon, pointInPolygon, buildVisibility,
-  renderVisibility, combinedVisibility, visibilityOrder, outsideCircleSegments } from "./visibility-model.js";
+  renderVisibility, combinedVisibility, visibilityOrder, outsideCircleSegments, buildLayeredVisibility, visibilityBands, thresholdMask } from "./visibility-model.js";
 test("unobstructed visibility covers the bounds; a wall blocks points behind it", () => {
   const empty = visibilityPolygon([1, 5], [], [0, 0, 10, 10]);
   assert.ok(pointInPolygon([9, 5], empty));
@@ -34,22 +34,22 @@ test("layer-group visibility is intersection in the requested composition order"
   layers[1].visible[0] = 0;
   assert.equal(combinedVisibility(layers, 1, 0), false);
   assert.equal(combinedVisibility(layers, 2, 0), true);
-  assert.deepEqual(visibilityOrder, ["sun", "far-cloud", "far-light", "middle-cloud", "middle-far-light", "near-cloud", "all-light"]);
+  assert.deepEqual(visibilityOrder, ["sun", "far-light", "far-cloud", "middle-far-light", "middle-cloud", "all-light", "near-cloud"]);
 });
-test("foreground all-layer light is composed after an opaque near cloud", () => {
-  const scene = createScene(); scene.layers[0].density.fill(2);
-  const settings = { ...defaults, sunAzimuth: 20, cloudOpacity: 3, haze: 0.5 };
-  const base = buildVisibility(scene, settings, 16, 10);
-  for (const layer of base.layers) layer.visible.fill(1);
-  const lit = renderVisibility(scene, base);
-  base.layers[0].visible.fill(0);
-  const unlit = renderVisibility(scene, base);
-  // Only the all-layer foreground overlay changes. Near-cloud opacity cannot hide it.
-  const inverseDisplay = value => -Math.log(1 - Math.pow(value / 255, 2.2)) / 1.3;
-  const expected = (1 - Math.exp(-settings.haze * 22 * 0.04)) * base.color[0];
-  const red = 4 * (5 * 16 + 8);
-  assert.ok(Math.abs((inverseDisplay(lit[red]) - inverseDisplay(unlit[red])) - expected) < 0.015);
+test("opaque near cloud remains visible over the light veil in both visibility modes", () => {
+  const scene = createScene(); scene.layers[0].density.fill(100);
+  for (const build of [buildVisibility, buildLayeredVisibility]) {
+    const view = build(scene, { sunAzimuth: 20, cloudOpacity: 3, haze: 1 }, 16, 10);
+    const bands = view.bands ?? [view];
+    for (const band of bands) for (const layer of band.layers) layer.visible.fill(1);
+    const lit = renderVisibility(scene, view);
+    for (const band of bands) band.layers[0].visible.fill(0);
+    const unlit = renderVisibility(scene, view);
+    // Changing only foreground haze cannot paint over an opaque near cloud.
+    assert.deepEqual(lit, unlit);
+  }
 });
+
 test("zero opacity clears polygons; moving sun preserves fields; opaque source containment is explicit", () => {
   const scene = createScene(), original = scene.layers.map(l => l.density.slice());
   const clear = buildVisibility(scene, { cloudOpacity: 0 }, 32, 20);
@@ -81,4 +81,28 @@ test("circle clipping preserves only distant portions of crossing edges", () => 
   assert.ok(Math.abs(clipped[0][1][0] + 2) < 1e-10);
   assert.ok(Math.abs(clipped[1][0][0] - 2) < 1e-10);
   assert.deepEqual(outsideCircleSegments([0, 0], [[-1, 0], [1, 0]], 2), []);
+});
+
+test("bright band penetrates denser material and has the largest pass-through radius", () => {
+  const layer = { density: Float64Array.of(0.4, 0.7, 1.2) };
+  const masks = visibilityBands.map(b => thresholdMask(layer, { ...defaults, cloudOpacity: 1, cloudThreshold: b.threshold }));
+  assert.deepEqual([...masks[0]], [0, 0, 1]);
+  assert.deepEqual([...masks[1]], [0, 1, 1]);
+  assert.deepEqual([...masks[2]], [1, 1, 1]);
+  const scene = createScene(), copy = scene.layers.map(l => l.density.slice());
+  const view = buildLayeredVisibility(scene, { sourceRadius: 6 }, 32, 20);
+  assert.equal(view.bands.length, 3);
+  assert.ok(view.bands.every(b => b.layers.length === 3 && b.weight > 0 && b.weight < 1));
+  assert.ok(view.bands[0].settings.sourceRadius > view.bands[1].settings.sourceRadius);
+  assert.ok(view.bands[1].settings.sourceRadius > view.bands[2].settings.sourceRadius);
+  assert.ok(Math.abs(view.bands.reduce((sum, b) => sum + b.weight, 0) - 1) < 1e-10);
+  scene.layers.forEach((layer, i) => assert.deepEqual(layer.density, copy[i]));
+});
+test("layered visibility adds distinct blended bands and zero radius propagates to all of them", () => {
+  const scene = createScene();
+  const single = buildVisibility(scene, {}, 32, 20), multiple = buildLayeredVisibility(scene, {}, 32, 20);
+  assert.notDeepEqual(renderVisibility(scene, single), renderVisibility(scene, multiple));
+  const zero = buildLayeredVisibility(scene, { sourceRadius: 0, cloudOpacity: 0 }, 32, 20);
+  assert.ok(zero.bands.every(b => b.settings.sourceRadius === 0 && b.layers.every(l => l.visible.every(v => v === 1))));
+  assert.ok(renderVisibility(scene, zero).every((v, i) => i % 4 !== 3 || v === 255));
 });
