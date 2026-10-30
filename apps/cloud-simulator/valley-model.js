@@ -1,7 +1,7 @@
 /* Purpose: Animate fixed cloud texture sampling and soft reveal fields over a valley.
  * Consumers: valley.js and valley-model.test.js. Dependencies: none; no DOM or image decoding. */
 export const defaults = { wind: 4, formationSpeed: 0.3, cloudY: 0.46,
-  bandWidth: 0.32, coverage: 0.72, maskSoftness: 0.16, mountainClearance: 0.06, textureScale: 1.1, opacity: 1.4 };
+  bandWidth: 0.32, coverage: 0.7, maskSoftness: 0.16, mountainClearance: 0.06, textureScale: 1.1, opacity: 1.4 };
 export const textureOptions = [
   { id: "bank", name: "Soft bank", file: "textures/FX_CloudAlpha01.jpg" },
   { id: "broken", name: "Broken puffs", file: "textures/FX_CloudAlpha06.jpg" },
