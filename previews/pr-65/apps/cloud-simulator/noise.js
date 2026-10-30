@@ -15,7 +15,7 @@ const image = context.createImageData(canvas.width, canvas.height);
 const liveRules = Object.keys(defaults).filter(id => element(id));
 const TICKS_PER_SECOND = 20;
 const legends = {
-  sunset: "Sunset: clouds lit peach toward the low sun at lower right and grey-violet where thick; soft grey streaks = rain falling from cloud bases; blue floor = puddles.",
+  sunset: "Sunset: clouds lit peach toward the low sun at lower right and grey-violet where thick; smooth grey curtain under a cloud base and thin streaks = rain falling from a raining cloud; blue floor = puddles.",
   water: "Cloud and rain: white = stored cloud water, gold tint = dense, lasting cloud that is raining, pale blue = rain in the air.",
   relative: "Cloud forcing: relative humidity × the cloud-layer band; brighter = closer to forming, orange = cloud condenses here now.",
   humidity: "Humidity: dark = dry, blue = moist.",
