@@ -88,14 +88,19 @@ test("the cloud-layer band is low at both ends, 1 in the middle, with asymmetry 
 
 test("cloud is forced exactly where relative humidity × band passes the threshold", () => {
   for (const seed of randomSeeds(2)) {
+    // Some seeds start with a clear sky, so sample frames along the noise's time axis
+    // (as playback does) and check the rule on every one; at least one must have cloud.
     const simulation = createWeather({ width: 64, height: 48, seed });
-    sampleFields(simulation);
     let cloudy = 0;
-    simulation.potential.forEach((cloud, i) => {
-      const forming = simulation.relative[i] * layerBand(altitudeOf(i, 64, 48));
-      assert.equal(cloud > 0, forming > RULES.cloudThreshold, `seed ${seed} pixel ${i}`);
-      if (cloud > 0) cloudy++;
-    });
+    for (let t = 0; t <= 4000 && cloudy === 0; t += 100) {
+      simulation.time = t * defaults.changeSpeed; simulation.scroll = t * defaults.wind;
+      sampleFields(simulation);
+      simulation.potential.forEach((cloud, i) => {
+        const forming = simulation.relative[i] * layerBand(altitudeOf(i, 64, 48));
+        assert.equal(cloud > 0, forming > RULES.cloudThreshold, `seed ${seed} tick ${t} pixel ${i}`);
+        if (cloud > 0) cloudy++;
+      });
+    }
     assert.ok(cloudy > 0, `seed ${seed} has some cloud`);
   }
 });
