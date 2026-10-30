@@ -1,4 +1,4 @@
-/* Purpose: Responsive pixel-field laboratory layout. Consumers: index.html and sunset.html.
+/* Purpose: Responsive pixel-field laboratory layout. Consumers: index.html, sunset.html and convection.html.
  * Dependencies: native HTML controls and canvas; no external assets. */
 :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0b1220; color: #e0eaf6; }
 * { box-sizing: border-box; }
@@ -23,6 +23,10 @@ code { overflow-wrap: anywhere; }
 label small { color: #b9c9dd; line-height: 1.4; }
 output { color: #9ed8ec; font-variant-numeric: tabular-nums; }
 input[type=range] { width: 100%; min-height: 32px; accent-color: #9ed8ec; margin: 0; }
+.choice { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.choice input { width: 20px; height: 20px; margin: 0; flex: none; accent-color: #9ed8ec; }
+.choices { display: grid; gap: 4px; font-size: .9rem; min-width: 0; }
+input:disabled + span, label:has(input:disabled) { opacity: .55; }
 fieldset { grid-column: 1 / -1; border: 1px solid #34455e; border-radius: 8px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; padding: 16px; min-width: 0; }
 legend, #legend, details { font-size: .85rem; color: #b9c9dd; }
 select, input[type=number] { width: 100%; min-width: 0; }
