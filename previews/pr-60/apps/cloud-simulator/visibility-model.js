@@ -3,7 +3,7 @@
  * Dependencies: shafts-model.js for shared fields/settings; sunset-model.js for sun color. */
 import { defaults, sharpenDensity, sampleCloud, sunDirection } from "./shafts-model.js";
 import { sunlight } from "./sunset-model.js";
-export const visibilityDefaults = { sourceRadius: 6, edgeFeather: 2 };
+export const visibilityDefaults = { sourceRadius: 6, edgeFeather: 4 };
 const SCALE = Math.tan(58 * Math.PI / 360);
 export function projectPoint(x, y, depth, width, height) {
   return [(x / ((depth + 12) * SCALE * width / height) + 1) * width / 2,
