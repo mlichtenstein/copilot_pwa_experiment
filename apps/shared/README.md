@@ -19,9 +19,13 @@ Each tap saves one row: the app id, the name, the rating, every parameter from `
 
 The bar also has:
 
-- **↶ Undo**: deletes this browser's most recent tap, and the one before that if you press it again (taps from this session only).
 - **🔗 Copy link**: copies a `?p=` link with the current settings. Opening the link restores them.
 - **Recent**: a pop-over list of the last 10 ratings for this app, from anyone, each with its thumbnail. Clicking one loads its settings. Your own taps are marked "(you)".
+- **About**: a pop-over next to Recent that explains, in plain words, what each emoji means, why tapping is useful (every tap saves the settings and a thumbnail, which maps which settings feel good or bad), that the name is remembered on this device, and what 🔗 Copy link does. Opening Recent or About closes the other.
+
+There is no undo: a tap is a quick reaction, and a stray one is harmless. Rows can still be deleted in the dashboard (see [moderation](../../supabase/README.md#moderation)).
+
+Explanations sit on the controls they explain: every button, the name field and both pop-over toggles have a short `title` tooltip, and the emoji meanings come from `RATINGS` in `presets.js` (`label` for tooltips, `meaning` for About), so they can't drift apart. See [Explanatory text](../../CODING_STANDARDS.md#explanatory-text).
 
 Files:
 

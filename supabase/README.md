@@ -5,7 +5,7 @@
 
 # Supabase
 
-The shared **rating bar** ([`apps/shared/`](../apps/shared/README.md)) stores each emoji tap, with the app's settings and a thumbnail, in one Supabase table, `cloud_simulator_presets`. Anyone can read the ratings. Rating works without an account: the first tap signs the visitor in anonymously, and Undo deletes their own taps from the same browser.
+The shared **rating bar** ([`apps/shared/`](../apps/shared/README.md)) stores each emoji tap, with the app's settings and a thumbnail, in one Supabase table, `cloud_simulator_presets`. Anyone can read the ratings. Rating works without an account: the first tap signs the visitor in anonymously.
 
 The client holds only the public project URL and the **publishable** key. Row-level security decides what that key can do. Never put a secret or service-role key in the repo or the client.
 
@@ -52,7 +52,7 @@ Anonymous sign-ins are on. This is an auth setting, not SQL, so it was switched 
 | `note`, `commit_sha` | kept from the first version, unused by the bar, nullable |
 
 - **Ratings:** the rating check is `NOT VALID`, so it applies to every new row but leaves the one row saved before ratings existed (rating null) in place. Delete that row and run `alter table public.cloud_simulator_presets validate constraint cloud_simulator_presets_rating_check;` to make it strict for old rows too.
-- **Row-level security:** everyone can select. Signed-in users, including anonymous ones, can insert rows only as themselves and delete only their own rows. Nobody can update a row through the API; a tap is a fact, and Undo deletes it.
+- **Row-level security:** everyone can select. Signed-in users, including anonymous ones, can insert rows only as themselves and delete only their own rows. Nobody can update a row through the API; a tap is a fact. The bar has no undo, but the delete-own-rows policy stays so a visitor's own client could remove a tap later.
 - **Abuse limit:** a trigger rejects more than 120 taps per user per rolling hour. Supabase also limits anonymous sign-ins to 30 per hour per IP address by default (**Authentication > Rate Limits**).
 
 ## Moderation

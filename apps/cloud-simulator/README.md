@@ -14,6 +14,8 @@ This deliberately conflates vapor, condensation and falling liquid. It explores 
 
 ## Exploring
 
+- **The picture comes first.** On every page the canvas takes the whole left side at the largest size that fits under the rating bar, scaled with crisp pixels and its own aspect ratio; the title, playback and sliders scroll in a side column. On a narrow phone the canvas spans the width (at most 60% of the screen height) and the controls scroll below it.
+- The rating bar above the canvas ([shared rating bar](../shared/README.md)) saves how the current settings feel; its **About** explains the emojis and 🔗 Copy link.
 - Pause, then Step to follow propagation. Step always pauses playback.
 - Transfer and threshold affect the existing field immediately. Zero transfer freezes transport.
 - Starting-field sliders and seed changes reset the simulation. Reset seed repeats the same fields; New seed changes their arrangement. Playback state is retained.

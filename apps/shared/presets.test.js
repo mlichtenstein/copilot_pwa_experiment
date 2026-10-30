@@ -41,6 +41,7 @@ test("validation mirrors the table's limits", () => {
   assert.equal(validateRating(ok), null);
   assert.equal(validateRating({ ...ok, thumbnail: null }), null);
   assert.deepEqual(RATINGS.map(r => r.value), ["love", "beautiful", "gross", "boring"]);
+  for (const rating of RATINGS) assert.ok(rating.emoji && rating.label && rating.meaning, `${rating.value} has an emoji, a tooltip label and an About meaning`);
   assert.match(validateRating({ ...ok, displayName: "  " }), /name/);
   assert.match(validateRating({ ...ok, displayName: "x".repeat(LIMITS.name + 1) }), /80/);
   assert.match(validateRating({ ...ok, rating: "meh" }), /Rating/);
@@ -162,20 +163,4 @@ test("a custom table is used for every request", async () => {
   const server = fakeServer([() => [200, []]]);
   await createPresetStore(options(server, { table: "other_ratings" })).list();
   assert.equal(server.requests[0].url.pathname, "/rest/v1/other_ratings");
-});
-
-test("undo (delete) needs this browser's session and reports rows it could not delete", async () => {
-  const server = fakeServer([
-    () => [200, { access_token: "jwt1", refresh_token: "r1", expires_in: 3600, user: { id: "user-1" } }],
-    () => [201, [{ id: "p1" }]],
-    () => [200, [{ id: "p1" }]],
-    () => [200, []],
-  ]);
-  const store = createPresetStore(options(server));
-  await assert.rejects(store.remove("p1"), { kind: "invalid" });
-  await store.save({ displayName: "Max", rating: "love", params });
-  await store.remove("p1");
-  assert.equal(server.requests[2].method, "DELETE");
-  assert.equal(server.requests[2].url.searchParams.get("id"), "eq.p1");
-  await assert.rejects(store.remove("someone-else"), /isn't yours/);
 });
