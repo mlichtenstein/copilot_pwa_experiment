@@ -3,10 +3,11 @@
  *   opaque frame, is deterministic and follows the shared sun; and the params helpers clean
  *   untrusted params.
  * Consumers: Node test runner. Dependencies: node:test, node:assert, experiment.js,
- *   registry.js, sun-path.js and clock.js. */
+ *   registry.js, sun-path.js, clock.js and fake-dom.js. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateExperiment, validateInstance, defaultParams, cleanParams, cleanParam, driftableParams } from "./experiment.js";
+import { validateExperiment, validateInstance, defaultParams, cleanParams, cleanParam, driftableParams, parseSize } from "./experiment.js";
+import { imageDocument } from "./fake-dom.js";
 import { experiments, findExperiment } from "./registry.js";
 import { sunAt, SUN_PATH } from "./sun-path.js";
 import { createClock, startLoop, MAX_FRAME_MS } from "./clock.js";
@@ -20,21 +21,39 @@ for (const entry of experiments) {
     const params = defaultParams(experiment);
     assert.deepEqual(cleanParams(experiment, params), params);
     // Small grid keeps the test quick; experiments must honour the size they are given.
-    const make = () => validateInstance(experiment.create({ width: 32, height: 20, params }));
-    const instance = make(), frame = { time: 0, sun: sunAt(0) };
+    // doc stands in for the page's document (experiments that load images use it).
+    const make = async (size = { width: 32, height: 20 }) => {
+      const instance = validateInstance(experiment.create({ ...size, params, doc: imageDocument() }));
+      await instance.ready;
+      return instance;
+    };
+    const instance = await make(), frame = { time: 0, sun: sunAt(0) };
     instance.step(0.1, frame);
     const pixels = instance.render(frame);
     assert.ok(pixels instanceof Uint8ClampedArray);
     assert.equal(pixels.length, 32 * 20 * 4);
     assert.ok(pixels.every((value, index) => index % 4 !== 3 || value === 255), "every pixel is opaque");
-    assert.deepEqual(make().render(frame), pixels, "same params, same frame, same picture");
+    const again = await make();
+    again.step(0.1, frame);
+    assert.deepEqual(again.render(frame), pixels, "same params, same frame, same picture");
+    again.dispose();
     if (experiment.sun) {
       const later = { time: SUN_PATH.period / 4, sun: sunAt(SUN_PATH.period / 4) };
       assert.notDeepEqual(instance.render(later), pixels, "the shared sun moves the picture");
     }
     // Every control's extremes render.
     for (const param of experiment.params) {
-      const values = param.kind === "range" ? [param.min, param.max] : param.kind === "select" ? param.options.map(([value]) => value) : [0, 4294967295];
+      if (param.kind === "size") {
+        // The host rebuilds at each offered size; the instance must fill it.
+        for (const [value] of param.options) {
+          const size = parseSize(value), sized = await make(size);
+          assert.equal(sized.render(frame).length, size.width * size.height * 4, `resolution ${value}`);
+          sized.dispose();
+        }
+        continue;
+      }
+      const values = param.kind === "range" ? [param.min, param.max] : param.kind === "select" ? param.options.map(([value]) => value)
+        : param.kind === "toggle" ? [false, true] : [0, 4294967295];
       for (const value of values) {
         instance.update({ ...params, [param.key]: value });
         assert.equal(instance.render(frame).length, 32 * 20 * 4, `${param.key} = ${value}`);

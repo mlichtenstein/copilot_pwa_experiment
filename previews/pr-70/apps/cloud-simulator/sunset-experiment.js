@@ -1,7 +1,7 @@
 /*
  * Purpose: The Sunset study as a cloud simulator experiment module: its controls (params
  *   schema) and a still scene that relights a fixed, seeded droplet slab from wherever the
- *   shared figure-eight sun path puts the sun.
+ *   shared vertical figure-eight sun path puts the sun.
  * Consumers: sunset.js (mounts it with core/host.js), core/registry.js, core/experiment.test.js.
  * Dependencies: sunset-model.js (density and lighting); the contract in core/experiment.js.
  */

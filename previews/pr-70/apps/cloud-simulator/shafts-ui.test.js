@@ -1,68 +1,59 @@
-/* Purpose: Regression checks for strategies, patterns, playback axes/speed and reset.
- * Consumers: Node test runner. Dependencies: node:test, node:assert, shafts.js and a minimal DOM harness. */
+/* Purpose: Check Light shafts on the shared host: strategy radios redraw and grey out the
+ *   visibility-only sliders, pattern buttons change one cloud picture, Reset experiment
+ *   restores lighting and patterns but keeps the strategy, the shared sun plays inside the
+ *   scene's limits, and old links with fixed sun angles still load.
+ * Consumers: Node test runner. Dependencies: node:test, node:assert, shafts-experiment.js,
+ *   core/host.js, core/sun-path.js and core/fake-dom.js. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { defaults } from "./shafts-model.js";
-import { visibilityDefaults } from "./visibility-model.js";
-const controlDefaults = { ...defaults, ...visibilityDefaults, sunSpeed: 3 };
-test("default layered strategy, controls, two-axis playback speed and reset work together", async () => {
-  const originalDocument = globalThis.document, originalRAF = globalThis.requestAnimationFrame;
-  let callback, pixels, time = 0;
-  const elements = new Map();
-  const get = id => {
-    if (!elements.has(id)) elements.set(id, { value: String(controlDefaults[id] ?? ""), checked: id === "strategy-layered",
-      textContent: "", listeners: {}, addEventListener(name, handler) { this.listeners[name] = handler; }, setAttribute() {} });
-    return elements.get(id);
-  };
-  Object.assign(get("sky"), { width: 128, height: 80, getContext: () => ({
-    createImageData: (width, height) => ({ data: new Uint8ClampedArray(width * height * 4) }),
-    putImageData: image => { pixels = image.data; }
-  }) });
-  globalThis.document = { hidden: false, getElementById: get, addEventListener() {} };
-  globalThis.requestAnimationFrame = handler => { callback = handler; };
-  const frame = (dt = 16) => { time += dt; callback(time); };
-  const input = (id, value) => { get(id).value = String(value); get(id).listeners.input(); frame(); };
+import { shafts, sceneSun, SUN_LIMITS } from "./shafts-experiment.js";
+import { mountExperiment } from "./core/host.js";
+import { DEFAULT_SUN_SHAPE, sunAt } from "./core/sun-path.js";
+import { fakeDocument, fakeCanvas, manualFrames } from "./core/fake-dom.js";
+
+test("Light shafts: strategies, patterns, reset keeps the strategy, the shared sun stays in the scene's limits", () => {
+  const doc = fakeDocument(["sky", "presets", "playback", "controls", "stats", "status", "patterns", "pattern-buttons"]);
+  const canvas = fakeCanvas(doc, 32, 20), { raf, frame } = manualFrames(), $ = id => doc.getElementById(id);
+  const page = mountExperiment(shafts, { doc, raf, presets: false, serviceWorker: null });
+  const input = (id, value) => { $(id).value = String(value); $(id).fire("input"); frame(); };
   const strategy = name => {
-    for (const mode of ["visibility", "layered", "geometric"]) get("strategy-" + mode).checked = mode === name;
-    get("strategy-" + name).listeners.change(); frame();
+    for (const mode of ["visibility", "layered", "geometric"]) $("strategy-" + mode).checked = mode === name;
+    $("strategy-" + name).fire("change"); frame();
   };
-  try {
-    await import("./shafts.js"); frame();
-    const first = pixels.slice(), originalPatterns = get("patterns").textContent;
-    assert.equal(Number(get("edgeFeather").value), 4);
-    assert.equal(get("strategy-layered").checked, true);
-    strategy("geometric"); assert.notDeepEqual(pixels, first);
-    assert.equal(get("sourceRadius").disabled, true); assert.equal(get("edgeFeather").disabled, true);
-    strategy("visibility"); assert.notDeepEqual(pixels, first);
-    strategy("layered"); assert.deepEqual(pixels, first);
-    assert.equal(get("sourceRadius").disabled, false);
-    input("edgeFeather", 0); assert.notDeepEqual(pixels, first);
-    input("edgeFeather", 4); assert.deepEqual(pixels, first);
-    input("sourceRadius", 0); assert.notDeepEqual(pixels, first);
-    input("sourceRadius", 6); assert.deepEqual(pixels, first);
-    get("pattern-0").listeners.click(); frame();
-    assert.equal(get("patterns").textContent, "near: 43 · middle: 1039 · far: 2036");
-    get("reset").listeners.click(); frame();
-    assert.deepEqual(pixels, first); assert.equal(get("patterns").textContent, originalPatterns);
-    const startAz = Number(get("sunAzimuth").value), startEl = Number(get("sunElevation").value);
-    get("play").listeners.click(); frame(); frame(200);
-    const azStep = Number(get("sunAzimuth").value) - startAz, elStep = Number(get("sunElevation").value) - startEl;
-    assert.ok(azStep > 0 && elStep > 0);
-    assert.ok(Math.abs(elStep / azStep - 0.4) < 1e-8);
-    get("play").listeners.click(); frame();
-    const paused = [get("sunAzimuth").value, get("sunElevation").value]; frame(200);
-    assert.deepEqual([get("sunAzimuth").value, get("sunElevation").value], paused);
-    get("reset").listeners.click(); frame(); input("sunSpeed", 6);
-    get("play").listeners.click(); frame(); frame(200);
-    assert.ok(Math.abs((Number(get("sunAzimuth").value) - startAz) / azStep - 2) < 1e-8);
-    input("sunElevation", 34.9); assert.equal(get("play").textContent, "Play sun");
-    input("sunAzimuth", 39.9); input("sunSpeed", 15);
-    get("play").listeners.click(); frame(); frame(200); frame(200);
-    assert.ok(Number(get("sunAzimuth").value) < 40 && Number(get("sunAzimuth").value) >= -40);
-    assert.ok(Number(get("sunElevation").value) < 35 && Number(get("sunElevation").value) >= 1);
-    get("reset").listeners.click(); frame();
-    assert.equal(Number(get("sunSpeed").value), 3); assert.equal(get("strategy-layered").checked, true);
-    assert.deepEqual(pixels, first);
-    assert.ok(!elements.has("slice") && !elements.has("shadowSmoothing"));
-  } finally { globalThis.document = originalDocument; globalThis.requestAnimationFrame = originalRAF; }
+  frame();
+  const first = canvas.pixels();
+  assert.deepEqual($("playback").children.map(button => button.textContent), ["Play sun", "Reset sun", "Reset experiment"]);
+  assert.deepEqual($("pattern-buttons").children.map(button => button.textContent), ["Change near", "Change middle", "Change far"]);
+  assert.equal($("patterns").textContent, "near: 42 · middle: 1039 · far: 2036");
+  assert.match($("stats").textContent, /^3 cloud layers · layered visibility · \d+ ms\/frame$/);
+  assert.equal($("strategy-layered").checked, true);
+
+  strategy("geometric"); assert.notDeepEqual(canvas.pixels(), first);
+  assert.equal($("sourceRadius").disabled, true); assert.equal($("edgeFeather").disabled, true);
+  strategy("visibility"); assert.notDeepEqual(canvas.pixels(), first);
+  strategy("layered"); assert.deepEqual(canvas.pixels(), first); assert.equal($("sourceRadius").disabled, false);
+  input("edgeFeather", 0); assert.notDeepEqual(canvas.pixels(), first);
+  input("edgeFeather", 4); assert.deepEqual(canvas.pixels(), first);
+
+  $("new-nearPattern").fire("click"); frame();
+  assert.equal($("patterns").textContent, "near: 43 · middle: 1039 · far: 2036");
+  assert.notDeepEqual(canvas.pixels(), first);
+  strategy("geometric"); input("haze", 0.8);
+  $("reset-experiment").fire("click"); frame();
+  assert.equal($("patterns").textContent, "near: 42 · middle: 1039 · far: 2036");
+  assert.equal(Number($("haze").value), 0.35); assert.equal($("strategy-geometric").checked, true, "reset keeps the strategy");
+  strategy("layered"); assert.deepEqual(canvas.pixels(), first);
+
+  // The shared sun moves; the scene holds it above its horizon and inside its reach.
+  $("play").fire("click"); for (let i = 0; i < 20; i++) frame(200);
+  assert.ok(page.clock.time > 0); assert.notDeepEqual(canvas.pixels(), first);
+  assert.deepEqual(sceneSun({ elevation: -5, azimuth: 60 }), { sunElevation: SUN_LIMITS.elevation[0], sunAzimuth: SUN_LIMITS.azimuth[1] });
+
+  // Old links: the fixed sun angles go to the nearest point on the path; sunSpeed is dropped;
+  // the strategy and lighting come back.
+  page.applyParams({ sunElevation: 8, sunAzimuth: -8, sunSpeed: 3, haze: 0.5, strategy: "visibility" });
+  const sun = sunAt(page.clock.time, DEFAULT_SUN_SHAPE);
+  assert.ok(Math.hypot(sun.azimuth + 8, sun.elevation - 8) < 4);
+  assert.equal(page.getParams().strategy, "visibility"); assert.equal(page.getParams().haze, 0.5);
+  assert.equal($("play").textContent, "Play sun");
 });
