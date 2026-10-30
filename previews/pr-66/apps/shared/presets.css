@@ -1,0 +1,13 @@
+/* Purpose: Layout for the drop-in Presets panel. Consumers: pages that mount presets-panel.js.
+ * Dependencies: the host page's base styles for buttons, inputs and text colors. */
+.presets { display: grid; gap: 10px; margin-top: 18px; padding: 16px; border: 1px solid #34455e; border-radius: 8px; }
+.presets h2, .presets h3 { margin: 0; font-size: 1rem; font-weight: 600; }
+.presets-intro, .presets-status { margin: 0; font-size: .85rem; }
+.presets-form { display: grid; gap: 10px; }
+.presets input[type=text], .presets textarea { font: inherit; color: inherit; background: #1b2a40; border: 1px solid #536781; border-radius: 6px; padding: 8px 10px; width: 100%; min-height: 44px; }
+.presets-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.presets-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.presets-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.presets-list li { display: grid; gap: 4px; padding: 10px; border: 1px solid #2a3a52; border-radius: 6px; }
+.presets-list p { margin: 0; font-size: .85rem; overflow-wrap: anywhere; }
+.presets-list strong { overflow-wrap: anywhere; }
