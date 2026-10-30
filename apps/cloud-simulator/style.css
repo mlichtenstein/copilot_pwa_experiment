@@ -1,4 +1,4 @@
-/* Purpose: Responsive pixel-field laboratory layout. Consumers: index.html, sunset.html and convection.html.
+/* Purpose: Responsive pixel-field laboratory layout. Consumers: index.html, sunset.html, convection.html and noise.html.
  * Dependencies: native HTML controls and canvas; no external assets. */
 :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0b1220; color: #e0eaf6; }
 * { box-sizing: border-box; }
