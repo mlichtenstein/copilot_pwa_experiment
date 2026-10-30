@@ -9,7 +9,7 @@
 <div class="playback"><button id="play" type="button" aria-pressed="false">Play sun</button><button id="reset" type="button">Reset lighting</button><button id="new-seed" type="button">New clouds</button></div>
 <p id="stats" class="stats"></p><section class="controls" aria-label="Geometry and light parameters">
 <label>View<select id="view"><option value="light">Camera light</option><option value="air">Air scattering only</option><option value="slice">Sunlight depth slice</option><option value="near">Near sheet density</option><option value="middle">Middle sheet density</option><option value="far">Far sheet density</option></select></label>
-<label><code>slice</code><small>Sunlight diagnostic depth index, near 0 to far 23.</small><output id="slice-value">12</output><input id="slice" type="range" min="0" max="23" step="1" value="12"></label>
+<label><code>slice</code><small>Sunlight depth index (0–23). Moving this slider switches to the sunlight slice view and pauses playback.</small><output id="slice-value">12</output><input id="slice" type="range" min="0" max="23" step="1" value="12"></label>
 <label><code>seed</code><small>Repeatable arrangement of all three fixed sheets.</small><input id="seed" type="number" min="0" max="4294967295" step="1" value="42"></label>
 <label><code>sunElevation</code><small>Sun angle above the horizon, degrees.</small><output id="sunElevation-value"></output><input id="sunElevation" type="range" min="1" max="35" step="0.5" value="12"></label>
 <label><code>sunAzimuth</code><small>Sun direction left/right of the camera, degrees.</small><output id="sunAzimuth-value"></output><input id="sunAzimuth" type="range" min="-40" max="40" step="0.5" value="-18"></label>
@@ -23,7 +23,7 @@
 <label><code>far</code><small>Density multiplier for the far cloud sheet (depth 78).</small><output id="far-value"></output><input id="far" type="range" min="0" max="2" step="0.1" value="1"></label>
 </section><p>Try Air scattering only, then set <code>haze</code> to 0 or disable individual sheets. Density views show the raw fixed fields before their multipliers.</p>
 <details><summary>Geometry, lighting rules and approximations</summary>
-<p>The box spans x = −48…48, y = −30…30, z = 0…96. A 64 × 40 × 24 grid holds three cloud sheets centered at z = 22, 50, 78, each 4 units thick. The perspective camera is at (0, 0, −12), looking along +z; nearby sheets appear larger. Rays leave the finite box into vacuum.</p>
+<p>The padded lighting box spans x = −256…256, y = −160…160, z = 0…96 on a 128 × 80 × 24 grid. Near, middle and far cloud fields have 32 × 20, 64 × 40 and 96 × 60 cells respectively, with 4-unit cells: distant sheets cover larger world areas at higher resolution. They sit at z = 22, 50, 78, each 4 units thick. The perspective camera is at (0, 0, −12), looking along +z; nearby sheets appear larger. The lighting box covers all camera rays and their sun paths over the supported FOV and sun ranges. Cloud-free margins still contain haze; they are not cut off at the cloud-sheet edges.</p>
 <p><code>sigma = haze + cloudExtinction × density × layerMultiplier</code></p>
 <p>Sweep from far z toward the camera. Each cell reads the transmitted light from its upstream neighbors in the previous depth slice (bilinear interpolation):</p>
 <p><code>pathLength = 4 / sunDirection.z</code><br><code>Tcenter = Tupstream × exp(−sigma × pathLength / 2)</code><br><code>Tout = Tupstream × exp(−sigma × pathLength)</code></p>
@@ -31,7 +31,7 @@
 <p>Camera rays sample the cached sunlight and extinction once per depth slice:</p>
 <p><code>Tsegment = exp(−sigma × cameraStepLength)</code><br><code>L += Tcamera × (1 − Tsegment) × scattering / sigma × Tcenter × Lsun</code><br><code>Tcamera *= Tsegment</code></p>
 <p><code>scattering</code> combines haze with Henyey–Greenstein parameter <code>g</code> and cloud scattering with fixed g = 0.45, albedo = 0.95. Haze uses RGB weights [0.65, 0.9, 1.3]; the same scalar extinction is used in all channels. Air-only view omits cloud scattering and backdrop, but keeps cloud shadows and camera extinction.</p>
-<p>Relative solar RGB follows the prior experiment’s approximate atmospheric attenuation. Background, sun disk, RGB haze weights and display tone mapping are artistic approximations. No multiple scattering, ground shadows, physical units or evolving clouds. Coarse sheet interpolation and finite side boundaries can introduce artifacts.</p>
+<p>Relative solar RGB follows the prior experiment’s approximate atmospheric attenuation. Background, sun disk, RGB haze weights and display tone mapping are artistic approximations. No multiple scattering, ground shadows, physical units or evolving clouds. Coarse sheet/shadow interpolation can introduce artifacts; physical angular scattering can still produce brightness gradients.</p>
 <p>Playback starts paused and moves only sunAzimuth at 3 degrees/second, bouncing at ±40°. Controls and diagnostic views do not evolve density.</p>
 <p>Background reading: <a href="https://www.pbr-book.org/4ed/Volume_Scattering/Transmittance">transmittance</a> and <a href="https://www.pbr-book.org/4ed/Volume_Scattering/Phase_Functions">phase functions</a>.</p>
 </details><p id="status" role="status"></p><noscript>JavaScript is required.</noscript></div></main><script type="module" src="shafts.js"></script></body></html>

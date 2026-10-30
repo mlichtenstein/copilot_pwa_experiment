@@ -14,7 +14,8 @@ function render() {
   image.data.set(renderShafts(scene, lighting, element("view").value, canvas.width, canvas.height, Number(element("slice").value)));
   context.putImageData(image, 0, 0);
   for (const key of [...Object.keys(defaults), "slice"]) element(key + "-value").textContent = Number(element(key).value).toFixed(key === "haze" ? 3 : 1);
-  element("stats").textContent = `Seed ${scene.seed} · 64×40×24 · ${(performance.now() - start).toFixed(0)} ms/frame`;
+  element("slice-value").textContent = `${element("slice").value} · z = ${(Number(element("slice").value) + 0.5) * scene.dz}`;
+  element("stats").textContent = `Seed ${scene.seed} · ${scene.nx}×${scene.ny}×${scene.nz} · ${(performance.now() - start).toFixed(0)} ms/frame`;
   dirty = lightDirty = false;
 }
 function pause() { playing = false; element("play").textContent = "Play sun"; element("play").setAttribute("aria-pressed", "false"); }
@@ -23,7 +24,10 @@ for (const key of Object.keys(defaults)) element(key).addEventListener("input", 
   dirty = true;
   if (!["g", "fov", "exposure"].includes(key)) lightDirty = true;
 });
-for (const id of ["view", "slice"]) element(id).addEventListener("input", () => { dirty = true; });
+element("view").addEventListener("change", () => { dirty = true; });
+element("slice").addEventListener("input", () => {
+  pause(); element("view").value = "slice"; dirty = true;
+});
 element("play").addEventListener("click", () => {
   playing = !playing; previous = undefined; elapsed = 0;
   element("play").textContent = playing ? "Pause sun" : "Play sun";
