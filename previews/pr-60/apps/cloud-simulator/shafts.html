@@ -3,35 +3,23 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#111c30"><title>Cloud Simulator · Light shafts</title><link rel="stylesheet" href="style.css"><link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg"></head>
 <body class="experiment"><main class="experiment-layout"><header class="experiment-header"><p class="eyebrow">Cloud simulator / Experiment 03</p><h1>Light shafts</h1>
-<p>Three cloud sheets. Swept sunlight. Scattering through the air.</p><p><a href="index.html">Rain study</a> · <a href="sunset.html">Sunset study</a> · Light shafts</p></header>
-<section class="viewport simulation-pane" aria-label="Perspective light-shaft simulation"><canvas id="sky" width="128" height="80" style="aspect-ratio: 8 / 5" role="img" aria-label="Pixel light shafts through three fixed cloud layers; diagnostic views available in controls."></canvas></section>
+<p>Three cloud pictures. Two air pictures. Move the light.</p><p><a href="index.html">Rain study</a> · <a href="sunset.html">Sunset study</a> · Light shafts</p></header>
+<section class="viewport simulation-pane" aria-label="Perspective light-shaft simulation"><canvas id="sky" width="128" height="80" style="aspect-ratio: 8 / 5" role="img" aria-label="Pixel sunset composed from three cloud pictures and two illuminated-air pictures."></canvas></section>
 <div class="controls-pane" role="region" aria-label="Scrollable experiment controls" tabindex="0">
-<div class="playback"><button id="play" type="button" aria-pressed="false">Play sun</button><button id="reset" type="button">Reset lighting</button><button id="new-seed" type="button">New clouds</button></div>
-<p id="stats" class="stats"></p><section class="controls" aria-label="Geometry and light parameters">
-<label>View<select id="view"><option value="light">Camera light</option><option value="air">Air scattering only</option><option value="slice">Sunlight depth slice</option><option value="near">Near sheet density</option><option value="middle">Middle sheet density</option><option value="far">Far sheet density</option></select></label>
-<label><code>slice</code><small>Sunlight depth index (0–23). Moving this slider switches to the sunlight slice view and pauses playback.</small><output id="slice-value">12</output><input id="slice" type="range" min="0" max="23" step="1" value="12"></label>
-<label><code>seed</code><small>Repeatable arrangement of all three fixed sheets.</small><input id="seed" type="number" min="0" max="4294967295" step="1" value="42"></label>
-<label><code>sunElevation</code><small>Sun angle above the horizon, degrees.</small><output id="sunElevation-value"></output><input id="sunElevation" type="range" min="1" max="35" step="0.5" value="12"></label>
-<label><code>sunAzimuth</code><small>Sun direction left/right of the camera, degrees.</small><output id="sunAzimuth-value"></output><input id="sunAzimuth" type="range" min="-40" max="40" step="0.5" value="-18"></label>
-<label><code>cloudExtinction</code><small>Light loss per droplet-density unit per world-length unit.</small><output id="cloudExtinction-value"></output><input id="cloudExtinction" type="range" min="0" max="1.5" step="0.05" value="0.35"></label>
-<label><code>haze</code><small>Air extinction per world-length unit; also controls shaft scattering.</small><output id="haze-value"></output><input id="haze" type="range" min="0" max="0.04" step="0.001" value="0.012"></label>
-<label><code>g</code><small>Haze scattering asymmetry; larger values favor forward scattering.</small><output id="g-value"></output><input id="g" type="range" min="0" max="0.85" step="0.05" value="0.6"></label>
-<label><code>fov</code><small>Vertical camera field of view, degrees.</small><output id="fov-value"></output><input id="fov" type="range" min="35" max="85" step="1" value="58"></label>
-<label><code>exposure</code><small>Camera exposure multiplier before display tone mapping.</small><output id="exposure-value"></output><input id="exposure" type="range" min="0.2" max="3" step="0.1" value="1.3"></label>
-<label><code>near</code><small>Density multiplier for the near cloud sheet (depth 22).</small><output id="near-value"></output><input id="near" type="range" min="0" max="2" step="0.1" value="1"></label>
-<label><code>middle</code><small>Density multiplier for the middle cloud sheet (depth 50).</small><output id="middle-value"></output><input id="middle" type="range" min="0" max="2" step="0.1" value="1"></label>
-<label><code>far</code><small>Density multiplier for the far cloud sheet (depth 78).</small><output id="far-value"></output><input id="far" type="range" min="0" max="2" step="0.1" value="1"></label>
-</section><p>Try Air scattering only, then set <code>haze</code> to 0 or disable individual sheets. Density views show the raw fixed fields before their multipliers.</p>
-<details><summary>Geometry, lighting rules and approximations</summary>
-<p>The padded lighting box spans x = −256…256, y = −160…160, z = 0…96 on a 128 × 80 × 24 grid. Near, middle and far cloud fields have 32 × 20, 64 × 40 and 96 × 60 cells respectively, with 4-unit cells: distant sheets cover larger world areas at higher resolution. They sit at z = 22, 50, 78, each 4 units thick. The perspective camera is at (0, 0, −12), looking along +z; nearby sheets appear larger. The lighting box covers all camera rays and their sun paths over the supported FOV and sun ranges. Cloud-free margins still contain haze; they are not cut off at the cloud-sheet edges.</p>
-<p><code>sigma = haze + cloudExtinction × density × layerMultiplier</code></p>
-<p>Sweep from far z toward the camera. Each cell reads the transmitted light from its upstream neighbors in the previous depth slice (bilinear interpolation):</p>
-<p><code>pathLength = 4 / sunDirection.z</code><br><code>Tcenter = Tupstream × exp(−sigma × pathLength / 2)</code><br><code>Tout = Tupstream × exp(−sigma × pathLength)</code></p>
-<p>Open sun-facing boundaries receive unit light. This shared sweep replaces per-camera-sample shadow rays. Oblique shadows soften through interpolation; the grid is intentionally coarse. Sun directions are restricted to the forward hemisphere so the sweep stays well behaved.</p>
-<p>Camera rays sample the cached sunlight and extinction once per depth slice:</p>
-<p><code>Tsegment = exp(−sigma × cameraStepLength)</code><br><code>L += Tcamera × (1 − Tsegment) × scattering / sigma × Tcenter × Lsun</code><br><code>Tcamera *= Tsegment</code></p>
-<p><code>scattering</code> combines haze with Henyey–Greenstein parameter <code>g</code> and cloud scattering with fixed g = 0.45, albedo = 0.95. Haze uses RGB weights [0.65, 0.9, 1.3]; the same scalar extinction is used in all channels. Air-only view omits cloud scattering and backdrop, but keeps cloud shadows and camera extinction.</p>
-<p>Relative solar RGB follows the prior experiment’s approximate atmospheric attenuation. Background, sun disk, RGB haze weights and display tone mapping are artistic approximations. No multiple scattering, ground shadows, physical units or evolving clouds. Coarse sheet/shadow interpolation can introduce artifacts; physical angular scattering can still produce brightness gradients.</p>
-<p>Playback starts paused and moves only sunAzimuth at 3 degrees/second, bouncing at ±40°. Controls and diagnostic views do not evolve density.</p>
-<p>Background reading: <a href="https://www.pbr-book.org/4ed/Volume_Scattering/Transmittance">transmittance</a> and <a href="https://www.pbr-book.org/4ed/Volume_Scattering/Phase_Functions">phase functions</a>.</p>
+<div class="playback"><button id="play" type="button" aria-pressed="false">Play sun</button><button id="reset" type="button">Reset experiment</button></div>
+<p id="stats" class="stats"></p><section class="controls" aria-label="Sun, clouds and haze">
+<label><code>sunElevation</code><small>Sun height above the horizon, degrees.</small><output id="sunElevation-value"></output><input id="sunElevation" type="range" min="1" max="35" step="0.5" value="8"></label>
+<label><code>sunAzimuth</code><small>Sun position left/right, degrees.</small><output id="sunAzimuth-value"></output><input id="sunAzimuth" type="range" min="-40" max="40" step="0.5" value="-18"></label>
+<label><code>cloudOpacity</code><small>How strongly droplets block sunlight and the background; 0 makes clouds transparent.</small><output id="cloudOpacity-value"></output><input id="cloudOpacity" type="range" min="0" max="3" step="0.1" value="1.2"></label>
+<label><code>haze</code><small>Amount of illuminated air between cloud pictures; 0 removes it.</small><output id="haze-value"></output><input id="haze" type="range" min="0" max="1" step="0.05" value="0.35"></label>
+</section>
+<p>Cloud patterns</p><div class="playback"><button id="pattern-0" type="button">Change near</button><button id="pattern-1" type="button">Change middle</button><button id="pattern-2" type="button">Change far</button></div><p id="patterns" class="stats"></p>
+<details><summary>How the pictures combine</summary>
+<p>Three fixed cloud pictures sit at depths 22, 50 and 78, with 32×20, 64×40 and 96×60 cells. Farther pictures cover more world space. The camera uses fixed perspective (58°); each density cell spans 4 world units.</p>
+<p>Between each pair is one 64×40 air picture. For each of its pixels, project toward the sun onto the farther cloud pictures. Their densities determine how much sunlight gets through:</p>
+<p><code>sunTransmission = product(exp(−cloudOpacity × density / sunDirection.z))</code></p>
+<p>Use that light to color the air picture, then blend everything from far to near:</p>
+<p><code>airTransmission = exp(−haze × gapDepth × 0.04)</code><br><code>airColor = (1 − airTransmission) × sunTransmission × sunColor</code><br><code>color = background × airTransmission + airColor</code></p>
+<p>Cloud pictures similarly use <code>cloudTransmission = exp(−cloudOpacity × density)</code> to blend their lit color over what is behind them. Low sunlight uses the previous experiment’s approximate RGB atmospheric attenuation.</p>
+<p>This is a layered image approximation: one lighting sample per air picture, no 3D air grid, slice, phase controls or volume ray marching. Cloud shading, sky and display tone mapping are approximate. Only the sun moves during playback; pattern buttons change one cloud picture at a time. Reset restores the original patterns and lighting.</p>
 </details><p id="status" role="status"></p><noscript>JavaScript is required.</noscript></div></main><script type="module" src="shafts.js"></script></body></html>

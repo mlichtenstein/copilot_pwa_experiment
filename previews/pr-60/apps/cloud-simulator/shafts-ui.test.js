@@ -1,14 +1,14 @@
-/* Purpose: Regression check for the slice control's view switching and redraw.
+/* Purpose: Regression check for the simple controls, per-layer patterns and reset.
  * Consumers: Node test runner. Dependencies: node:test, node:assert, shafts.js and a minimal DOM harness. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { defaults } from "./shafts-model.js";
-test("moving slice pauses animation, selects sunlight view and redraws the requested depth", async () => {
+test("sun slider redraws; pattern buttons change one layer; reset restores the original experiment", async () => {
   const originalDocument = globalThis.document, originalRAF = globalThis.requestAnimationFrame;
   let callback, pixels;
   const elements = new Map();
   const get = id => {
-    if (!elements.has(id)) elements.set(id, { value: String(defaults[id] ?? (id === "seed" ? 42 : id === "view" ? "light" : 12)),
+    if (!elements.has(id)) elements.set(id, { value: String(defaults[id] ?? ""),
       textContent: "", listeners: {}, addEventListener(name, handler) { this.listeners[name] = handler; }, setAttribute() {} });
     return elements.get(id);
   };
@@ -19,18 +19,15 @@ test("moving slice pauses animation, selects sunlight view and redraws the reque
   globalThis.document = { hidden: false, getElementById: get, addEventListener() {} };
   globalThis.requestAnimationFrame = handler => { callback = handler; };
   try {
-    await import("./shafts.js");
-    callback(0);
-    get("play").listeners.click();
-    get("slice").value = "0"; get("slice").listeners.input(); callback(16);
-    assert.equal(get("view").value, "slice");
-    assert.equal(get("play").textContent, "Play sun");
-    assert.equal(get("slice-value").textContent, "0 · z = 2");
-    const first = pixels.slice();
-    get("slice").value = "23"; get("slice").listeners.input(); callback(32);
-    assert.equal(get("slice-value").textContent, "23 · z = 94");
+    await import("./shafts.js"); callback(0);
+    const first = pixels.slice(), originalPatterns = get("patterns").textContent;
+    get("sunAzimuth").value = "20"; get("sunAzimuth").listeners.input(); callback(16);
     assert.notDeepEqual(pixels, first);
-  } finally {
-    globalThis.document = originalDocument; globalThis.requestAnimationFrame = originalRAF;
-  }
+    get("pattern-0").listeners.click(); callback(32);
+    assert.equal(get("patterns").textContent, "near: 43 · middle: 1039 · far: 2036");
+    get("reset").listeners.click(); callback(48);
+    assert.equal(get("patterns").textContent, originalPatterns);
+    assert.deepEqual(pixels, first);
+    assert.ok(!elements.has("slice"));
+  } finally { globalThis.document = originalDocument; globalThis.requestAnimationFrame = originalRAF; }
 });
