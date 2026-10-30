@@ -218,7 +218,42 @@ export function step(simulation, options = {}) {
 export const RAIN_SCALE = 0.008, LAMP_RAIN_FLOOR = 0.0015;
 const RAIN_COLOR = [175, 235, 255];
 
-export function renderConvection(simulation, view = "lamp", options = {}) {
+// Sunset view mapping, kept pure so it can be tested apart from the simulation.
+// Optical depth of one pixel: condensed cloud is opaque by CLOUD_DEPTH_SCALE; air near
+// saturation adds a thin haze that fades in from 90% relative humidity, so wisps
+// show where cloud is about to form.
+export const CLOUD_DEPTH_SCALE = 0.004, HAZE_START = 0.9, HAZE_DEPTH = 0.15;
+const mix = (a, b, amount) => a.map((channel, c) => channel + (b[c] - channel) * amount);
+const clip01 = value => Math.max(0, Math.min(1, value));
+export function cloudDepth(cloud, relativeHumidity) {
+  const haze = clip01((relativeHumidity - HAZE_START) / (1 - HAZE_START));
+  return Math.max(0, cloud) / CLOUD_DEPTH_SCALE + HAZE_DEPTH * haze * haze;
+}
+export const opacity = depth => 1 - Math.exp(-depth);
+// Rain curtains (virga) stay see-through: at most 50% opaque.
+export const rainOpacity = rain => 0.5 * clip01(rain / RAIN_SCALE);
+// Sky: indigo at the lid, through dusky rose, to gold at the floor. `warmth` (the row
+// buoyancy, -1..1) brightens or dims it by up to 10% so the overturning still reads.
+const SKY = [[14, 16, 46], [78, 40, 92], [214, 104, 78], [252, 182, 96]];
+export function sunsetSky(altitude, warmth = 0) {
+  const depth = clip01(1 - altitude) * (SKY.length - 1);
+  const k = Math.min(SKY.length - 2, Math.floor(depth));
+  const rgb = mix(SKY[k], SKY[k + 1], depth - k);
+  return rgb.map(channel => channel * (1 + 0.1 * Math.max(-1, Math.min(1, warmth))));
+}
+// A low sun off the lower right lights cloud from below and the side. `reach` is the
+// fraction of sunlight left after the cloud between a pixel and the sun: lit cloud
+// glows peach low down and pink higher up; shaded, thick cloud turns grey-violet.
+const SHADE = [66, 42, 78];
+export function cloudColor(reach, altitude) {
+  const lit = mix([255, 200, 128], [255, 128, 146], clip01(altitude));
+  return mix(SHADE, lit, clip01(reach));
+}
+// Sunlight lost per unit optical depth, and the light path: SUN_STEPS pixels toward
+// the sun, one column right and SUN_RISE rows down per step.
+const SHADOWING = 0.1, SUN_STEPS = 40, SUN_RISE = 0.5;
+
+export function renderConvection(simulation, view = "sunset", options = {}) {
   const rules = { ...defaults, ...options };
   const { width, height, temperature, vapor, liquid, rain } = simulation;
   const pixels = new Uint8ClampedArray(width * height * 4);
@@ -229,13 +264,41 @@ export function renderConvection(simulation, view = "lamp", options = {}) {
     rowMeans[y] = sum / width;
   }
   const clip = value => Math.max(0, Math.min(1, value));
+  // Sunset: cloud depth per pixel, and how much of the low sun's light reaches it.
+  let depthOf, reachOf;
+  if (view === "sunset") {
+    depthOf = new Float64Array(temperature.length); reachOf = new Float64Array(temperature.length);
+    for (let i = 0; i < temperature.length; i++) {
+      const relative = vapor[i] / saturation(temperature[i], altitudeOf(i, width, height), rules.saturation, rules.expansion);
+      depthOf[i] = cloudDepth(liquid[i], relative);
+    }
+    for (let i = 0; i < temperature.length; i++) {
+      const x = i % width, y = Math.floor(i / width);
+      let path = depthOf[i] / 2;
+      for (let k = 1; k <= SUN_STEPS; k++) {
+        // The right wall repeats its edge column, so the wall does not glow.
+        const sx = Math.min(width - 1, x + k), sy = Math.round(y + k * SUN_RISE);
+        if (sy >= height) break;
+        path += depthOf[sy * width + sx];
+      }
+      reachOf[i] = Math.exp(-SHADOWING * path);
+    }
+  }
   for (let i = 0; i < temperature.length; i++) {
     const t = clip(temperature[i]);
     const cloud = clip(liquid[i] / 0.04), drops = clip(rain[i] / RAIN_SCALE);
     const shower = clip((rain[i] - LAMP_RAIN_FLOOR) / (RAIN_SCALE * 0.75));
     const wet = (rgb, amount) => rgb.map((channel, c) => channel + (RAIN_COLOR[c] - channel) * amount);
     let rgb;
-    if (view === "temperature") rgb = [40 + 205 * t, 95 + 40 * t, 220 - 150 * t];
+    if (view === "sunset") {
+      // Sky, then a cloud layer by opacity, then soft rain curtains in the cloud's light.
+      const altitude = altitudeOf(i, width, height);
+      const warmth = (temperature[i] - rowMeans[Math.floor(i / width)]) / 0.15;
+      const sky = sunsetSky(altitude, warmth), light = cloudColor(reachOf[i], altitude);
+      rgb = mix(sky, light, opacity(depthOf[i]));
+      // Rain takes the cloud's light, softened toward the sky behind it.
+      rgb = mix(rgb, mix(light, sky, 0.35), rainOpacity(rain[i]));
+    } else if (view === "temperature") rgb = [40 + 205 * t, 95 + 40 * t, 220 - 150 * t];
     else if (view === "buoyancy" || view === "lamp") {
       // Warmer than the row average glows orange; cooler is blue. Clips at ±0.15.
       const a = Math.max(-1, Math.min(1, (temperature[i] - rowMeans[Math.floor(i / width)]) / 0.15));

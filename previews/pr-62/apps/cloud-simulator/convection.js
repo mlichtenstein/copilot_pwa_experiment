@@ -12,6 +12,7 @@ const image = context.createImageData(canvas.width, canvas.height);
 // Sliders whose id matches a model rule; the remaining rules keep their defaults.
 const liveRules = ["buoyancy", "viscosity", "heating", "cooling", "latentHeat", "expansion", "evaporation", "autoconversion", "fallSpeed", "flicker"];
 const legends = {
+  sunset: "Sunset: cloud and near-saturated haze over a dusk sky, lit peach and pink from a low sun at lower right, grey-violet in their own shadow; soft curtains = falling rain.",
   lamp: "Lava lamp: orange = warmer than the row average (rising), blue = cooler (sinking), pale cyan = falling rain (cloud is hidden here; see Cloud and rain).",
   water: "Cloud and rain: dark air, blue tint = vapor, gray-white = cloud, pale cyan = falling rain. Fixed color scale; no decorative trails.",
   temperature: "Temperature: blue = cold, red = warm. The floor is heated and the lid is cooled.",
@@ -64,10 +65,10 @@ element("new-seed").addEventListener("click", () => {
   seed = crypto.getRandomValues(new Uint32Array(1))[0];
   reset();
 });
-element("view").addEventListener("change", () => {
-  element("legend").textContent = legends[element("view").value];
-  render();
-});
+const showLegend = () => { element("legend").textContent = legends[element("view").value]; };
+element("view").addEventListener("change", () => { showLegend(); render(); });
+// Browsers may restore a previous view choice on reload; match its legend.
+showLegend();
 // Hidden tabs do not bank time: playback resumes from the current state.
 document.addEventListener("visibilitychange", () => { previousTime = undefined; elapsed = 0; });
 reset();
