@@ -36,7 +36,8 @@ test("layer toggles change contributions and inspector views expose each field",
   assert.deepEqual(renderOrder.slice(0,2),["sky","all-light-veils"]);
 });
 test("existing host builds controls without numeric seed entry, steps, resets, and restores settings",()=>{
-  validateExperiment(weather);const doc=fakeDocument(),canvas=fakeCanvas(doc,64,40),frames=manualFrames();
+  validateExperiment(weather);for(const p of weather.params.filter(p=>p.kind==="range")){const steps=(p.default-p.min)/p.step;assert.ok(Math.abs(steps-Math.round(steps))<1e-8,`${p.key} default must sit on a slider step`);}
+  const doc=fakeDocument(),canvas=fakeCanvas(doc,64,40),frames=manualFrames();
   const page=mountExperiment(weather,{doc,raf:frames.raf,presets:false,serviceWorker:null});frames.frame();
   const inputs=descendants(doc.getElementById("controls")).filter(n=>n.tagName==="INPUT");assert.ok(inputs.every(n=>n.type!=="number"));assert.ok(canvas.pixels());
   doc.getElementById("step-weather").fire("click");frames.frame();assert.equal(page.instance.state.time,.1);

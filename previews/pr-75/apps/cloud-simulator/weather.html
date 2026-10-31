@@ -1,7 +1,13 @@
 <!DOCTYPE html>
 <!-- Purpose: Combined weather experiment shell with fixed canvas and independently scrolling controls.
      Consumers: browser. Dependencies: weather.js, core host, style.css, shared presets and scoped worker. -->
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#111c30"><title>Cloud simulator · Weather layers</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="../shared/presets.css"><link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg"></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#111c30"><title>Cloud simulator · Weather layers</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="../shared/presets.css"><link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg"><style>
+/* Purpose: Keep this prototype’s generated controls legible in its narrow scrolling pane.
+ * Consumers: weather.html. Dependencies: core host .choice/fieldset markup. */
+#controls fieldset { grid-template-columns: minmax(0, 1fr); }
+#controls .choice { align-items: flex-start; }
+#controls .choice > span { display: grid; gap: 5px; min-width: 0; }
+</style></head>
 <body class="experiment"><main class="experiment-layout"><header class="experiment-header"><p class="eyebrow">Weather lab / Scrappy integration</p><h1>Weather layers</h1><p>One cloud field. Several ways to see it.</p><p><a href="horizon.html">Horizon</a> · <a href="shafts.html">Shafts</a> · <a href="valley.html">Valley</a> · <a href="lightning.html">Lightning</a></p></header>
 <section class="viewport simulation-pane with-presets" aria-label="Combined layered weather scene"><div id="presets" role="group" aria-label="Rate these settings"></div><div class="canvas-fit"><canvas id="sky" width="160" height="100" style="--ar:1.6" role="img" aria-label="Atmospheric sunset with three moving cloud fields, visibility shafts, rain, lightning and terrain."></canvas></div></section>
 <div class="controls-pane" role="region" aria-label="Scrollable weather controls" tabindex="0"><div id="playback" class="playback"></div><p id="stats" class="stats"></p>
