@@ -1,5 +1,5 @@
 /* Purpose: Fixed droplet fields and single-scattered sunset light, independent of GUI.
- * Consumers: sunset.js and sunset-model.test.js.
+ * Consumers: sunset-experiment.js (the Sunset study module) and sunset-model.test.js.
  * Dependencies: none; no browser APIs. */
 
 // Seeded linear congruential generator in [0, 1), so density fields repeat per seed.
@@ -19,7 +19,10 @@ export function phase(cosTheta, g) {
   return (1 - g * g) / (4 * Math.PI * Math.pow(1 + g * g - 2 * g * cosTheta, 1.5));
 }
 export function sunlight(sunAngle, airOpticalDepth) {
-  const elevation = Math.sin(sunAngle * Math.PI / 180);
+  return sunlightAtHeight(Math.sin(sunAngle * Math.PI / 180), airOpticalDepth);
+}
+// `elevation` here is the sine of the sun's height above the horizon.
+function sunlightAtHeight(elevation, airOpticalDepth) {
   const airMass = 1 / Math.max(0.04, elevation);
   // RGB proxies for wavelength^-4 Rayleigh extinction, not spectral integration.
   const visibility = Math.max(0, Math.min(1, 1 + elevation / 0.08));
@@ -45,18 +48,32 @@ function sample(field, x, y) {
     + density[(iy + 1) * width + ix] * (1 - fx) * fy
     + density[(iy + 1) * width + ix + 1] * fx * fy;
 }
+// The shared sun path gives azimuth and elevation (degrees). The picture spans
+// ±SUN_AZIMUTH_SPAN degrees across, like Horizon light's azimuth slider.
+export const SUN_AZIMUTH_SPAN = 45;
+// The sun's place in the picture plane: across (−1 left … 1 right) and up (the sine of its
+// height above the horizon). With sunAzimuth and sunElevation given it follows them;
+// otherwise the legacy sunAngle arc (0 is the right horizon, 90 overhead).
+export function sunInPicture({ sunAngle = defaults.sunAngle, sunAzimuth, sunElevation } = {}) {
+  if (typeof sunAzimuth === "number" && typeof sunElevation === "number") {
+    return { across: Math.max(-1, Math.min(1, sunAzimuth / SUN_AZIMUTH_SPAN)), up: Math.sin(sunElevation * Math.PI / 180) };
+  }
+  const angle = sunAngle * Math.PI / 180;
+  return { across: Math.cos(angle), up: Math.sin(angle) };
+}
 export function renderSunset(field, options = {}, view = "light") {
   const settings = { ...defaults, ...options };
-  const { sunAngle, extinction, slabDepth, albedo, g, airOpticalDepth, ambient, exposure } = settings;
+  const { extinction, slabDepth, albedo, g, airOpticalDepth, ambient, exposure } = settings;
   const { width, height, density } = field;
-  const angle = sunAngle * Math.PI / 180;
+  // across/up: where the sun sits in the picture plane (see sunInPicture).
+  const { across, up } = sunInPicture(settings);
   // Orthographic camera looks along +z. The distant sun is behind the slab (+z).
-  const direction = [Math.cos(angle) * 0.8, -Math.sin(angle) * 0.8, 0.6];
-  const direct = sunlight(sunAngle, airOpticalDepth);
+  const direction = [across * 0.8, -up * 0.8, 0.6];
+  const direct = sunlightAtHeight(up, airOpticalDepth);
   const phaseWeight = phase(direction[2], g) * 4 * Math.PI;
   const pixels = new Uint8ClampedArray(width * height * 4);
-  const sunX = width * (0.5 + 0.44 * Math.cos(angle));
-  const sunY = height * (0.86 - 0.78 * Math.sin(angle));
+  const sunX = width * (0.5 + 0.44 * across);
+  const sunY = height * (0.86 - 0.78 * up);
   for (let i = 0; i < density.length; i++) {
     const x = i % width, y = Math.floor(i / width);
     const rho = density[i];
@@ -76,7 +93,7 @@ export function renderSunset(field, options = {}, view = "light") {
       scattered += transmittance(rho * extinction * z) * sunT * rho * extinction * albedo * slabDepth / 6;
     }
     const horizon = y / height;
-    const daylight = Math.max(0, Math.sin(angle));
+    const daylight = Math.max(0, up);
     const disk = Math.hypot(x - sunX, y - sunY) < 2.2 && horizon < 0.86;
     let rgb;
     if (view !== "light") {
