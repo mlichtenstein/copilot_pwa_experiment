@@ -1,7 +1,8 @@
 /* Purpose: Three charge-driven storm layers, branching discharge dynamics and read-only pixel rendering.
- * Consumers: lightning.js, model tests, and the generic experiment host. Dependencies: valley-noise.js and charge-field.js. */
+ * Consumers: lightning.js, model tests, and the generic experiment host. Dependencies: valley-noise.js, charge-field.js and lightning-terrain.js. */
 import { perlin3 } from "./valley-noise.js";
 import {createCharge,stepCharge,strongestGradient,chargePoint,discharge} from "./charge-field.js";
+import {createTerrainObjects,terrainShadowAt,drawTerrainObjects,groundLightRadius} from "./lightning-terrain.js";
 const width = 160, height = 100, clamp = v => Math.max(0, Math.min(1, v));
 export const parameters = [
   { key:"fieldBias", default:2, min:0.2, max:4, step:0.1, description:"Strength of attraction along the selected charge gradient toward its cloud or ground endpoint." },
@@ -57,7 +58,7 @@ function grow(state, params) {
 }
 
 function createLayer({seed,depth}) {
-  const state={depth,seed:seed>>>0,rng:seed>>>0,time:0,age:0,phase:"quiet",charge:createCharge(seed^0xa341316c),strike:null,nodes:[],returnPath:[],head:0,growth:0,strikes:0,clouds:[]};
+  const state={depth,seed:seed>>>0,rng:seed>>>0,time:0,age:0,phase:"quiet",charge:createCharge(seed^0xa341316c),strike:null,nodes:[],returnPath:[],head:0,growth:0,strikes:0,objects:createTerrainObjects(seed,depth,groundAt),clouds:[]};
   for(let y=0;y<height;y++)for(let x=0;x<width;x++) state.clouds.push(clamp((perlin3(x/width*5,y/height*9,seed%997,13)-0.25)*2)*Math.exp(-(((y/height-(0.16+depth*0.06))/0.22)**4)));
   return state;
 }
@@ -97,8 +98,8 @@ function renderLayer(state,params,pixels) {
     // Each depth pass owns its clouds, channel and opaque terrain. Later passes occlude it.
     if(v>=hills) {
       const dx=(x/width-(contact?.x??0))*1.6,dy=v-(contact?.y??0);
-      const distance=Math.hypot(dx,dy),radius=0.19;
-      const pool=terrainPower*Math.max(0,1-distance/radius)**2;
+      const distance=Math.hypot(dx,dy),radius=groundLightRadius;
+      const pool=terrainPower*Math.max(0,1-distance/radius)**2*(terrainPower>0?terrainShadowAt(state.objects,contact,x/width,v):1);
       const base=[[0.045,0.06,0.085],[0.026,0.044,0.065],[0.018,0.032,0.05]][state.depth];
       for(let c=0;c<3;c++)pixels[offset+c]=clamp(base[c]+pool*[0.8,0.85,1][c])*255;
     } else {
@@ -109,6 +110,7 @@ function renderLayer(state,params,pixels) {
       }
     }
   }
+  drawTerrainObjects(pixels,width,height,state.objects);
 }
 export function createLightning({seed,params,start="peak"}) {
   const state={time:0,layers:[0,1,2].map(depth=>createLayer({seed:(seed+Math.imul(depth,2654435761))>>>0,params,depth}))};
