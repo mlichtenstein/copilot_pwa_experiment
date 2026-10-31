@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- Purpose: Convection experiment controls and field display. Consumers: browser.
-     Dependencies: style.css, ../shared/presets.css, convection.js, convection-model.js, ../shared/presets-panel.js (emoji rating bar), manifest.json. -->
+     Dependencies: style.css, ../shared/presets.css, convection.js (mounts convection-experiment.js with core/host.js, which builds the controls and the emoji rating bar), convection-model.js, manifest.json. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -22,43 +22,9 @@
     <div class="axis"><span>Cooled lid</span><span>Heated, wet floor ↓</span></div>
   </section>
   <div class="controls-pane" role="region" aria-label="Scrollable experiment controls" tabindex="0">
-<div class="playback"><button id="play" type="button" aria-pressed="true">Pause</button>
-    <button id="step" type="button">Step</button><button id="reset" type="button">Reset</button>
-    <button id="new-seed" type="button">New seed</button></div>
+<div id="playback" class="playback"></div>
   <p id="stats" class="stats"></p>
-  <section class="controls" aria-label="Experiment parameters">
-    <label>View<select id="view"><option value="sunset" selected>Sunset</option><option value="lamp">Lava lamp</option><option value="water">Cloud and rain</option><option value="temperature">Temperature</option><option value="buoyancy">Buoyancy</option><option value="humidity">Relative humidity</option></select></label>
-    <fieldset id="options"><legend>Options · part of the run’s parameters</legend>
-      <div class="choices" role="radiogroup" aria-labelledby="layering-label"><span id="layering-label"><code>layering</code> <small>What shapes the cloud layer.</small></span>
-        <label class="choice"><input type="radio" name="layering" value="none"><span>None: plain overturning</span></label>
-        <label class="choice"><input type="radio" name="layering" value="inversion"><span>Inversion (cap): a warm, stable layer aloft stops the rising air, as a trade-wind inversion does; clouds spread flat under it</span></label>
-        <label class="choice"><input type="radio" name="layering" value="lcl" checked><span>LCL (flat bases): a well-mixed layer under the lifting condensation level; every thermal saturates at one height, so cumulus sit on flat bases and billow up</span></label></div>
-      <label><span><code>inversionHeight</code></span><small>Altitude (0 floor, 1 lid) where the warm layer starts. Inversion only.</small> <output id="inversionHeight-value"></output><input id="inversionHeight" type="range" min="0.3" max="0.85" step="0.05" value="0.6"></label>
-      <label><span><code>lclHeight</code></span><small>Cloud-base altitude the surface moisture is set for: the floor's dewpoint spread. LCL only.</small> <output id="lclHeight-value"></output><input id="lclHeight" type="range" min="0.15" max="0.6" step="0.05" value="0.35"></label>
-      <div class="choices" role="radiogroup" aria-labelledby="resolution-label"><span id="resolution-label"><code>resolution</code> <small>Grid size; switching restarts the same seed.</small></span>
-        <label class="choice"><input type="radio" name="resolution" value="64x48" checked><span>Pixel art 64×48</span></label>
-        <label class="choice"><input type="radio" name="resolution" value="128x96"><span>Detailed 128×96</span></label></div>
-      <div class="choices" role="radiogroup" aria-labelledby="cloudStyle-label"><span id="cloudStyle-label"><code>cloudStyle</code> <small>How the Sunset view draws cloud water.</small></span>
-        <label class="choice"><input type="radio" name="cloudStyle" value="cumulus" checked><span>Cumulus: rising or capped cloud, billowed</span></label>
-        <label class="choice"><input type="radio" name="cloudStyle" value="raw"><span>Raw cloud water (smoky first version)</span></label></div>
-      <label class="choice"><input id="feather" type="checkbox" checked><span><code>feather</code> <small>Fray cumulus edges into wisps that fade over a few pixels; cores stay solid.</small></span></label>
-      <label class="choice"><input id="pixelArt" type="checkbox" checked><span><code>pixelArt</code> <small>Banded sky, a few hard-stepped cloud shades, dithered fringe and rain.</small></span></label>
-    </fieldset>
-    <label><span><code>buoyancy</code></span><small>How strongly a sideways temperature difference spins the air; warm sides rise.</small> <output id="buoyancy-value"></output><input id="buoyancy" type="range" min="0" max="0.03" step="0.001" value="0.012"></label>
-    <label><span><code>viscosity</code></span><small>Fraction of spin shared with neighbors per tick; higher makes fatter, slower blobs.</small> <output id="viscosity-value"></output><input id="viscosity" type="range" min="0" max="0.24" step="0.01" value="0.15"></label>
-    <label><span><code>heating</code></span><small>Fraction of the gap to the hot floor temperature closed per tick in the bottom row.</small> <output id="heating-value"></output><input id="heating" type="range" min="0" max="1" step="0.05" value="0.25"></label>
-    <label><span><code>cooling</code></span><small>Fraction of the gap to the cold lid temperature closed per tick in the top row.</small> <output id="cooling-value"></output><input id="cooling" type="range" min="0" max="1" step="0.05" value="0.5"></label>
-    <label><span><code>latentHeat</code></span><small>Warming per unit of vapor condensed; evaporation cools by the same amount.</small> <output id="latentHeat-value"></output><input id="latentHeat" type="range" min="0" max="1" step="0.05" value="0.35"></label>
-    <label><span><code>expansion</code></span><small>How much rising air cools by expanding; sets how low the cloud base sits. LCL mode uses its own steeper 1.</small> <output id="expansion-value"></output><input id="expansion" type="range" min="0" max="1.5" step="0.05" value="0.5"></label>
-    <label><span><code>evaporation</code></span><small>Fraction of the humidity deficit refilled from cloud per tick. LCL mode uses its own faster 0.3.</small> <output id="evaporation-value"></output><input id="evaporation" type="range" min="0" max="0.5" step="0.01" value="0.08"></label>
-    <label><span><code>autoconversion</code></span><small>Fraction of cloud above 0.005 per pixel that gathers into rain drops per tick.</small> <output id="autoconversion-value"></output><input id="autoconversion" type="range" min="0" max="1" step="0.05" value="0.3"></label>
-    <label><span><code>fallSpeed</code></span><small>Fraction of each pixel’s rain moving down one pixel per tick; 1 outruns the fastest updraft.</small> <output id="fallSpeed-value"></output><input id="fallSpeed" type="range" min="0" max="1" step="0.05" value="1"></label>
-    <label><span><code>flicker</code></span><small>Seeded random wobble of the floor temperature per column; keeps the flow from locking.</small> <output id="flicker-value"></output><input id="flicker" type="range" min="0" max="1.5" step="0.05" value="0.6"></label>
-    <label><span><code>speed</code></span><small>Simulation ticks per second; playback speed, not a wind speed.</small> <output id="speed-value"></output><input id="speed" type="range" min="1" max="60" step="1" value="30"></label>
-    <fieldset><legend>Starting fields · changing these resets the run</legend>
-      <label><span><code>water</code></span><small>Mean water per pixel (vapor + cloud + rain + puddles); conserved for the whole run.</small> <output id="water-value"></output><input id="water" type="range" min="0" max="0.4" step="0.01" value="0.11"></label>
-    </fieldset>
-  </section>
+  <section id="controls" class="controls" aria-label="Experiment parameters"></section>
   <p id="legend">Sunset: solid clouds = cloudy air that is rising or warm, or pressed flat under warmer air above it (the inversion); with the LCL they sit on flat bases at one height over clear air, lit peach and pink from a low sun at lower right and grey-violet in their own shadow, with frayed wisps at the edges; faint veil = still cloud and near-saturated haze; soft curtains = falling rain.</p>
 
   <details><summary>The rules and update formulas</summary>

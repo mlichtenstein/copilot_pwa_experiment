@@ -141,3 +141,13 @@ test("zero feather keeps binary coverage and positive feather leaves polygon geo
   }
   assert.ok(soft.layers.some(l => l.coverage.some(v => v > 0 && v < 1)));
 });
+
+test("visibility light veils fade out with the setting sun instead of inverting into dark shafts", () => {
+  const scene = createScene();
+  for (const build of [buildVisibility, buildLayeredVisibility]) {
+    const render = sunElevation => renderVisibility(scene, build(scene, { sunElevation, sunAzimuth: 0 }, 32, 20));
+    assert.deepEqual(render(-6), render(-30));
+    for (const sunElevation of [-45, -2, 0, 60, 85]) assert.ok(render(sunElevation).every((v, i) => i % 4 !== 3 || v === 255));
+    assert.notDeepEqual(render(60), render(10));
+  }
+});

@@ -5,6 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {lightningScene,groundAt} from "./lightning-model.js";
 import {createSession} from "./experiment-session.js";
+import {groundLightRadius,terrainShadowAt,createTerrainObjects} from "./lightning-terrain.js";
 import {createCharge,stepCharge,strongestGradient,chargePoint} from "./charge-field.js";
 const seeds=process.env.LIGHTNING_SEEDS?process.env.LIGHTNING_SEEDS.split(",").map(Number):Array.from({length:4},()=>randomInt(0,4294967296));
 const active=s=>s.state.layers.find(l=>l.phase==="flash"||l.phase==="ready"||l.phase==="leader");
@@ -50,7 +51,7 @@ test("ground and cloud connections discharge the field and only ground lights te
     assert.equal(l.strike.kind,kind);assert.ok(l.charge.values.reduce((sum,v)=>sum+Math.abs(v),0)<before*.6);
     const lit=lightningScene.render({layers:[l]},s.params);l.phase="quiet";const dark=lightningScene.render({layers:[l]},s.params);let changed=0;
     const hit=l.nodes[l.head];for(let y=0;y<100;y++)for(let x=0;x<160;x++)if(y/100>=groundAt(x/160,l.depth)){
-      const i=(y*160+x)*4;if(lit[i]>dark[i]){changed++;assert.ok(Math.hypot((x/160-hit.x)*1.6,y/100-hit.y)<.19);}
+      const i=(y*160+x)*4;if(lit[i]>dark[i]){changed++;assert.ok(Math.hypot((x/160-hit.x)*1.6,y/100-hit.y)<groundLightRadius);}
     }
     if(kind==="ground")assert.ok(changed>5);else assert.equal(changed,0);
   }
@@ -70,8 +71,8 @@ test("charge ticks are repeatable, bounded, and freeze when rate is zero",()=>{
 test("render is read-only; flash fades and foreground terrain covers farther contact light",()=>{
   const {s,l}=forced("ground");finish(s,l);const before=JSON.stringify(s.state),lit=s.render();assert.equal(JSON.stringify(s.state),before);s.set("flashStrength",0);assert.notDeepEqual(lit,s.render());s.set("flashStrength",.65);
   for(let i=3;i<lit.length;i+=4)assert.equal(lit[i],255);
-  const foreground=s.state.layers[2];foreground.phase="quiet";const hidden=lightningScene.render({layers:[l,foreground]},s.params);
-  for(let y=0;y<100;y++)for(let x=0;x<160;x++)if(y/100>=groundAt(x/160,2))assert.equal(hidden[(y*160+x)*4],Math.round(.018*255));
+  const foreground=s.state.layers[2];foreground.phase="quiet";const hidden=lightningScene.render({layers:[l,foreground]},s.params),foregroundOnly=lightningScene.render({layers:[foreground]},s.params);
+  for(let y=0;y<100;y++)for(let x=0;x<160;x++)if(y/100>=groundAt(x/160,2))assert.equal(hidden[(y*160+x)*4],foregroundOnly[(y*160+x)*4]);
   l.age=.15;const faded=s.render();assert.ok(faded.reduce((sum,v)=>sum+v,0)<lit.reduce((sum,v)=>sum+v,0));
   for(let i=0;i<60;i++)s.step();assert.equal(l.phase,"quiet");
 });
@@ -104,4 +105,29 @@ test("sustained signed bias increases the ground-strike share across fresh-seed 
   }
   t.diagnostic(JSON.stringify(counts));assert.ok(counts.every(c=>c.total>0));
   for(const biased of counts.slice(1))assert.ok(biased.ground/biased.total>counts[0].ground/counts[0].total);
+});
+
+test("terrain props are fixed across dynamics and attached to each depth",()=>{
+  for(const seed of seeds){const s=createSession(lightningScene,seed),before=s.state.layers.map(l=>structuredClone(l.objects));
+    for(let i=0;i<180;i++)s.step();assert.deepEqual(s.state.layers.map(l=>l.objects),before);
+    for(const l of s.state.layers){assert.deepEqual(l.objects,createTerrainObjects(l.seed,l.depth,groundAt));assert.equal(l.objects.length,17);
+      for(const p of l.objects){assert.ok(p.x>0&&p.x<1&&p.y>=groundAt(p.x,l.depth)&&p.y<1);assert.ok(p.height>0&&p.radius>0);}}
+  }
+});
+test("low contact light casts a long shadow away from a prop and moves with the source",()=>{
+  const tree={kind:"tree",x:.5,y:.84,height:.06,radius:.008},source={x:.4,y:.8};
+  assert.equal(terrainShadowAt([tree],source,.45,.82),1);
+  assert.ok(terrainShadowAt([tree],source,.8,.96)<.1);
+  assert.equal(terrainShadowAt([tree],{x:.8,y:.8},.8,.96),1);
+  assert.equal(terrainShadowAt([{...tree,height:.001}],source,.8,.96),1);
+  assert.equal(terrainShadowAt([tree],source,source.x,source.y),1);
+});
+test("props block flash illumination beyond their silhouettes and the shadow contrast fades",()=>{
+  const {s,l}=forced("ground");finish(s,l);const objects=structuredClone(l.objects),state={layers:[l]};
+  const lit=lightningScene.render(state,s.params);l.age=.15;const faded=lightningScene.render(state,s.params);l.phase="quiet";const dark=lightningScene.render(state,s.params);
+  l.objects=[];const bareDark=lightningScene.render(state,s.params);l.phase="flash";l.age=0;const bareLit=lightningScene.render(state,s.params);l.age=.15;const bareFaded=lightningScene.render(state,s.params);let shadows=0;
+  for(let y=0;y<100;y++)for(let x=0;x<160;x++)if(y/100>=groundAt(x/160,l.depth)){
+    const i=(y*160+x)*4;if(dark[i]===bareDark[i]&&bareLit[i]-lit[i]>2){shadows++;assert.ok(bareFaded[i]-faded[i]<=bareLit[i]-lit[i]);}
+  }
+  assert.ok(shadows>2);assert.deepEqual(objects,createTerrainObjects(l.seed,l.depth,groundAt));
 });
