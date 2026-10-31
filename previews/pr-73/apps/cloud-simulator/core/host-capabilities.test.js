@@ -87,7 +87,7 @@ test("generic controls: groups, radios, toggles, enabled rules, linked params an
 
   // Saved params: old or unknown keys are harmless; drift and the size come back.
   page.applyParams({ mode: "b", resolution: "8x6", crisp: "false", gain: 99, sunAzimuth: 3, drift: true, nonsense: 1 });
-  assert.deepEqual(page.getParams(), { mode: "b", level: 0.5, resolution: "8x6", crisp: false, gain: 10, rate: 30, seed: 1, layout: 1, drift: true });
+  assert.deepEqual(page.getParams(), { mode: "b", level: 0.5, resolution: "8x6", crisp: false, gain: 10, rate: 30, seed: 1, layout: 1, drift: true, driftSpeed: 1 });
   assert.equal($("drift").checked, true);
 });
 

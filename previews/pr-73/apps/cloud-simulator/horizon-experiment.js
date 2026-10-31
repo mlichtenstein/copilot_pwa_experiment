@@ -30,8 +30,6 @@ export const horizon = {
     slider("aerosol", 0, 1, 0.05, "Low-altitude haze strength; approximately neutral extinction."),
     slider("exposure", 0.5, 4, 0.1, "Camera exposure multiplier before tone mapping.")
   ],
-  actions: [{ id: "reset-experiment", label: "Reset experiment", title: "Every setting, the sun and its path back to their defaults, paused",
-    run: page => { page.setPlaying(false); page.resetToDefaults(); } }],
   readouts: {
     "cloud-status": (params, frame) => cloudCenters(settings(params, frame)).map((layer, i) =>
       `${["Near", "Middle", "Far"][i]} cloud: ${layer.height.toFixed(1)} km high, ${layer.distance.toFixed(0)} km away, ${layer.lit ? "sunlit" : "Earth shadow"}`).join(" · ")

@@ -13,6 +13,9 @@ canvas { display: block; width: 100%; aspect-ratio: 4 / 3; image-rendering: pixe
 .playback { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .controls > .drift { display: flex; align-items: baseline; gap: 6px; grid-column: 1 / -1; }
 .controls > .drift small { opacity: 0.8; }
+.controls > .drift-speed, .controls > .randomize { flex-wrap: wrap; align-items: center; column-gap: 10px; row-gap: 2px; }
+.controls > .drift-speed input[type=range] { flex: 1 1 140px; width: auto; }
+.controls > .drift-speed small, .controls > .randomize small { flex: 1 1 220px; }
 button, select, input[type=number] { font: inherit; color: inherit; background: #1b2a40; border: 1px solid #536781; border-radius: 6px; min-height: 44px; padding: 8px 12px; }
 button { cursor: pointer; }
 button:hover { background: #2b405b; }
