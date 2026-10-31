@@ -260,21 +260,32 @@ export function mountExperiment(experiment, {
   playback.append(...seedButtons);
   if (sunControl && !sunControl.element.parentNode) placeSun();
 
-  // Drift (optional): while playing, the experiment's driftable sliders wander on their own
-  // slow random walk (own random numbers, so simulation seeds are untouched). Dragging a
-  // slider takes it over. The walk moves by the clock time that passes, so it stops when paused.
+  // Drift (every experiment with a driftable slider, unless it sets drift: false): while
+  // playing, those sliders wander on their own slow random walk (own random numbers, so
+  // simulation seeds are untouched). Dragging a slider takes it over; greyed-out sliders hold
+  // still. The walk moves by the clock time that passes, so it stops when paused. The
+  // checkbox heads the controls it moves; its changes redraw at the experiment's frame rate.
+  const driftSliders = experiment.drift === false ? [] : driftableParams(experiment).map(param => controls.get(param.key).input);
   let drift = null, driftBox = null;
-  if (experiment.drift) {
+  if (driftSliders.length) {
     driftBox = make(doc, "input", { id: "drift", type: "checkbox", checked: false });
-    playback.append(make(doc, "label", { className: "drift" }, driftBox, " Drift ",
-      make(doc, "small", { textContent: "While playing, every slider wanders slowly on its own (noticeably within a minute); drag one to steer it." })));
-    const sliders = driftableParams(experiment).map(param => controls.get(param.key).input);
+    const label = make(doc, "label", { className: "drift" }, driftBox, " Drift ",
+      make(doc, "small", { textContent: "While playing, every slider below wanders slowly on its own (noticeably within a minute); drag one to steer it."
+        + (experiment.sun ? " The sun and its path sliders stay put." : "") }));
+    label.title = "Slowly wander the sliders on a mean-reverting random walk while playing";
+    panel.prepend(label);
     let moved = null;
-    drift = bindDrift(sliders, { seed: randomSeed(), onChange: slider => { (moved ??= {})[slider.id] = slider.value; } });
+    drift = bindDrift(driftSliders, { seed: randomSeed(), onChange: slider => { (moved ??= {})[slider.id] = slider.value; } });
     driftBox.addEventListener("change", () => drift.sync());
+    // Returns true when a slider moved; the redraw then waits for frameInterval like any
+    // other playback frame rather than forcing one every animation frame.
     drift.advance = dt => {
       moved = null; drift.step(dt);
-      if (moved) setParams({ ...params, ...moved });
+      if (!moved) return false;
+      const wasDirty = dirty;
+      setParams({ ...params, ...moved });
+      dirty = wasDirty;
+      return true;
     };
   }
 
@@ -290,8 +301,8 @@ export function mountExperiment(experiment, {
     const advanced = loading ? 0 : clock.advance(dt);
     let changed = false;
     if (advanced) {
-      if (drift && driftBox.checked) drift.advance(advanced);
-      changed = instance.step(advanced, frameInfo()) !== false || experiment.sun;
+      const drifted = drift && driftBox.checked ? drift.advance(advanced) : false;
+      changed = instance.step(advanced, frameInfo()) !== false || experiment.sun || drifted;
     }
     sinceRender += dt * 1000;
     if (dirty || (changed && sinceRender >= (experiment.frameInterval ?? 0))) render();
@@ -303,7 +314,7 @@ export function mountExperiment(experiment, {
     ...params,
     ...(experiment.sun ? { sunPhase: sunPhase(clock.time), ...sunShape } : {}),
     ...(sizeParam ? {} : { resolution: `${canvas.width}x${canvas.height}` }),
-    ...(experiment.drift ? { drift: driftBox.checked } : {})
+    ...(driftBox ? { drift: driftBox.checked } : {})
   });
   function applyParams(raw) {
     const source = raw && typeof raw === "object" ? raw : {};

@@ -11,8 +11,8 @@ p { line-height: 1.55; color: #b9c9dd; }
 canvas { display: block; width: 100%; aspect-ratio: 4 / 3; image-rendering: pixelated; }
 .axis { display: flex; justify-content: space-between; padding: 8px 12px; font-size: .75rem; color: #abbdd6; }
 .playback { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-.playback .drift { display: flex; align-items: baseline; gap: 6px; flex-basis: 100%; }
-.playback .drift small { opacity: 0.8; }
+.controls > .drift { display: flex; align-items: baseline; gap: 6px; grid-column: 1 / -1; }
+.controls > .drift small { opacity: 0.8; }
 button, select, input[type=number] { font: inherit; color: inherit; background: #1b2a40; border: 1px solid #536781; border-radius: 6px; min-height: 44px; padding: 8px 12px; }
 button { cursor: pointer; }
 button:hover { background: #2b405b; }

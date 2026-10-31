@@ -94,7 +94,9 @@ test("generic controls: groups, radios, toggles, enabled rules, linked params an
 test("playback: autoplay labels, actions, frame gating, Drift and reset", () => {
   const { experiment, log } = toy();
   const { page, frame, canvas, $ } = mount(experiment, { playing: true });
-  assert.deepEqual($("playback").children.map(node => node.textContent || node.className), ["Pause wind", "Step", "Reset", "New seed", "New layout", "drift"]);
+  assert.deepEqual($("playback").children.map(node => node.textContent || node.className), ["Pause wind", "Step", "Reset", "New seed", "New layout"]);
+  // Drift heads the controls it moves, with its explanation beside it.
+  assert.equal($("controls").children[0].className, "drift"); assert.equal($("controls").children[0].children[0], $("drift"));
   frame(); const drawn = canvas.pixels();
   // Steps that change nothing do not redraw; a tick redraws once the frame interval passes.
   for (let i = 0; i < 4; i++) frame(100);

@@ -20,8 +20,8 @@
  * Optional capabilities (each generic; an experiment uses only what it needs):
  *   autoplay      start playing on load (unless the reader prefers reduced motion)
  *   playLabels    [play, pause] button text, e.g. ["Play wind", "Pause wind"]
- *   drift         true to offer the shared Drift checkbox (../../shared/drift.js) over
- *                 driftableParams; the checkbox is saved as `drift`
+ *   drift         false to leave out the shared Drift checkbox. Every experiment with
+ *                 driftableParams gets it otherwise (../../shared/drift.js); it is saved as `drift`
  *   actions       extra buttons, [{ id, label, title, run(page) }] (Step, Reset, …); page is
  *                 { instance, params, setPlaying, resetToDefaults({ keep }), redraw }
  *   readouts      { elementId: (params, frame, instance) => text } filled on each redraw

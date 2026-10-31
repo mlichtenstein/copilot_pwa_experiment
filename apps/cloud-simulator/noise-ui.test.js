@@ -15,9 +15,9 @@ test("Noise weather: autoplay ticks, Step, Reset, New seed, views, Drift and sav
   const page = mountExperiment(noise, { doc, raf, presets: false, serviceWorker: null, playing: true });
   const tick = () => Number(/^Tick (\d+)/.exec($("stats").textContent)[1]);
   frame();
-  assert.deepEqual($("playback").children.map(node => node.textContent || node.className), ["Pause", "Step", "Reset", "New seed", "drift"]);
-  assert.deepEqual($("controls").children.map(node => node.tagName === "FIELDSET" ? node.children[0].children[0].textContent : node.children.find(child => child.tagName === "SELECT").id),
-    ["view", "Sky", "Cloud layer", "Rain"]);
+  assert.deepEqual($("playback").children.map(node => node.textContent || node.className), ["Pause", "Step", "Reset", "New seed"]);
+  assert.deepEqual($("controls").children.map(node => node.tagName === "FIELDSET" ? node.children[0].children[0].textContent : node.className === "drift" ? "drift" : node.children.find(child => child.tagName === "SELECT").id),
+    ["drift", "view", "Sky", "Cloud layer", "Rain"]);
   assert.match($("stats").textContent, /^Tick 0 · Cloud \d+% · Rain in air \d+\.\d\d · Puddles \d+\.\d\d$/);
   assert.match($("legend").textContent, /^Sunset:/);
 

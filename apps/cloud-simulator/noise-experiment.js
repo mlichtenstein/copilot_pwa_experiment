@@ -33,7 +33,6 @@ export const noise = {
   height: 96,
   sun: false,
   autoplay: true,
-  drift: true,
   groupNotes: { [SKY]: "", [LAYER]: "Clouds form only in this band of height.", [RAIN]: "" },
   params: [
     { key: "view", kind: "select", label: "View", wide: true, default: "sunset",

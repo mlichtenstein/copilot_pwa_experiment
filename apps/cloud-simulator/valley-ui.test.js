@@ -68,7 +68,7 @@ test("Valley textures: loading lock, previews, wind clock, Step, brush layout, R
   // Ratings save every control (not the wind clock); a saved run restores them.
   page.applyParams({ ...page.getParams(), horizon: "open", shape: "ribbon", brushSeed: 5 }); frame();
   assert.equal($("horizon-open").checked, true); assert.equal($("shape").value, "ribbon"); assert.match($("stats").textContent, /layout 5/);
-  assert.deepEqual(Object.keys(page.getParams()).sort(), [...valley.params.map(param => param.key), "resolution"].sort());
+  assert.deepEqual(Object.keys(page.getParams()).sort(), [...valley.params.map(param => param.key), "resolution", "drift"].sort());
 });
 
 test("Valley textures: a failed load says so", async () => {

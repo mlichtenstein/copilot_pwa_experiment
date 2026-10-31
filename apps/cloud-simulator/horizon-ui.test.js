@@ -18,7 +18,7 @@ test("Horizon: altitude redraws, the shared sun plays and pauses, reset restores
   frame();
   assert.deepEqual($("playback").children.map(button => button.textContent), ["Play sunset", "Reset sun", "Reset experiment"]);
   assert.deepEqual($("controls").children.map(label => label.children.find(child => child.tagName === "INPUT").id),
-    ["sunPhase", ...SUN_PATH_KEYS, "cloudAltitude", "altitudeSpread", "distanceScale", "airDensity", "aerosol", "exposure"]);
+    ["drift", "sunPhase", ...SUN_PATH_KEYS, "cloudAltitude", "altitudeSpread", "distanceScale", "airDensity", "aerosol", "exposure"]);
   assert.match($("stats").textContent, /^Fixed bitmaps · six layers · \d+ ms\/frame$/);
   assert.match($("cloud-status").textContent, /^Near cloud: .* km high, .* km away, (sunlit|Earth shadow) · Middle cloud: .* · Far cloud: /);
   const first = canvas.pixels();

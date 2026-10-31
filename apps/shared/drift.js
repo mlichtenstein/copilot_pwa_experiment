@@ -3,7 +3,7 @@
  *   walk (Ornstein-Uhlenbeck), so a visitor can press play, leave it and come back to new
  *   settings. The walk itself (createDrift) is pure and deterministic for a given seed;
  *   bindDrift drives range inputs with it.
- * Consumers: ../cloud-simulator/noise.js (and any app that wants drifting sliders);
+ * Consumers: ../cloud-simulator/core/host.js (the Drift checkbox on every experiment page);
  *   drift.test.js.
  * Dependencies: none; bindDrift needs DOM <input type="range"> elements.
  */
@@ -60,6 +60,7 @@ export function createDrift(ranges, values = {}, { seed = 1, timeConstant = DRIF
 // Drive range inputs with a drift walk. `step(dt)` moves every slider (snapped to its own
 // step for display, while the walk keeps its exact position) and calls onChange(slider) for
 // each; a person dragging a slider takes it over, and it wanders on from where they leave it.
+// Disabled sliders hold still.
 export function bindDrift(sliders, { seed = 1, onChange = () => {}, ...options } = {}) {
   const ranges = Object.fromEntries(sliders.map(slider => [slider.id, { min: Number(slider.min), max: Number(slider.max) }]));
   const walk = createDrift(ranges, Object.fromEntries(sliders.map(slider => [slider.id, Number(slider.value)])), { seed, ...options });
@@ -78,7 +79,8 @@ export function bindDrift(sliders, { seed = 1, onChange = () => {}, ...options }
     step(dt) {
       const values = walk.step(dt);
       for (const slider of sliders) {
-        if (held.has(slider)) { walk.set(slider.id, Number(slider.value)); continue; }
+        // Held or disabled (greyed out because it does nothing right now): stays put.
+        if (held.has(slider) || slider.disabled) { walk.set(slider.id, Number(slider.value)); continue; }
         slider.value = values[slider.id]; onChange(slider);
       }
     }
