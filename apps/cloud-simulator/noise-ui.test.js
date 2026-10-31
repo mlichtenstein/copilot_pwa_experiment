@@ -1,5 +1,5 @@
 /* Purpose: Check Noise weather on the shared host: it plays on load at 20 ticks a second,
- *   Step and Reset work on the current run, a new seed restarts, the view changes only the
+ *   Step works on the current run, Randomize keeps the seed, a new seed restarts, the view changes only the
  *   picture, Drift moves the sliders while playing, and saved ratings round-trip.
  * Consumers: Node test runner. Dependencies: node:test, node:assert, noise-experiment.js,
  *   core/host.js and core/fake-dom.js. */
@@ -9,15 +9,15 @@ import { noise } from "./noise-experiment.js";
 import { mountExperiment } from "./core/host.js";
 import { fakeDocument, fakeCanvas, manualFrames } from "./core/fake-dom.js";
 
-test("Noise weather: autoplay ticks, Step, Reset, New seed, views, Drift and saved runs", () => {
+test("Noise weather: autoplay ticks, Step, Randomize, New seed, views, Drift and saved runs", () => {
   const doc = fakeDocument(["sky", "presets", "playback", "controls", "stats", "status", "legend"]);
   const canvas = fakeCanvas(doc, 32, 24), { raf, frame } = manualFrames(), $ = id => doc.getElementById(id);
   const page = mountExperiment(noise, { doc, raf, presets: false, serviceWorker: null, playing: true });
   const tick = () => Number(/^Tick (\d+)/.exec($("stats").textContent)[1]);
   frame();
-  assert.deepEqual($("playback").children.map(node => node.textContent || node.className), ["Pause", "Step", "Reset", "New seed"]);
-  assert.deepEqual($("controls").children.map(node => node.tagName === "FIELDSET" ? node.children[0].children[0].textContent : node.className === "drift" ? "drift" : node.children.find(child => child.tagName === "SELECT").id),
-    ["drift", "view", "Sky", "Cloud layer", "Rain"]);
+  assert.deepEqual($("playback").children.map(node => node.textContent || node.className), ["Pause", "Step", "New seed"]);
+  assert.deepEqual($("controls").children.map(node => node.tagName === "FIELDSET" ? node.children[0].children[0].textContent : node.className?.startsWith("drift") ? node.className : node.children.find(child => child.tagName === "SELECT").id),
+    ["drift", "drift drift-speed", "drift randomize", "view", "Sky", "Cloud layer", "Rain"]);
   assert.match($("stats").textContent, /^Tick 0 · Cloud \d+% · Rain in air \d+\.\d\d · Puddles \d+\.\d\d$/);
   assert.match($("legend").textContent, /^Sunset:/);
 
@@ -31,7 +31,7 @@ test("Noise weather: autoplay ticks, Step, Reset, New seed, views, Drift and sav
   $("step").fire("click"); frame(); assert.equal(tick(), 21); assert.equal($("play").textContent, "Play");
   frame(500); assert.equal(tick(), 21, "paused");
   $("view").value = "sunset"; $("view").fire("change");
-  $("reset").fire("click"); frame(); assert.equal(tick(), 0); assert.equal(page.getParams().seed, seed);
+  $("randomize").fire("click"); frame(); assert.equal(page.getParams().seed, seed, "Randomize keeps the seed");
   const restarted = canvas.pixels();
   $("cloudiness").value = "0.6"; $("cloudiness").fire("input"); frame();
   assert.notDeepEqual(canvas.pixels(), restarted, "paused slider changes show at once");
@@ -49,7 +49,7 @@ test("Noise weather: autoplay ticks, Step, Reset, New seed, views, Drift and sav
   // A saved run (old ratings stored sliders, seed, view and drift) restores and restarts.
   page.applyParams({ ...noise.params.reduce((all, param) => ({ ...all, [param.key]: param.default }), {}), seed: 7, view: "water", drift: false, wind: 0.3 });
   frame(0);
-  assert.deepEqual(Object.keys(page.getParams()).sort(), [...noise.params.map(param => param.key), "resolution", "drift"].sort());
+  assert.deepEqual(Object.keys(page.getParams()).sort(), [...noise.params.map(param => param.key), "resolution", "drift", "driftSpeed"].sort());
   assert.equal(page.getParams().seed, 7); assert.equal($("view").value, "water"); assert.equal($("drift").checked, false);
   assert.equal(Number($("wind").value), 0.3); assert.equal(tick(), 0);
 });

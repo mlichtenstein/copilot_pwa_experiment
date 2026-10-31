@@ -16,7 +16,7 @@ import { validateExperiment, validateInstance, cleanParams, cleanParam, defaultP
 import { createClock, startLoop } from "./clock.js";
 import { DEFAULT_SUN_SHAPE, SUN_PATH_PARAMS, nearestPhase, sunAt, sunPhase, timeForPhase } from "./sun-path.js";
 import { mountPresetBar } from "../../shared/presets-panel.js";
-import { bindDrift } from "../../shared/drift.js";
+import { bindDrift, seededRandom, DRIFT } from "../../shared/drift.js";
 
 // Where the sun starts and where Reset sun puts it: an eighth of the way round, in the top
 // lobe, high and to the right (15° across and about 20° up with the default path shape).
@@ -261,22 +261,55 @@ export function mountExperiment(experiment, {
   if (sunControl && !sunControl.element.parentNode) placeSun();
 
   // Drift (every experiment with a driftable slider, unless it sets drift: false): while
-  // playing, those sliders wander on their own slow random walk (own random numbers, so
-  // simulation seeds are untouched). Dragging a slider takes it over; greyed-out sliders hold
-  // still. The walk moves by the clock time that passes, so it stops when paused. The
-  // checkbox heads the controls it moves; its changes redraw at the experiment's frame rate.
-  const driftSliders = experiment.drift === false ? [] : driftableParams(experiment).map(param => controls.get(param.key).input);
-  let drift = null, driftBox = null;
+  // playing, those sliders wander on their own slow random walk across their whole range (own
+  // random numbers, so simulation seeds are untouched). Dragging a slider takes it over;
+  // greyed-out sliders hold still. The walk moves by the clock time that passes, so it stops
+  // when paused. The checkbox, its speed slider and Randomize head the controls they move;
+  // drift changes redraw at the experiment's frame rate.
+  const driftParams = experiment.drift === false ? [] : driftableParams(experiment);
+  const driftSliders = driftParams.map(param => controls.get(param.key).input);
+  let drift = null, driftBox = null, speedInput = null, speedOutput = null;
+  const setDriftSpeed = value => {
+    const speed = Math.min(DRIFT.speed.max, Math.max(DRIFT.speed.min, finite(value) ? value : DRIFT.speed.default));
+    speedInput.value = String(Math.log10(speed));
+    speedOutput.textContent = `${speed < 1 ? speed.toFixed(2) : speed.toFixed(1)}×`;
+    drift.walk.setSpeed(speed);
+  };
   if (driftSliders.length) {
     driftBox = make(doc, "input", { id: "drift", type: "checkbox", checked: false });
     const label = make(doc, "label", { className: "drift" }, driftBox, " Drift ",
-      make(doc, "small", { textContent: "While playing, every slider below wanders slowly on its own (noticeably within a minute); drag one to steer it."
+      make(doc, "small", { textContent: "While playing, every slider below wanders slowly on its own, anywhere in its range (across all of it in a few minutes at 1×); drag one to steer it."
         + (experiment.sun ? " The sun and its path sliders stay put." : "") }));
-    label.title = "Slowly wander the sliders on a mean-reverting random walk while playing";
-    panel.prepend(label);
+    label.title = "Slowly wander the sliders on a random walk across their whole range while playing";
+    // Drift speed: a log slider from 0.1× to 10× the walk's step, 1× in the middle. It never
+    // drifts or gets randomized itself; it stays live while Drift is off so it can be set first.
+    speedInput = make(doc, "input", { id: "drift-speed", type: "range", min: "-1", max: "1", step: "0.05", value: "0" });
+    const speedLabel = make(doc, "label", { className: "drift drift-speed", title: "How fast Drift moves the sliders: 0.1× to 10× (log scale), 1× in the middle" },
+      "Drift speed ", speedInput, speedOutput = make(doc, "output", { textContent: "1.0×" }),
+      make(doc, "small", { textContent: "Scales each drift step; 1× crosses a slider's range in about 7 minutes, 10× in seconds, 0.1× in hours." }));
+    // Randomize: every slider Drift moves (not the sun, its path, seeds, menus, toggles or
+    // greyed-out sliders) to a uniformly random value in its range, from its own random numbers.
+    const randomize = make(doc, "button", { id: "randomize", type: "button", textContent: "Randomize",
+      title: "Set every slider Drift moves to a random value in its range (the sun, its path, seeds, menus, toggles and greyed-out sliders stay)" });
+    const randomizeLabel = make(doc, "div", { className: "drift randomize" }, randomize,
+      make(doc, "small", { textContent: "Every slider below that Drift moves jumps to a random value in its range; greyed-out ones stay." + (experiment.sun ? " The sun and its path stay put." : "") }));
+    panel.prepend(label, speedLabel, randomizeLabel);
+    lockable.push(randomize);
     let moved = null;
     drift = bindDrift(driftSliders, { seed: randomSeed(), onChange: slider => { (moved ??= {})[slider.id] = slider.value; } });
     driftBox.addEventListener("change", () => drift.sync());
+    speedInput.addEventListener("input", () => setDriftSpeed(10 ** Number(speedInput.value)));
+    const randomizeRandom = seededRandom(randomSeed());
+    randomize.addEventListener("click", () => {
+      const next = {};
+      for (const param of driftParams) {
+        if (controls.get(param.key).input.disabled) continue;
+        const steps = Math.floor((param.max - param.min) / param.step + 1e-9);
+        next[param.key] = Math.min(param.max, Number((param.min + Math.floor(randomizeRandom() * (steps + 1)) * param.step).toFixed(10)));
+      }
+      setParams({ ...params, ...next }, { linked: true });
+      drift.sync();
+    });
     // Returns true when a slider moved; the redraw then waits for frameInterval like any
     // other playback frame rather than forcing one every animation frame.
     drift.advance = dt => {
@@ -309,12 +342,12 @@ export function mountExperiment(experiment, {
   }, { raf, doc });
 
   // Ratings and links: every param, the sun's place on the path and the path's shape, the
-  // grid size and Drift.
+  // grid size, Drift and its speed.
   const getParams = () => ({
     ...params,
     ...(experiment.sun ? { sunPhase: sunPhase(clock.time), ...sunShape } : {}),
     ...(sizeParam ? {} : { resolution: `${canvas.width}x${canvas.height}` }),
-    ...(driftBox ? { drift: driftBox.checked } : {})
+    ...(driftBox ? { drift: driftBox.checked, driftSpeed: drift.walk.speed } : {})
   });
   function applyParams(raw) {
     const source = raw && typeof raw === "object" ? raw : {};
@@ -329,6 +362,8 @@ export function mountExperiment(experiment, {
       else if (finite(source.sunAzimuth) && finite(source.sunElevation)) clock.set(timeForPhase(nearestPhase(source.sunAzimuth, source.sunElevation, sunShape)));
     }
     if (driftBox && typeof source.drift === "boolean") driftBox.checked = source.drift;
+    // Links from before the speed slider load at 1×.
+    if (driftBox) setDriftSpeed(source.driftSpeed);
     // Missing keys fall back to defaults (seeds included, so a saved run is reproduced).
     setParams(cleanParams(experiment, source, defaultParams(experiment)));
     drift?.sync();

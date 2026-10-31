@@ -21,8 +21,8 @@ test("Sunset on the host: generated controls, shared sun playback, pause, reset 
   const $ = id => doc.getElementById(id);
 
   // Controls: View first, then the seed, the shared sun, and the lighting sliders, with tooltips on buttons.
-  assert.deepEqual($("controls").children.map(label => label.children.find(child => ["INPUT", "SELECT"].includes(child.tagName))?.id),
-    ["drift", "view", "seed", "sunPhase", ...SUN_PATH_KEYS, "extinction", "slabDepth", "albedo", "g", "airOpticalDepth", "ambient", "exposure"]);
+  assert.deepEqual($("controls").children.map(label => label.children.find(child => ["INPUT", "SELECT", "BUTTON"].includes(child.tagName))?.id),
+    ["drift", "drift-speed", "randomize", "view", "seed", "sunPhase", ...SUN_PATH_KEYS, "extinction", "slabDepth", "albedo", "g", "airOpticalDepth", "ambient", "exposure"]);
   assert.deepEqual($("playback").children.map(button => button.textContent), ["Play sun", "Reset sun", "New density seed"]);
   assert.ok($("playback").children.every(button => button.title));
 
@@ -58,7 +58,7 @@ test("Sunset on the host: generated controls, shared sun playback, pause, reset 
 
   // Params round-trip, including the sun's place and path shape; untrusted values are cleaned.
   const saved = page.getParams();
-  assert.deepEqual(Object.keys(saved).sort(), [...sunset.params.map(param => param.key), "sunPhase", ...SUN_PATH_KEYS, "resolution", "drift"].sort());
+  assert.deepEqual(Object.keys(saved).sort(), [...sunset.params.map(param => param.key), "sunPhase", ...SUN_PATH_KEYS, "resolution", "drift", "driftSpeed"].sort());
   page.applyParams({ ...saved, extinction: 5, view: "nope", seed: "x", sunPhase: 0.25 });
   frame();
   assert.equal($("extinction").value, "0.5");

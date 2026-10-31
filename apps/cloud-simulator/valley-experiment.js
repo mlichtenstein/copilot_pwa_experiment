@@ -77,9 +77,7 @@ export const valley = {
       newTitle: "Choose another stable randomized brush layout; photographs stay unchanged" }
   ],
   actions: [
-    { id: "step", label: "Step 1 second", title: "Pause and move the wind clock on one second", run: page => { page.setPlaying(false); page.instance.time += 1; } },
-    { id: "reset", label: "Reset", title: "Pause, put the wind clock back to 0 and every control back to its default",
-      run: page => { page.setPlaying(false); page.instance.time = 0; page.resetToDefaults(); } }
+    { id: "step", label: "Step 1 second", title: "Pause and move the wind clock on one second", run: page => { page.setPlaying(false); page.instance.time += 1; } }
   ],
   stats: (params, frame, instance) =>
     `${textureFor(params.textureA).name} → ${textureFor(params.textureB).name} · ${Math.round(params.textureBlend * 100)}% B · layout ${params.brushSeed} · t ${instance.time.toFixed(1)} s · ${instance.lastMs.toFixed(0)} ms/frame`,
