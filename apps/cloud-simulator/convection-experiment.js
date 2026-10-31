@@ -65,17 +65,17 @@ export const convection = {
     slider("fallSpeed", 0, 1, 0.05, "Fraction of each pixel’s rain moving down one pixel per tick; 1 outruns the fastest updraft."),
     slider("flicker", 0, 1.5, 0.05, "Seeded random wobble of the floor temperature per column; keeps the flow from locking."),
     { key: "speed", kind: "range", min: 1, max: 60, step: 1, default: 30, drift: false, help: "Simulation ticks per second; playback speed, not a wind speed." },
-    { key: "water", kind: "range", min: 0, max: 0.4, step: 0.01, default: 0.11, group: START, help: "Mean water per pixel (vapor + cloud + rain + puddles); conserved for the whole run." },
+    // Changing water restarts the run, so Drift leaves it alone.
+    { key: "water", kind: "range", min: 0, max: 0.4, step: 0.01, default: 0.11, group: START, drift: false, help: "Mean water per pixel (vapor + cloud + rain + puddles); conserved for the whole run." },
     // Seeds only make a run reproducible; behavior should look alike on any seed, so the
-    // page picks one at random and Reset restarts the same run.
+    // page picks one at random; New seed starts another.
     { key: "seed", kind: "seed", default: 42, random: true, hidden: true, newLabel: "New seed", newTitle: "Start a new run on a random seed" }
   ],
   // The pixel-art style follows a resolution switch (on for 64×48, off for 128×96) and can
   // still be changed afterwards.
   adjust: (next, previous) => next.resolution !== previous.resolution ? { ...next, pixelArt: next.resolution === "64x48" } : next,
   actions: [
-    { id: "step", label: "Step", title: "Pause and advance one tick", run: page => { page.setPlaying(false); page.instance.tick(); } },
-    { id: "reset", label: "Reset", title: "Restart the run on the same seed and settings", run: page => page.instance.restart() }
+    { id: "step", label: "Step", title: "Pause and advance one tick", run: page => { page.setPlaying(false); page.instance.tick(); } }
   ],
   readouts: { legend: params => legends[params.view === "sunset" && params.cloudStyle === "raw" ? "sunsetRaw" : params.view] },
   stats: (params, frame, { simulation }) =>

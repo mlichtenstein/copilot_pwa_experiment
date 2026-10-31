@@ -9,6 +9,7 @@ export function fakeDocument(ids = ["sky", "presets", "playback", "controls", "s
   const node = tag => ({
     tagName: tag.toUpperCase(), children: [], parentNode: null, listeners: {}, attributes: {}, textContent: "", value: "", checked: false, disabled: false,
     append(...items) { for (const item of items) if (typeof item === "object") { item.parentNode = this; this.children.push(item); register(item); } },
+    prepend(...items) { const nodes = items.filter(item => typeof item === "object"); for (const item of nodes) { item.parentNode = this; register(item); } this.children.unshift(...nodes); },
     addEventListener(name, fn) { (this.listeners[name] ??= []).push(fn); },
     fire(name) { for (const fn of this.listeners[name] ?? []) fn({ isTrusted: true }); },
     setAttribute(name, value) { this.attributes[name] = value; },

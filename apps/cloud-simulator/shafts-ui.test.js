@@ -1,6 +1,6 @@
 /* Purpose: Check Light shafts on the shared host: strategy radios redraw and grey out the
- *   visibility-only sliders, pattern buttons change one cloud picture, Reset experiment
- *   restores lighting and patterns but keeps the strategy, the shared sun plays inside the
+ *   visibility-only sliders, pattern buttons change one cloud picture, Randomize changes the
+ *   lighting but keeps the strategy and patterns, the shared sun plays inside the
  *   scene's limits, and old links with fixed sun angles still load.
  * Consumers: Node test runner. Dependencies: node:test, node:assert, shafts-experiment.js,
  *   core/host.js, core/sun-path.js and core/fake-dom.js. */
@@ -11,7 +11,7 @@ import { mountExperiment } from "./core/host.js";
 import { DEFAULT_SUN_SHAPE, sunAt } from "./core/sun-path.js";
 import { fakeDocument, fakeCanvas, manualFrames } from "./core/fake-dom.js";
 
-test("Light shafts: strategies, patterns, reset keeps the strategy, the shared sun stays in the scene's limits", () => {
+test("Light shafts: strategies, patterns, Randomize keeps the strategy, the shared sun stays in the scene's limits", () => {
   const doc = fakeDocument(["sky", "presets", "playback", "controls", "stats", "status", "patterns", "pattern-buttons"]);
   const canvas = fakeCanvas(doc, 32, 20), { raf, frame } = manualFrames(), $ = id => doc.getElementById(id);
   const page = mountExperiment(shafts, { doc, raf, presets: false, serviceWorker: null });
@@ -22,7 +22,7 @@ test("Light shafts: strategies, patterns, reset keeps the strategy, the shared s
   };
   frame();
   const first = canvas.pixels();
-  assert.deepEqual($("playback").children.map(button => button.textContent), ["Play sun", "Reset sun", "Reset experiment"]);
+  assert.deepEqual($("playback").children.map(button => button.textContent), ["Play sun", "Reset sun"]);
   assert.deepEqual($("pattern-buttons").children.map(button => button.textContent), ["Change near", "Change middle", "Change far"]);
   assert.equal($("patterns").textContent, "near: 42 · middle: 1039 · far: 2036");
   assert.match($("stats").textContent, /^3 cloud layers · layered visibility · \d+ ms\/frame$/);
@@ -39,10 +39,11 @@ test("Light shafts: strategies, patterns, reset keeps the strategy, the shared s
   assert.equal($("patterns").textContent, "near: 43 · middle: 1039 · far: 2036");
   assert.notDeepEqual(canvas.pixels(), first);
   strategy("geometric"); input("haze", 0.8);
-  $("reset-experiment").fire("click"); frame();
-  assert.equal($("patterns").textContent, "near: 42 · middle: 1039 · far: 2036");
-  assert.equal(Number($("haze").value), 0.35); assert.equal($("strategy-geometric").checked, true, "reset keeps the strategy");
-  strategy("layered"); assert.deepEqual(canvas.pixels(), first);
+  $("randomize").fire("click"); frame();
+  assert.equal($("patterns").textContent, "near: 43 · middle: 1039 · far: 2036", "Randomize keeps the patterns");
+  assert.equal($("strategy-geometric").checked, true, "Randomize keeps the strategy");
+  assert.ok(Number($("haze").value) >= 0 && Number($("haze").value) <= 1);
+  strategy("layered");
 
   // The shared sun moves; the scene follows its elevation and holds it inside its sideways reach.
   $("play").fire("click"); for (let i = 0; i < 20; i++) frame(200);

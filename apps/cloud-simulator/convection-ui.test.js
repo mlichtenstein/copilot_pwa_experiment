@@ -22,7 +22,7 @@ test("Convection study: layout, playback, options, resolution, restarts and save
   const page = mountExperiment(convection, { doc, raf, presets: false, serviceWorker: null, playing: true });
   const tick = () => Number(/^Tick (\d+)/.exec($("stats").textContent)[1]);
   frame();
-  assert.deepEqual($("playback").children.map(node => node.textContent), ["Pause", "Step", "Reset", "New seed"]);
+  assert.deepEqual($("playback").children.map(node => node.textContent), ["Pause", "Step", "New seed"]);
   const legends = $("controls").children.filter(node => node.tagName === "FIELDSET").map(node => node.children[0].textContent);
   assert.deepEqual(legends, ["Options · part of the run’s parameters", "Starting fields · changing these resets the run"]);
   assert.equal($("controls").children.at(-1).tagName, "FIELDSET", "water sits last, after the rule sliders");
@@ -46,7 +46,9 @@ test("Convection study: layout, playback, options, resolution, restarts and save
 
   const seed = page.getParams().seed;
   $("step").fire("click"); frame(); assert.equal(tick(), 41); assert.equal($("play").textContent, "Play");
-  $("reset").fire("click"); frame(); assert.equal(tick(), 0); assert.equal(page.getParams().seed, seed);
+  // Randomize moves the rule sliders, never water (which would restart) or the seed.
+  const water = page.getParams().water; $("randomize").fire("click"); frame();
+  assert.equal(page.getParams().water, water); assert.equal(page.getParams().seed, seed);
   $("step").fire("click"); $("water").value = "0.2"; $("water").fire("input"); frame();
   assert.equal(tick(), 0, "water restarts the run"); assert.match($("stats").textContent, /Water\/cell 0\.200/);
 

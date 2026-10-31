@@ -49,8 +49,6 @@ export const shafts = {
     slider("edgeFeather", 0, 6, 0.5, "Visibility strategies only: fades the cloud-facing and radius-facing ends of lit regions. Ray sides stay crisp. Native image pixels; 0 restores hard ends.", { enabled: polygons }),
     pattern("nearPattern", 0, "near"), pattern("middlePattern", 1, "middle"), pattern("farPattern", 2, "far")
   ],
-  actions: [{ id: "reset-experiment", label: "Reset experiment", title: "Lighting, the sun, its path and the cloud patterns back to their defaults, paused; the strategy stays",
-    run: page => { page.setPlaying(false); page.resetToDefaults({ keep: ["strategy"] }); } }],
   readouts: { patterns: (params, frame, instance) => instance.scene.layers.map(layer => `${layer.name}: ${layer.seed}`).join(" · ") },
   stats: (params, frame, instance) => `3 cloud layers · ${modeName(params)} · ${instance.lastMs.toFixed(0)} ms/frame`,
   create({ width, height, params }) {

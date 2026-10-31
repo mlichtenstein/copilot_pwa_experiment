@@ -87,14 +87,16 @@ test("generic controls: groups, radios, toggles, enabled rules, linked params an
 
   // Saved params: old or unknown keys are harmless; drift and the size come back.
   page.applyParams({ mode: "b", resolution: "8x6", crisp: "false", gain: 99, sunAzimuth: 3, drift: true, nonsense: 1 });
-  assert.deepEqual(page.getParams(), { mode: "b", level: 0.5, resolution: "8x6", crisp: false, gain: 10, rate: 30, seed: 1, layout: 1, drift: true });
+  assert.deepEqual(page.getParams(), { mode: "b", level: 0.5, resolution: "8x6", crisp: false, gain: 10, rate: 30, seed: 1, layout: 1, drift: true, driftSpeed: 1 });
   assert.equal($("drift").checked, true);
 });
 
 test("playback: autoplay labels, actions, frame gating, Drift and reset", () => {
   const { experiment, log } = toy();
   const { page, frame, canvas, $ } = mount(experiment, { playing: true });
-  assert.deepEqual($("playback").children.map(node => node.textContent || node.className), ["Pause wind", "Step", "Reset", "New seed", "New layout", "drift"]);
+  assert.deepEqual($("playback").children.map(node => node.textContent || node.className), ["Pause wind", "Step", "Reset", "New seed", "New layout"]);
+  // Drift heads the controls it moves, with its explanation beside it.
+  assert.equal($("controls").children[0].className, "drift"); assert.equal($("controls").children[0].children[0], $("drift"));
   frame(); const drawn = canvas.pixels();
   // Steps that change nothing do not redraw; a tick redraws once the frame interval passes.
   for (let i = 0; i < 4; i++) frame(100);

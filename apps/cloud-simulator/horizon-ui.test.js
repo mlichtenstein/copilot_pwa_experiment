@@ -1,24 +1,23 @@
 /* Purpose: Check Horizon light on the shared host: altitude redraws, Play sunset moves the
- *   shared sun (both angles), a manual sun position pauses, Reset experiment restores
- *   defaults, the cloud status line follows, and old ratings with fixed sun angles still load.
+ *   shared sun (both angles), a manual sun position pauses, Randomize moves the sliders but
+ *   not the sun, the cloud status line follows, and old ratings with fixed sun angles still load.
  * Consumers: Node test runner. Dependencies: node:test, node:assert, horizon-experiment.js,
- *   horizon-model.js, core/host.js, core/sun-path.js and core/fake-dom.js. */
+ *   core/host.js, core/sun-path.js and core/fake-dom.js. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { horizon } from "./horizon-experiment.js";
-import { defaults } from "./horizon-model.js";
 import { mountExperiment } from "./core/host.js";
 import { DEFAULT_SUN_SHAPE, SUN_PATH_KEYS, sunAt } from "./core/sun-path.js";
 import { fakeDocument, fakeCanvas, manualFrames } from "./core/fake-dom.js";
 
-test("Horizon: altitude redraws, the shared sun plays and pauses, reset restores defaults, old links load", () => {
+test("Horizon: altitude redraws, the shared sun plays and pauses, Randomize leaves the sun, old links load", () => {
   const doc = fakeDocument(["sky", "presets", "playback", "controls", "stats", "status", "cloud-status"]);
   const canvas = fakeCanvas(doc, 32, 20), { raf, frame } = manualFrames(), $ = id => doc.getElementById(id);
   const page = mountExperiment(horizon, { doc, raf, presets: false, serviceWorker: null });
   frame();
-  assert.deepEqual($("playback").children.map(button => button.textContent), ["Play sunset", "Reset sun", "Reset experiment"]);
-  assert.deepEqual($("controls").children.map(label => label.children.find(child => child.tagName === "INPUT").id),
-    ["sunPhase", ...SUN_PATH_KEYS, "cloudAltitude", "altitudeSpread", "distanceScale", "airDensity", "aerosol", "exposure"]);
+  assert.deepEqual($("playback").children.map(button => button.textContent), ["Play sunset", "Reset sun"]);
+  assert.deepEqual($("controls").children.map(label => label.children.find(child => child.tagName === "INPUT" || child.tagName === "BUTTON").id),
+    ["drift", "drift-speed", "randomize", "sunPhase", ...SUN_PATH_KEYS, "cloudAltitude", "altitudeSpread", "distanceScale", "airDensity", "aerosol", "exposure"]);
   assert.match($("stats").textContent, /^Fixed bitmaps · six layers · \d+ ms\/frame$/);
   assert.match($("cloud-status").textContent, /^Near cloud: .* km high, .* km away, (sunlit|Earth shadow) · Middle cloud: .* · Far cloud: /);
   const first = canvas.pixels();
@@ -34,10 +33,12 @@ test("Horizon: altitude redraws, the shared sun plays and pauses, reset restores
 
   $("sunPhase").value = "0.7"; $("sunPhase").fire("input"); assert.equal($("play").textContent, "Play sunset");
 
-  $("reset-experiment").fire("click"); frame();
-  assert.equal(Number($("cloudAltitude").value), defaults.cloudAltitude);
+  const before = page.getParams();
+  $("randomize").fire("click"); frame();
+  const after = page.getParams();
+  assert.ok(["cloudAltitude", "altitudeSpread", "distanceScale", "airDensity", "aerosol", "exposure"].some(key => after[key] !== before[key]), "Randomize moved the sliders");
+  assert.equal(after.sunPhase, before.sunPhase); assert.equal(after.sunPathWidth, before.sunPathWidth);
   assert.equal($("play").textContent, "Play sunset");
-  assert.ok(Math.abs(page.getParams().sunPhase - 0.125) < 1e-9);
 
   // A rating saved before the shared sun (its old default angles): they land on the nearest point of the path; sunSpeed drops.
   page.applyParams({ sunElevation: -1.2, sunAzimuth: -15, sunSpeed: 0.3, cloudAltitude: 4, resolution: "128x80" });
