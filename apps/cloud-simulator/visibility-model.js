@@ -199,11 +199,15 @@ export function renderVisibility(scene, visibility) {
   const { settings, width, height, color, sun } = visibility;
   const bands = visibility.bands ?? [{ ...visibility, weight: 1, brightness: 1 }];
   const pixels = new Uint8ClampedArray(width * height * 4);
+  // Veils blend toward the sun's colour, so once it has set they would darken the lit air into
+  // inverted shafts. They fade out with the same 0..−4.6° ramp as sunlight(); 1 for any sun up.
+  const sunUp = Math.max(0, Math.min(1, 1 + Math.sin(settings.sunElevation * Math.PI / 180) / 0.08));
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     const index = y * width + x;
     const rx = (2 * (x + 0.5) / width - 1) * SCALE * width / height;
     const ry = (1 - 2 * (y + 0.5) / height) * SCALE;
-    const disk = Math.hypot(x + 0.5 - sun[0], y + 0.5 - sun[1]) < 1.5 ? 4 : 0;
+    // The sun disc sets behind the horizon (ry = 0); sunlight() fades its colour and the light.
+    const disk = ry > 0 && Math.hypot(x + 0.5 - sun[0], y + 0.5 - sun[1]) < 1.5 ? 4 : 0;
     let rgb = [0.035, 0.065, 0.14].map((v, c) => v + color[c] * (disk + Math.exp(-Math.abs(ry) * 6) * 0.09));
     for (let i = 2; i >= 0; i--) {
       const layer = scene.layers[i];
@@ -211,7 +215,7 @@ export function renderVisibility(scene, visibility) {
       // First pass: collect the light veils without painting over any cloud bodies.
       const alpha = (1 - Math.exp(-settings.haze * span * 0.04)) * 0.55;
       for (const band of bands) {
-        const opacity = alpha * band.weight * combinedCoverage(band.layers, i, index);
+        const opacity = sunUp * alpha * band.weight * combinedCoverage(band.layers, i, index);
         rgb = rgb.map((v, c) => v * (1 - opacity) + opacity * color[c] * band.brightness);
       }
     }

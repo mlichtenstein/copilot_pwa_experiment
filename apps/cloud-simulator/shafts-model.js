@@ -141,7 +141,8 @@ export function renderShafts(scene, maps, width = 128, height = 80) {
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     const [rx, ry] = screenPosition(x, y, width, height, -11); // unit camera-plane distance
     const cosine = (rx * direction[0] + ry * direction[1] + direction[2]) / Math.hypot(rx, ry, 1);
-    const disk = cosine > Math.cos(0.8 * Math.PI / 180) ? 4 : 0;
+    // The sun disc sets behind the horizon (ry = 0); sunlight() fades its colour and the shafts.
+    const disk = ry > 0 && cosine > Math.cos(0.8 * Math.PI / 180) ? 4 : 0;
     let rgb = [0.035, 0.065, 0.14].map((v, c) => v + color[c] * (disk + Math.exp(-Math.abs(ry) * 6) * 0.09));
     // Back-to-front image compositing: far cloud, air, middle cloud, air, near cloud.
     for (let i = 2; i >= 0; i--) {
