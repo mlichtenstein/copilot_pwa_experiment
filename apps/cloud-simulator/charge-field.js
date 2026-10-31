@@ -9,7 +9,7 @@ export function createCharge(seed){
   for(let i=0;i<chargeWidth*chargeHeight;i++){field.values.push((random(field)-.5)*.25);field.drift.push((random(field)-.5)*2);}
   return field;
 }
-export function stepCharge(field,dt,rate){
+export function stepCharge(field,dt,rate,bias=0){
   // Fixed coarse ticks keep the field smooth in time and independent of render frequency.
   field.clock+=dt;
   while(field.clock+1e-10>=.1){
@@ -19,7 +19,7 @@ export function stepCharge(field,dt,rate){
       const x=i%chargeWidth,y=Math.floor(i/chargeWidth),q=field.values[i];let neighbors=0,count=0;
       for(const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]])if(x+dx>=0&&x+dx<chargeWidth&&y+dy>=0&&y+dy<chargeHeight){neighbors+=field.values[i+dx+dy*chargeWidth];count++;}
       field.drift[i]=Math.max(-2,Math.min(2,field.drift[i]*.96+(random(field)-.5)*.48));
-      next.push(bounded(q+.1*rate*((.7*field.bulkDrift+.3*field.drift[i])-.025*q+.12*(neighbors/count-q))));
+      next.push(bounded(q+.1*rate*(bias+(.7*field.bulkDrift+.3*field.drift[i])-.025*q+.12*(neighbors/count-q))));
     }
     field.values=next;
   }
