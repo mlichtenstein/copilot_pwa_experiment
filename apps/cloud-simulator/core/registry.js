@@ -8,6 +8,7 @@
 // href is relative to apps/cloud-simulator/. Every experiment page is ported to
 // core/experiment.js (see issue #68).
 export const experiments = [
+  { id: "weather", title: "Weather layers", href: "weather.html", load: () => import("../weather-experiment.js").then(module => module.weather) },
   { id: "sunset", title: "Sunset study", href: "sunset.html", load: () => import("../sunset-experiment.js").then(module => module.sunset) },
   { id: "horizon", title: "Horizon light", href: "horizon.html", load: () => import("../horizon-experiment.js").then(module => module.horizon) },
   { id: "shafts", title: "Light shafts", href: "shafts.html", load: () => import("../shafts-experiment.js").then(module => module.shafts) },
