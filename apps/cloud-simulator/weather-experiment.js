@@ -36,6 +36,7 @@ export const weather={id:"weather",title:"Weather layers",app:"cloud-simulator/w
   ],
   actions:[{id:"step-weather",label:"Step 0.1 s",title:"Pause and advance two fixed weather ticks",run:page=>{page.setPlaying(false);page.instance.step(.1);}},
     {id:"reset-weather",label:"Reset weather",title:"Pause and restore default settings with fresh weather",run:page=>{page.setPlaying(false);page.resetToDefaults();}}],
+  decorate({doc}){for(const param of weather.params){const input=doc.getElementById(param.key);if(input)input.title=param.help??param.key;}return ()=>{};},
   create({width,height,params}){
     let current=params,state=createWeather(params.seed,params),maps=null;
     const samples={dynamics:[],lighting:[],drawing:[]},record=(key,value)=>{samples[key].push(value);if(samples[key].length>60)samples[key].shift();};
