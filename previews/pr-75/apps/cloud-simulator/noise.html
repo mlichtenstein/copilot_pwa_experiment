@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<!-- Purpose: Noise weather experiment controls and field display. Consumers: browser.
+     Dependencies: style.css, ../shared/presets.css, noise.js (mounts noise-experiment.js with core/host.js, which builds the controls, the emoji rating bar and Drift), noise-model.js, manifest.json. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111c30">
+  <title>Cloud Simulator · Noise weather</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="../shared/presets.css">
+</head>
+<body class="experiment">
+<main class="experiment-layout">
+  <header class="experiment-header"><p class="eyebrow">Cloud simulator / Experiment 04</p><h1>Noise weather</h1>
+    <p>Humidity, heat and pressure drift as noise through time. Everything drifts with one wind. Clouds condense fast where the air saturates inside a cloud layer and linger after; dense, lasting clouds rain, and the rain falls all the way to the floor.</p><p><a href="sunset.html">Sunset study</a> · <a href="convection.html">Convection study</a> · <a href="horizon.html">Horizon light</a> · <a href="shafts.html">Light shafts</a> · <a href="lightning.html">Lightning</a> · <a href="weather.html">Weather layers</a> · Noise weather</p></header>
+  <section class="viewport simulation-pane with-presets" aria-label="Vertical slice of noise-driven weather">
+    <div id="presets" role="group" aria-label="Rate these settings"></div>
+    <div class="canvas-fit"><canvas id="sky" style="--ar: 1.3333" width="128" height="96" role="img" aria-label="Animated pixel-art sunset sky with clouds forming and fading and rain falling; use the view menu for the humidity, temperature, pressure, cloud-forming, or cloud and rain fields."></canvas></div>
+    <div class="axis"><span>Lid</span><span>Floor, puddles ↓</span></div>
+  </section>
+  <div class="controls-pane" role="region" aria-label="Scrollable experiment controls" tabindex="0">
+  <div id="playback" class="playback"></div>
+  <p id="stats" class="stats"></p>
+  <section id="controls" class="controls" aria-label="Experiment parameters"></section>
+  <p id="legend"></p>
+  <details><summary>The rules and formulas</summary>
+    <p>The noise is only the forcing; cloud water and rain are stored and evolve. <code>humidity</code>, <code>temperature</code> and <code>pressure</code> are each a 2D slice of its own seeded 3D Perlin noise, with time as the third axis, sliding sideways with the wind: <code>value = bias + amplitude × 2 × fractal((x − scroll) / size, y / size, time)</code>. <code>size</code> is <code>featureSize</code> (×1.5 for temperature, ×2 for pressure); <code>time</code> grows by <code>changeSpeed</code> per tick (temperature and pressure change more slowly); <code>scroll</code> grows by <code>wind</code>. Humidity's bias is <code>cloudiness</code>; the other noise settings are fixed.</p>
+    <p><code>capacity = exp(3 × (temperature − 1)) × (1 + 0.3 × pressure)</code>, so cold air and low pressure hold less; <code>relative = humidity / capacity</code>.</p>
+    <p><b>Cloud layer.</b> With altitude 0 at the floor and 1 at the lid, <code>band = exp(−(|altitude − layerHeight| / w)^1.5)</code>, where the half-width <code>w</code> is <code>layerThickness / 2 × (1 + layerAsymmetry)</code> above the middle and <code>× (1 − layerAsymmetry)</code> below. It is 1 in the middle and fades softly to 0 above and below (the fixed exponent 1.5 gives no flat top or hard edge). <code>potential = clamp((relative × band − 1) × 8, 0, 1)</code>, so clouds form only inside the layer, with a crisper bottom when the asymmetry is positive.</p>
+    <p><b>Cloud water.</b> Each pixel stores cloud water, carried by the wind. Where the potential is higher it condenses fast (30% of the gap per tick); where it is lower it evaporates slowly and from the edges in: <code>loss = 0.04 × 10^(−1.5 × persistence) × (0.05 + 10 × exposure)</code> per tick, where <code>exposure</code> is the mean cloud missing from the 8 neighboring pixels (0 deep inside a cloud, about 0.4 on a straight edge, 1 for a lone pixel). So a fading cloud keeps a dense core and shrinks as its edge eats inward.</p>
+    <p><b>Rain.</b> Cloud water of at least 0.8 builds charge (+0.012 per tick, up to 1; anywhere thinner it drains 10% per tick). Past 0.6, about 50 ticks of staying dense, it makes up to <code>rainAmount</code> rain per tick (more the denser it is) and loses twice that in cloud water, so a cloud the noise no longer feeds rains itself thin, stops raining and then fades. Every tick all rain moves <code>fallSpeed</code> pixels down and <code>wind</code> pixels sideways, split over neighboring pixels, carried in whole pixels with the cloud it fell from, and each pixel passes 0.3% of itself to each side neighbor, so a shaft widens only slightly. Rain never dries in the air: it falls until it leaves the floor into that column’s puddle, which dries at 0.2% per tick. Rain made = rain in the air + puddles + evaporated, exactly.</p>
+    <p><b>Sunset view.</b> Nine dithered sky bands and cloud in four shades lit from a low sun off the lower right. Rain is drawn from the rain in the air two ways, neither of which changes the simulation, so every shaft can be followed from the floor up to its cloud. A dithered grey <b>curtain</b> covers wherever rain is falling, denser where there is more: it starts inside the raining cloud, evening out the cloud's lower part, and runs to the floor; when a cloud stops raining the top of its curtain lets go and falls away. Thin <b>streaks</b> of random length (3–30 pixels, mostly short) are born anywhere in the falling rain, more where it is heavy: each slides down at about <code>fallSpeed</code>, leans and drifts with the wind, and fades in and out over its life, drawn as sky-tinted grey.</p>
+    <p><b>Drift.</b> Each slider follows its own mean-reverting random walk (Ornstein-Uhlenbeck): it wanders about a fifth of its range around where it started or was last set, forgets its path over about a minute of play, and bounces off the ends of its range. It uses its own random numbers, so the weather seed is unchanged, and it only moves while playing.</p>
+  </details>
+  <p id="status" role="status"></p><noscript>This experiment needs JavaScript to run.</noscript>
+</div>
+</main>
+<script type="module" src="noise.js"></script>
+</body>
+</html>
