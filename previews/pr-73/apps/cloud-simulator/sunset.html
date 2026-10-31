@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<!-- Purpose: Sunset light laboratory page shell. Consumers: browser. Dependencies: sunset.js (mounts the Sunset experiment module with core/host.js, which builds the buttons and controls into #playback and #controls and mounts the emoji rating bar in #presets), style.css, ../shared/presets.css. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#111c30"><title>Cloud Simulator · Sunset study</title>
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="../shared/presets.css"><link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg"></head>
+<body class="experiment"><main class="experiment-layout"><header class="experiment-header"><p class="eyebrow">Cloud simulator / Experiment 02</p><h1>Sunset study</h1>
+<p>Fixed droplets. Moving sunlight. Follow the light to the camera.</p><p>Sunset study · <a href="convection.html">Convection study</a> · <a href="horizon.html">Horizon light</a> · <a href="shafts.html">Light shafts</a> · <a href="noise.html">Noise weather</a> · <a href="valley.html">Valley textures</a></p></header>
+<section class="viewport simulation-pane with-presets" aria-label="Sunset light through a fixed cloud slab"><div id="presets" role="group" aria-label="Rate these settings"></div><div class="canvas-fit"><canvas id="sky" style="--ar: 1.6" width="128" height="80" role="img" aria-label="Pixel sunset; use diagnostic views to inspect fixed density and light transmission."></canvas></div></section>
+<div class="controls-pane" role="region" aria-label="Scrollable experiment controls" tabindex="0">
+<div class="playback" id="playback"></div>
+<p id="stats" class="stats"></p>
+<section class="controls" id="controls" aria-label="Lighting parameters">
+</section>
+<details><summary>The lighting rules and formulas</summary>
+<p>Each pixel’s <code>density</code> is extruded through a slab of thickness <code>slabDepth</code>. The camera looks straight through its front. The sun is distant, behind the slab. It follows the shared vertical figure-eight sun path (<code>sunPhase</code>, sized and placed by <code>sunPathWidth</code>, <code>sunPathHeight</code>, <code>sunPathX</code> and <code>sunPathY</code>): its azimuth, spread over ±45° across the picture, and its elevation set its direction in the image plane, with a fixed depth component of 0.6. This is a 2.5D experiment.</p>
+<p><code>tau = extinction × integral(density × pathLength)</code><br><code>T = exp(−tau)</code></p>
+<p>For each camera-ray sample, trace a second ray toward the sun to compute <code>Tsun</code>. Accumulate single-scattered light:</p>
+<p><code>Lcloud += Tcamera × Tsun × density × extinction × albedo × phase × Lsun × stepLength</code></p>
+<p><code>phase = (1 − g²) / (4π × (1 + g² − 2g × cosTheta)^(3/2))</code>. Here <code>cosTheta = 0.6</code>; directions point along incoming and outgoing light propagation. The renderer uses <code>4π × phase</code> with relative sunlight units.</p>
+<p><code>airMass = 1 / max(0.04, sin(elevation))</code><br><code>LsunRGB = visibility × exp(−airOpticalDepth × [0.35, 0.75, 1.6] × airMass)</code></p>
+<p>RGB extinction approximates stronger short-wavelength scattering. Sunlight fades below the horizon; air mass is clamped near the horizon. These are artistic approximations, not a calibrated atmosphere.</p>
+<p><code>Lcamera = Tcamera × Lbackground + Lcloud + ambient × (1 − Tcamera)</code><br><code>display = (1 − exp(−exposure × Lcamera))^(1/2.2)</code></p>
+<p>Cloud paths use six camera and eight sunlight samples. The sky gradient, sun disk and ambient term are approximations. No multiple scattering, refraction, evolving droplets or full spectral transport. Density never changes during playback. Play sun runs the shared clock: one loop of the vertical figure-eight takes 90 seconds. With the default path the sun climbs from 9° to 25° up and back through the top lobe, then sinks to 7° below the horizon and back through the bottom lobe, swinging 15° left and right of center twice per loop. The path is the same in every experiment that has a sun.</p>
+<p>Inspired by <a href="https://www.pbr-book.org/4ed/Volume_Scattering/Transmittance">PBRT transmittance</a> and <a href="https://www.pbr-book.org/4ed/Volume_Scattering/Phase_Functions">phase functions</a>.</p>
+</details><p id="status" role="status"></p><noscript>JavaScript is required.</noscript></div>
+</main><script type="module" src="sunset.js"></script></body></html>
