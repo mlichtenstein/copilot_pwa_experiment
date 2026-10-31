@@ -81,3 +81,27 @@ test("branch setting affects geometry and parameter links preserve the starting 
   a.reset(19,"before");const settings=a.getParams();assert.equal(b.applyParams(settings),true);assert.equal(active(b).phase,"ready");
   delete settings.start;assert.equal(b.applyParams(settings),true);assert.equal(active(b).phase,"flash");assert.equal(b.applyParams({...settings,start:"unknown"}),false);
 });
+test("chargeBias shifts mean buildup in either direction without changing random samples; zero rate still freezes",()=>{
+  for(const seed of seeds){
+    const base=createCharge(seed),positive=structuredClone(base),negative=structuredClone(base),frozen=structuredClone(base);
+    stepCharge(base,.1,1,0);stepCharge(positive,.1,1,.5);stepCharge(negative,.1,1,-.5);stepCharge(frozen,.1,0,1);
+    for(let i=0;i<base.values.length;i++){
+      assert.ok(Math.abs(positive.values[i]-base.values[i]-.05)<1e-12);
+      assert.ok(Math.abs(negative.values[i]-base.values[i]+.05)<1e-12);
+    }
+    assert.equal(base.rng,positive.rng);assert.deepEqual(base.drift,positive.drift);assert.deepEqual(frozen.values,createCharge(seed).values);
+  }
+  const s=createSession(lightningScene,42);s.set("chargeBias",-.35);const copy=createSession(lightningScene,43);assert.equal(copy.applyParams(s.getParams()),true);assert.equal(copy.params.chargeBias,-.35);
+});
+test("sustained signed bias increases the ground-strike share across fresh-seed runs",t=>{
+  const counts=[];
+  for(const bias of [0,-.75,.75]){
+    let ground=0,total=0;
+    for(const seed of seeds){const s=createSession(lightningScene,seed,{chargeBias:bias});
+      for(let tick=0;tick<1800;tick++){const prev=s.state.layers.map(l=>l.strikes);s.step();for(const l of s.state.layers)if(l.strikes>prev[l.depth]){total++;if(l.strike.kind==="ground")ground++;}}
+    }
+    counts.push({bias,ground,total});
+  }
+  t.diagnostic(JSON.stringify(counts));assert.ok(counts.every(c=>c.total>0));
+  for(const biased of counts.slice(1))assert.ok(biased.ground/biased.total>counts[0].ground/counts[0].total);
+});

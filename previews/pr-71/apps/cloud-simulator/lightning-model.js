@@ -12,6 +12,7 @@ export const parameters = [
   { key:"flashStrength", default:0.65, min:0, max:1, step:0.05, description:"Brightness of the connected channel and its illumination of clouds, air and struck terrain." },
   { key:"haze", default:0.55, min:0, max:1, step:0.05, description:"How strongly air and cloud droplets reveal light around the channel." },
   { key:"chargeRate", default:1, min:0, max:3, step:0.1, description:"Rate of stochastic charge buildup, relaxation and diffusion in each layer; zero freezes quiet fields." },
+  { key:"chargeBias", default:0.2, min:-1, max:1, step:0.05, description:"Mean signed charge added to stochastic buildup; zero is unbiased. Either polarity favors a difference from neutral ground. Multiplied by chargeRate." },
   { key:"breakdownGradient", default:4, min:1, max:10, step:0.25, description:"Potential difference per scene distance required to initiate a cloud-to-cloud or cloud-to-ground channel." }
 ];
 export function groundAt(x, depth = 2) { return [0.66,0.79,0.91][depth]+0.035*Math.sin(x*9+1+depth*1.7)+0.016*Math.sin(x*23+depth); }
@@ -70,7 +71,7 @@ function stepLayer(state,dt,params) {
     state.age+=dt;
     if(state.age+1e-10>=params.flashDuration){state.phase="quiet";state.age=0;}
   } else {
-    stepCharge(state.charge,dt,params.chargeRate);
+    stepCharge(state.charge,dt,params.chargeRate,params.chargeBias);
     const candidate=strongestGradient(state.charge,state.depth,groundAt);
     if(candidate.gradient>=params.breakdownGradient){state.strike=candidate;beginStrike(state);}
   }
@@ -115,7 +116,7 @@ export function createLightning({seed,params,start="peak"}) {
   // At chargeRate=0 use unit rate only during preparation, then freeze the live quiet fields.
   let selected;
   for(let tick=0;tick<12000&&!selected;tick++)for(const layer of state.layers){
-    stepCharge(layer.charge,.1,params.chargeRate||1);
+    stepCharge(layer.charge,.1,params.chargeRate||1,params.chargeBias);
     const candidate=strongestGradient(layer.charge,layer.depth,groundAt);
     if(candidate.gradient>=params.breakdownGradient){layer.strike=candidate;layer.phase="ready";selected=layer;break;}
   }
