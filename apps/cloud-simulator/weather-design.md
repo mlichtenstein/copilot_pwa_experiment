@@ -17,7 +17,7 @@ One cloud-water grid feeds three consumers: optical cloud opacity/color, thresho
 | Middle | 24 km | 32×20 | 12×6 | Camera frustum at 24 km |
 | Far | 65 km | 48×30 | 12×6 | Camera frustum at 65 km |
 
-The camera has a 58° vertical field of view and a 1.6 aspect ratio. Grid cell sizes derive from distance and extent. Altitudes and atmospheric paths use km; cloud water, humidity, rain and charge are normalized artistic quantities. Output is 160×100; sky optics are 32×20, visibility masks 64×40, and per-depth atmospheric colors 12×8. Resolution choices are explicit and provisional.
+The camera uses a 58° vertical frustum and a 1.6 aspect ratio, shifted upward by tan(8°) in the projection plane to leave more room for sky. Field sampling, sun projection and terrain share that offset. Grid cell sizes derive from distance and extent. Altitudes and atmospheric paths use km; cloud water, humidity, rain and charge are normalized artistic quantities. Output is 160×100; sky optics are 32×20, visibility masks 64×40, and per-depth atmospheric colors 12×8. Resolution choices are explicit and provisional.
 
 ## Scene layers versus render passes
 

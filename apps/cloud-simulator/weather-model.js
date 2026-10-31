@@ -1,7 +1,7 @@
 /* Purpose: Interpret shared weather fields as atmospheric colors, layered visibility, and explicit render passes.
  * Consumers: weather-experiment.js and weather tests.
  * Dependencies: weather-fields.js, atmosphere/visibility/shafts models, and lightning terrain helpers. */
-import {SCALE,clamp,enabled,cloudAltitude,terrainY,weatherSun} from "./weather-fields.js";
+import {SCALE,CAMERA_LIFT,clamp,enabled,cloudAltitude,terrainY,weatherSun} from "./weather-fields.js";
 import {skyRadiance,sunDirection,pointAtAltitude,directSunlight,viewTransmission} from "./atmosphere-model.js";
 import {buildLayeredVisibility,combinedCoverage} from "./visibility-model.js";
 import {sampleCloud} from "./shafts-model.js";
@@ -9,15 +9,15 @@ import {groundAt} from "./lightning-model.js";
 import {terrainShadowAt,drawTerrainObjects,groundLightRadius} from "./lightning-terrain.js";
 export const renderOrder=["sky","all-light-veils","far-cloud-rain-lightning-terrain","middle-cloud-rain-lightning-terrain","near-cloud-rain-lightning-terrain"];
 export function projectionLayers(state,p){return state.layers.map(l=>({...l,density:enabled(l,p)?l.fields.cloudWater:l.fields.cloudWater.map(()=>0)}));}
-function rayAt(u,v){const ray=[(2*u-1)*SCALE*1.6,(1-2*v)*SCALE,1],len=Math.hypot(...ray);return ray.map(x=>x/len);}
+function rayAt(u,v){const ray=[(2*u-1)*SCALE*1.6,(1-2*v)*SCALE+CAMERA_LIFT,1],len=Math.hypot(...ray);return ray.map(x=>x/len);}
 export function buildWeatherLighting(state,p){
   const sun=weatherSun(state,p),direction=sunDirection(sun.elevation,sun.azimuth),layers=projectionLayers(state,p);
-  const options={...p,sunElevation:sun.elevation,sunAzimuth:sun.azimuth,sourceRadius:6};
+  const options={...p,sunElevation:Math.atan(Math.tan(sun.elevation*Math.PI/180)-CAMERA_LIFT*Math.cos(sun.azimuth*Math.PI/180))*180/Math.PI,sunAzimuth:sun.azimuth,sourceRadius:6};
   const visibility=buildLayeredVisibility({layers},options,64,40);
   const sky=Array.from({length:32*20},(_,i)=>skyRadiance(rayAt((i%32+.5)/32,(Math.floor(i/32)+.5)/20),direction,p));
   const colors=state.layers.map(layer=>Array.from({length:12*8},(_,i)=>{
     const u=(i%12+.5)/12,v=(Math.floor(i/12)+.5)/8,lateral=(2*u-1)*SCALE*1.6*layer.distance;
-    const altitude=Math.max(.02,.15+(1-2*v)*SCALE*layer.distance+layer.distance**2/(2*6371));
+    const altitude=Math.max(.02,.15+((1-2*v)*SCALE+CAMERA_LIFT)*layer.distance+layer.distance**2/(2*6371));
     const point=pointAtAltitude(layer.distance,altitude,lateral);
     return {direct:directSunlight(point,direction,p),transmission:viewTransmission(point,p)};
   }));
@@ -25,7 +25,7 @@ export function buildWeatherLighting(state,p){
   return {sun,visibility,sky,colors,veilColors,work:{cells:state.layers.reduce((n,l)=>n+l.width*l.height,0),segments:visibility.bands.reduce((n,b)=>n+b.layers.reduce((k,l)=>k+l.segments.length,0),0)}};
 }
 function mapBolt(layer,node,p){
-  const top=.5-(cloudAltitude(layer,p)-.15)/(2*SCALE*layer.distance)-.09;
+  const top=.5-((cloudAltitude(layer,p)-.15)/layer.distance-CAMERA_LIFT)/(2*SCALE)-.09;
   return {x:node.x,y:top+(node.y-.09)/(groundAt(node.x,layer.lightning.depth)-.09)*(terrainY(layer,node.x)-top)};
 }
 function boltLight(layer,p,width,height){
