@@ -15,6 +15,15 @@ export function weatherMoon(phase){
   const angle=2*Math.PI*(phase-.57);
   return {phase,azimuth:-22*Math.cos(angle),elevation:24*Math.sin(angle)};
 }
+// Artistic forward scattering through cloud water, limited to three disc radii.
+// Thick cloud cores extinguish it; thinner edges reveal the cool backlight.
+export function moonCloudLight(maps,u,v,density,p){
+  if(!maps.moon||maps.moon.elevation<=0)return 0;
+  const angle=Math.acos(Math.max(-1,Math.min(1,dot(rayAt(u,v),maps.moonDirection))));
+  const t=clamp(1-angle/(4.5*Math.PI/180)),falloff=t*t*(3-2*t);
+  const night=1-.85*clamp((maps.sun.elevation+4)/16),rise=clamp(maps.moon.elevation/2);
+  return .22*falloff*night*rise*Math.exp(-Math.max(0,p.cloudOpacity*density)*.5);
+}
 export const renderOrder=["sky","all-light-veils","far-cloud-rain-lightning-terrain","middle-cloud-rain-lightning-terrain","near-cloud-rain-lightning-terrain","terrain-props"];
 export function projectionLayers(state,p){return state.layers.map(l=>({...l,density:enabled(l,p)?l.fields.cloudWater:l.fields.cloudWater.map(()=>0)}));}
 function rayAt(u,v){const ray=[(2*u-1)*SCALE*1.6,(1-2*v)*SCALE+CAMERA_LIFT,1],len=Math.hypot(...ray);return ray.map(x=>x/len);}
@@ -103,8 +112,9 @@ export function renderWeather(state,p,maps,width=160,height=100,throughPass=5){
     }
     for(let j=2;j>=Math.max(0,4-throughPass);j--){const layer=state.layers[j];if(!enabled(layer,p))continue;
       const density=sampleCloud(layers[j],rx*layer.distance,ry*layer.distance),alpha=1-Math.exp(-p.cloudOpacity*density),color=maps.colors[j][mi];
+      const moonlight=moonCloudLight(maps,u,v,density,p);
       let lit=0;for(const band of vMaps.bands)lit+=band.weight*band.brightness*combinedCoverage(band.layers,j+1,mi);
-      rgb=rgb.map((c,k)=>c*(1-alpha)+alpha*(([.018,.025,.045][k]+color.direct[k]*lit*.65)*color.transmission[k]+sky[k]*(1-color.transmission[k])));
+      rgb=rgb.map((c,k)=>c*(1-alpha)+alpha*(([.018,.025,.045][k]+color.direct[k]*lit*.65+moonlight*[.72,.82,1][k])*color.transmission[k]+sky[k]*(1-color.transmission[k])));
       const fx=Math.min(layer.width-1,Math.floor(u*layer.width)),fy=Math.min(layer.height-1,Math.floor(v*layer.height)),rain=layer.fields.rain[fy*layer.width+fx];
       const streak=((x*17+Math.floor(y/3)+Math.floor(state.time*8))%13)<2;
       if(streak&&rain>0)rgb=rgb.map((c,k)=>c*(1-rain*.6)+rain*.6*([.18,.22,.3][k]+color.direct[k]*.2));

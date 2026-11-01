@@ -131,3 +131,23 @@ test("paused host time scrubbing moves moon and restores its saved phase",()=>{
   page.applyParams(saved);frames.frame();assert.deepEqual(page.instance.preview("sky","near",160,100),night);
   assert.equal(JSON.stringify(page.instance.state),before);page.dispose();
 });
+test("moon backlights nearby thin clouds, fades over three radii and is extinguished by thick cores",async()=>{
+  const {moonCloudLight}=await import("./weather-model.js"),{renderInspection}=await import("./weather-inspection.js"),{sunAtPhase}=await import("./core/sun-path.js");
+  const p={...defaults,storminess:0,rainAmount:0},state=createWeather(42,p);
+  // A uniform cloud sheet makes the radial lighting behavior directly observable.
+  for(const layer of state.layers)layer.fields.cloudWater.fill(.5);
+  const vFor=el=>.5-(Math.tan(el*Math.PI/180)-Math.tan(8*Math.PI/180))/(2*Math.tan(29*Math.PI/180));
+  for(const lightingMode of ["interpolated","full"]){
+    const params={...p,lightingMode},maps=buildWeatherLighting(state,params,sunAtPhase(.82)),v=vFor(24);
+    const center=moonCloudLight(maps,.5,v,.5,params),edge=moonCloudLight(maps,.5,vFor(27),.5,params);
+    assert.ok(center>edge&&edge>0,"glow extends beyond the disc and fades radially");
+    assert.equal(moonCloudLight(maps,.5,vFor(29),.5,params),0);
+    assert.ok(moonCloudLight(maps,.5,v,100,params)<center*1e-10);
+    assert.equal(moonCloudLight({...maps,moon:{...maps.moon,elevation:-1}},.5,v,.5,params),0);
+    const lit=renderInspection(state,{...params,view:"cloudColor"},maps),dark=renderInspection(state,{...params,view:"cloudColor"},{...maps,moon:null});
+    const i=(Math.floor(v*100)*160+80)*4;assert.ok(lit[i+2]>dark[i+2],"cloud-color preview includes blue lunar backlight");
+    assert.deepEqual(lit.slice(0,4),dark.slice(0,4),"distant clouds are unchanged");
+    const clear=structuredClone(state);for(const layer of clear.layers)layer.fields.cloudWater.fill(0);
+    assert.deepEqual(renderInspection(clear,{...params,view:"cloudColor"},maps),renderInspection(clear,{...params,view:"cloudColor"},{...maps,moon:null}),"no glow without cloud water");
+  }
+});
