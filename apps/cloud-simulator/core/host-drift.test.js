@@ -11,6 +11,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mountExperiment } from "./host.js";
 import { driftableParams, validateExperiment } from "./experiment.js";
+
+// The visible name in the Drift speed label (a <code> before the slider).
+const speedLabelCode = input => input.parentNode.children.find(node => node.tagName === "CODE")?.textContent;
 import { experiments } from "./registry.js";
 import { SUN_PATH_PARAMS } from "./sun-path.js";
 import { fakeDocument, fakeCanvas, manualFrames, imageDocument, helpOf } from "./fake-dom.js";
@@ -51,13 +54,15 @@ for (const entry of experiments) {
     await page.instance.ready; await new Promise(resolve => setTimeout(resolve, 0));
     page.setPlaying(false); frame();
 
-    // The checkbox is in the common panel's Drift row, off, beside the Drift speed slider; Randomize
+    // The checkbox is in the common panel's Drift row, on by default, beside the Drift speed slider; Randomize
     // is in the buttons row. Their explanations are hidden, shown on hold (hold-help.test.js).
     // (common-panel.test.js checks the texts match on every page.)
     const label = $("drift").parentNode, row = label.parentNode;
     assert.equal(label.className, "drift help-host"); assert.equal(row.className, "panel-row drift-row"); assert.equal(row.parentNode, $("playback"));
-    assert.equal($("drift").checked, false);
-    assert.match(helpOf(doc, $("drift")), /sliders wander slowly/);
+    assert.equal($("drift").checked, true, "Drift is on on a fresh load");
+    assert.equal(page.getParams().drift, true);
+    assert.match(helpOf(doc, $("drift")), /On by default.*sliders wander slowly/);
+    assert.equal(speedLabelCode($("drift-speed")), "driftSpeed", "the Drift speed label is its code name");
     const speedLabel = $("drift-speed").parentNode, randomizeRow = $("randomize").parentNode.parentNode;
     assert.equal(speedLabel.className, "drift-speed help-host"); assert.equal(speedLabel.parentNode, row);
     assert.equal(randomizeRow.className, "panel-row buttons"); assert.equal(randomizeRow.parentNode, $("playback"));
@@ -66,9 +71,8 @@ for (const entry of experiments) {
     assert.equal(page.getParams().driftSpeed, 1); assert.equal(Number($("drift-speed").value), 0);
 
     const before = page.getParams();
-    $("drift").checked = true; $("drift").fire("change");
     for (let i = 0; i < 20; i++) frame(500);
-    assert.deepEqual(page.getParams(), { ...before, drift: true }, "paused: nothing drifts");
+    assert.deepEqual(page.getParams(), before, "paused: nothing drifts, though Drift is on");
 
     page.setPlaying(true);
     const time = page.clock.time;
@@ -112,15 +116,18 @@ for (const entry of experiments) {
     assert.equal(page.getParams()[key], Number(held.value)); assert.equal(Number(held.value), experiment.params.find(param => param.key === key).min);
     page.setPlaying(false);
 
-    // Ratings and ?p= links: drift and its speed save; links from before them (no drift or
-    // driftSpeed key) still load, at 1×.
+    // Ratings and ?p= links: drift and its speed save and load as saved (on or off); links from
+    // before them (no drift or driftSpeed key) load with Drift off, as they were made, at 1×.
     const saved = page.getParams();
     assert.equal(saved.driftSpeed, 10);
     page.applyParams({ ...saved, drift: false, driftSpeed: 0.1 }); frame();
     assert.equal($("drift").checked, false); assert.equal(page.getParams()[key], saved[key]);
     assert.equal(page.getParams().driftSpeed, 0.1); assert.equal(Number($("drift-speed").value), -1);
     const { drift, driftSpeed, ...old } = before;
+    page.applyParams({ ...saved, drift: true }); frame();
+    assert.equal($("drift").checked, true, "a saved drift: true loads on");
     page.applyParams(old); frame();
+    assert.equal($("drift").checked, false, "a look saved before Drift loads with it off");
     assert.deepEqual(page.getParams(), { ...before, drift: false, driftSpeed: 1, sunPhase: page.getParams().sunPhase });
     page.dispose();
   });

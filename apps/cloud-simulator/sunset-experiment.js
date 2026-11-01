@@ -21,7 +21,7 @@ export const sunset = {
   // Relighting the slab takes about 12 ms, so redraw ten times a second while the sun moves.
   frameInterval: 100,
   params: [
-    { key: "view", kind: "select", label: "View", default: "light", options: [["light", "Camera light"], ["density", "Droplet density"], ["sun", "Sunlight transmission"], ["camera", "Camera transmission"]] },
+    { key: "view", kind: "select", default: "light", options: [["light", "Camera light"], ["density", "Droplet density"], ["sun", "Sunlight transmission"], ["camera", "Camera transmission"]] },
     { key: "seed", kind: "seed", default: 42, help: "Fixed droplet arrangement; changing this regenerates density." },
     slider("extinction", 0, 0.5, 0.01, "Light loss per density unit per pixel of path (inverse pixels)."),
     slider("slabDepth", 1, 30, 1, "Cloud thickness toward the camera, in pixel-length units."),

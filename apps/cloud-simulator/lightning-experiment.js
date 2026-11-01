@@ -41,7 +41,7 @@ export const lightning = {
     ...parameters.map(p => ({ key: p.key, kind: "range", min: p.min, max: p.max, step: p.step, default: p.default, help: p.description })),
     { key: "seed", kind: "seed", default: 42, random: true, hidden: true },
     // Which moment a fresh strike is prepared at: set by the two start buttons.
-    { key: "start", kind: "select", hidden: true, randomize: false, label: "Start", default: lightningScene.defaultStart,
+    { key: "start", kind: "select", hidden: true, randomize: false, default: lightningScene.defaultStart,
       options: lightningScene.starts.map(start => [start.id, start.label]) }
   ],
   // Unique to Lightning: prepare one naturally triggered strike on a new seed, paused at a

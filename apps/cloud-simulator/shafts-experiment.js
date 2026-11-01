@@ -39,7 +39,7 @@ export const shafts = {
   sun: true,
   frameInterval: 160,
   params: [
-    { key: "strategy", kind: "select", display: "radio", label: "Lighting strategy", group: "Lighting strategy", default: "layered",
+    { key: "strategy", kind: "select", display: "radio", group: "Lighting strategy", default: "layered",
       help: "How lit air and shadows are drawn.",
       options: [["visibility", "Visibility polygons"], ["layered", "Layered visibility polygons"], ["geometric", "Geometric shadows"]] },
     slider("cloudOpacity", 0, 3, 0.1, "How strongly droplets block sunlight and the background; 0 makes clouds transparent."),

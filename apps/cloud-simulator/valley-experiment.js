@@ -55,13 +55,13 @@ export const valley = {
   stepSeconds: 1,
   loadError: "Cloud textures could not load. Reload online to try again.",
   params: [
-    { key: "textureA", kind: "select", label: "Cloud A", help: TEXTURE_HELP, group: BLEND, default: "rose", options: textureChoices },
-    { key: "textureB", kind: "select", label: "Cloud B", help: TEXTURE_HELP, group: BLEND, default: "billow", options: textureChoices },
-    slider("textureBlend", 0, 1, 0.01, "0 = Cloud A, 1 = Cloud B. Crossfades cloud opacity and opacity-weighted grayscale shading before lighting.", { group: BLEND, wide: true }),
+    { key: "textureA", kind: "select", help: TEXTURE_HELP, group: BLEND, default: "rose", options: textureChoices },
+    { key: "textureB", kind: "select", help: TEXTURE_HELP, group: BLEND, default: "billow", options: textureChoices },
+    slider("textureBlend", 0, 1, 0.01, "0 = textureA, 1 = textureB. Crossfades cloud opacity and opacity-weighted grayscale shading before lighting.", { group: BLEND, wide: true }),
     { key: "horizon", kind: "select", display: "radio", group: HORIZON, default: "hills", options: [["valley", "Deep valley"], ["hills", "Low rolling hills"], ["open", "Open horizon"]] },
-    { key: "placement", kind: "select", label: "Cloud placement", default: "full",
+    { key: "placement", kind: "select", default: "full",
       options: [["full", "Full sky"], ["spread", "Three separated heights"], ["high", "High clouds"], ["low", "Low clouds"], ["band", "Adjustable band"]] },
-    { key: "shape", kind: "select", label: "Reveal shape", default: "noise",
+    { key: "shape", kind: "select", default: "noise",
       options: [["noise", "Two evolving Perlin fields"], ["combined", "Ribbon + pockets"], ["ribbon", "Flowing ribbon"], ["pockets", "Drifting oval"]] },
     slider("wind", -12, 12, 0.5, "Signed horizontal drift in 192-pixel reference-screen pixels/second. Positive blows right; layers drift at different rates."),
     slider("formationSpeed", 0, 1, 0.05, "Speed of the broad reveal/dissolve fields, independent of wind."),
@@ -86,7 +86,7 @@ export const valley = {
       Object.assign(target, { id: "preview-" + "ab"[i], width: 96, height: 60 });
       target.setAttribute("role", "img");
       target.setAttribute("style", "width:100%;aspect-ratio:8/5;background:repeating-conic-gradient(#38404a 0% 25%,#56606b 0% 50%) 0 / 16px 16px");
-      target.setAttribute("aria-label", `Cloud ${"AB"[i]} grayscale mask preview`);
+      target.setAttribute("aria-label", `texture${"AB"[i]} grayscale mask preview`);
       controlFor(key)?.append(target);
       return { key, target, shown: null };
     });
