@@ -45,3 +45,15 @@ The host targets at most four new images/second while playing. The instance cach
 Toggles hide content; they are not a fixed-budget resolution benchmark. This sketch does not implement five-layer comparisons, GPU timing, input latency tracking, a measured images/second meter, or a phone performance target. Those should follow observed bottlenecks rather than another framework first.
 
 Rain is an illustrative source/transport/decay field, without water conservation or full convection. The sun arc is local to this prototype, not a change to the existing studies' shared sun path. No cross-depth charge transfer, full volumetric lighting, photo loading, or learned weather-path exploration is included. The bitmap supplier seam can accept the Valley photograph masks later; this first pass uses the already shipped literal Horizon masks.
+
+## Read-only field graph and composition inspector
+
+The expandable **Fields & rendering graph** panel is part of the combined experiment. Ingredients shows three depth columns with live previews of supplier bitmap/noise, humidity, cloud water, opacity, the middle-band threshold mask/visibility, cloud color, rain, light veil, charge, channel light, terrain and contact light/shadows. Clicking a tile enlarges that field/intermediate in the main viewport, names it and explains what it represents. The same View selector and settings links retain the selection. Black light tiles mean inactive contributions, not failed previews.
+
+Arrows are authored from the current implementation: blue for same-depth inputs and gold for visibility from farther depths. In particular, humidity has no outgoing dependency, cloud water does not feed charge, and cloud-body illumination reads farther visibility rather than its own mask. These gaps are shown explicitly; stronger weather rules and cross-layer interactions remain next-PR work under #74. The graph is a viewer, not a node editor.
+
+Composition shows six accumulated images produced by the existing renderer's stop points: sky, all light veils, far depth, middle depth, near depth, and terrain props/final image. These are real intermediate composites from the current frame, not recreated mockups or pictures of different random scenes. Surface/veil contribution tiles are shown on black; opacity/mask tiles use the native field grid and visibility uses the camera plane.
+
+Thumbnails are 32×20 and update with each new displayed frame while the panel is open. Closing it skips preview generation. The `inspect` median/p95 readout records its extra CPU cost separately from drawing; its first derived preview reuses or fills the same lighting cache. The sky canvas remains visible above the independently scrolling graph. On phones the graph can scroll horizontally across the three columns; phone layout/performance still needs device verification.
+
+The supplier sample was extracted into one read-only helper, so bitmap/noise thumbnails use the same calculation as cloud-water updates. No dynamics rules changed. Replay comparisons against the preceding revision verified identical scene state and final pixels on three runs.

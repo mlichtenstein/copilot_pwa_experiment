@@ -1,5 +1,5 @@
 /* Purpose: Interpret shared weather fields as atmospheric colors, layered visibility, and explicit render passes.
- * Consumers: weather-experiment.js and weather tests.
+ * Consumers: weather-experiment.js, weather-inspection.js and weather tests.
  * Dependencies: weather-fields.js, atmosphere/visibility/shafts models, and lightning terrain helpers. */
 import {SCALE,CAMERA_LIFT,clamp,enabled,cloudAltitude,terrainY,weatherSun} from "./weather-fields.js";
 import {skyRadiance,sunDirection,pointAtAltitude,directSunlight,viewTransmission} from "./atmosphere-model.js";
@@ -7,7 +7,7 @@ import {buildLayeredVisibility,combinedCoverage} from "./visibility-model.js";
 import {sampleCloud} from "./shafts-model.js";
 import {groundAt} from "./lightning-model.js";
 import {terrainShadowAt,drawTerrainObjects,groundLightRadius} from "./lightning-terrain.js";
-export const renderOrder=["sky","all-light-veils","far-cloud-rain-lightning-terrain","middle-cloud-rain-lightning-terrain","near-cloud-rain-lightning-terrain"];
+export const renderOrder=["sky","all-light-veils","far-cloud-rain-lightning-terrain","middle-cloud-rain-lightning-terrain","near-cloud-rain-lightning-terrain","terrain-props"];
 export function projectionLayers(state,p){return state.layers.map(l=>({...l,density:enabled(l,p)?l.fields.cloudWater:l.fields.cloudWater.map(()=>0)}));}
 function rayAt(u,v){const ray=[(2*u-1)*SCALE*1.6,(1-2*v)*SCALE+CAMERA_LIFT,1],len=Math.hypot(...ray);return ray.map(x=>x/len);}
 export function buildWeatherLighting(state,p){
@@ -28,7 +28,7 @@ function mapBolt(layer,node,p){
   const top=.5-((cloudAltitude(layer,p)-.15)/layer.distance-CAMERA_LIFT)/(2*SCALE)-.09;
   return {x:node.x,y:top+(node.y-.09)/(groundAt(node.x,layer.lightning.depth)-.09)*(terrainY(layer,node.x)-top)};
 }
-function boltLight(layer,p,width,height){
+export function boltLight(layer,p,width,height){
   const storm=layer.lightning,power=p.storminess<=0?0:storm.phase==="flash"?.65*Math.exp(-storm.age/.18):storm.phase==="leader"?.09:0;
   const nodes=storm.nodes.map(n=>({...mapBolt(layer,n,p),parent:n.parent,branch:n.branch})),path=new Set(storm.returnPath),light=new Float32Array(width*height),cores=new Float32Array(width*height);
   for(let i=1;i<nodes.length&&power>0;i++){
@@ -40,7 +40,7 @@ function boltLight(layer,p,width,height){
   }
   return {light,cores,contact:nodes[storm.head],power:storm.phase==="flash"&&storm.strike?.kind==="ground"?power:0};
 }
-export function renderWeather(state,p,maps,width=160,height=100){
+export function renderWeather(state,p,maps,width=160,height=100,throughPass=5){
   const pixels=new Uint8ClampedArray(width*height*4);
   if(p.view!=="scene"){
     const layer=state.layers.find(l=>l.name===p.inspectLayer)??state.layers[0],isCharge=p.view==="charge",field=isCharge?layer.lightning.charge.values:layer.fields[p.view],w=isCharge?12:layer.width,h=isCharge?6:layer.height;
@@ -52,11 +52,11 @@ export function renderWeather(state,p,maps,width=160,height=100){
     const sky=maps.sky[Math.min(19,Math.floor(v*20))*32+Math.min(31,Math.floor(u*32))];let rgb=sky.slice();
     const mi=Math.min(39,Math.floor(v*40))*64+Math.min(63,Math.floor(u*64));
     // Veils precede bodies: the same field supplies both the silhouettes and cloud opacity.
-    for(let j=2;j>=0;j--)if(enabled(state.layers[j],p))for(const band of vMaps.bands){
+    for(let j=2;j>=0&&throughPass>=1;j--)if(enabled(state.layers[j],p))for(const band of vMaps.bands){
       const alpha=p.shaftStrength*p.haze*.22*band.weight*combinedCoverage(band.layers,j,mi)*clamp((maps.sun.elevation+6)/6);
       rgb=rgb.map((c,k)=>c*(1-alpha)+maps.veilColors[j][k]*band.brightness*alpha);
     }
-    for(let j=2;j>=0;j--){const layer=state.layers[j];if(!enabled(layer,p))continue;
+    for(let j=2;j>=Math.max(0,4-throughPass);j--){const layer=state.layers[j];if(!enabled(layer,p))continue;
       const density=sampleCloud(layers[j],rx*layer.distance,ry*layer.distance),alpha=1-Math.exp(-p.cloudOpacity*density),color=maps.colors[j][Math.min(7,Math.floor(v*8))*12+Math.min(11,Math.floor(u*12))];
       let lit=0;for(const band of vMaps.bands)lit+=band.weight*band.brightness*combinedCoverage(band.layers,j+1,mi);
       rgb=rgb.map((c,k)=>c*(1-alpha)+alpha*(([.018,.025,.045][k]+color.direct[k]*lit*.65)*color.transmission[k]+sky[k]*(1-color.transmission[k])));
@@ -73,7 +73,7 @@ export function renderWeather(state,p,maps,width=160,height=100){
     pixels.set([...rgb.map(c=>255*Math.pow(1-Math.exp(-Math.max(0,c)*p.exposure),1/2.2)),255],index*4);
   }
   // Opaque terrain has already established depth. Clip each prop against all nearer terrain.
-  for(let j=2;j>=0;j--)if(enabled(state.layers[j],p)){
+  for(let j=2;j>=0&&throughPass>=5;j--)if(enabled(state.layers[j],p)){
     const props=state.layers[j].objects.filter(o=>state.layers.slice(0,j).every(l=>!enabled(l,p)||o.y-o.height<terrainY(l,o.x)));
     const propPixels=new Uint8ClampedArray(pixels.length);drawTerrainObjects(propPixels,width,height,props);
     for(let y=0;y<height;y++)for(let x=0;x<width;x++){const i=(y*width+x)*4;if(propPixels[i+3]&&state.layers.slice(0,j).every(l=>!enabled(l,p)||y/height<terrainY(l,x/width)))pixels.set(propPixels.subarray(i,i+4),i);}

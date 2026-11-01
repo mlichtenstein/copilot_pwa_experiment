@@ -1,5 +1,5 @@
 /* Purpose: Scrappy three-depth weather state and ordered field dynamics, independent of rendering/UI.
- * Consumers: weather-model.js, weather-experiment.js and weather tests.
+ * Consumers: weather-model.js, weather-experiment.js, weather-inspection.js and weather tests.
  * Dependencies: fixed horizon bitmaps, Perlin noise and the existing lightning model; lengths in km. */
 import {cloudBitmaps} from "./horizon-bitmaps.js";
 import {perlin3} from "./valley-noise.js";
@@ -17,19 +17,21 @@ export function terrainY(layer,x){
 export function weatherSun(state,p){const phase=state.time*p.sunSpeed*.02;return {elevation:p.sunElevation+5*(Math.cos(phase)-1),azimuth:p.sunAzimuth+20*Math.sin(phase*.5)};}
 export function boltSettings(p){return {...Object.fromEntries(boltParameters.map(v=>[v.key,v.default])),chargeRate:p.storminess,chargeBias:p.chargeBias};}
 function sampleBitmap(bitmap,u,v){if(v<0||v>=1)return 0;u=((u%1)+1)%1;return bitmap.alpha[Math.floor(v*bitmap.height)*bitmap.width+Math.floor(u*bitmap.width)]/255;}
+// One canonical supplier sample, also used by the read-only inspector.
+export function cloudIngredients(state,layer,p,x,y){
+  const {width,height,distance}=layer,center=cloudAltitude(layer,p),thickness=[1,2.4,5][layer.index];
+  const u=(x+.5)/width,v=(y+.5)/height;
+  const worldY=((1-2*v)*SCALE+CAMERA_LIFT)*distance+.15+distance**2/(2*6371);
+  const shifted=u-state.windOffset/(2*SCALE*distance*1.6)+(layer.seed%1024)/1024;
+  const noise=perlin3(shifted*5,v*7,state.evolution,layer.seed%997),reveal=.45+.8*noise;
+  const bitmap=sampleBitmap(cloudBitmaps[layer.index],shifted,.5-(worldY-center)/thickness);
+  const band=Math.exp(-(((worldY-center)/(thickness*.55))**4));
+  return {bitmap,reveal,humidity:.55+noise*.6,cloudWater:Math.max(0,p.coverage*(p.textureMix*bitmap+(1-p.textureMix)*Math.max(0,(noise-.38)*3)*band)*reveal)};
+}
 export function refreshFields(state,p){
-  for(const layer of state.layers){
-    const {width,height,distance,fields}=layer,center=cloudAltitude(layer,p),thickness=[1,2.4,5][layer.index];
-    for(let y=0;y<height;y++)for(let x=0;x<width;x++){
-      const i=y*width+x,u=(x+.5)/width,v=(y+.5)/height;
-      const worldY=((1-2*v)*SCALE+CAMERA_LIFT)*distance+.15+distance**2/(2*6371);
-      const shifted=u-state.windOffset/(2*SCALE*distance*1.6)+(layer.seed%1024)/1024;
-      const noise=perlin3(shifted*5,v*7,state.evolution,layer.seed%997),reveal=.45+.8*noise;
-      const alpha=sampleBitmap(cloudBitmaps[layer.index],shifted,.5-(worldY-center)/thickness);
-      const band=Math.exp(-(((worldY-center)/(thickness*.55))**4));
-      fields.humidity[i]=.55+noise*.6;
-      fields.cloudWater[i]=Math.max(0,p.coverage*(p.textureMix*alpha+(1-p.textureMix)*Math.max(0,(noise-.38)*3)*band)*reveal);
-    }
+  for(const layer of state.layers)for(let y=0;y<layer.height;y++)for(let x=0;x<layer.width;x++){
+    const value=cloudIngredients(state,layer,p,x,y),i=y*layer.width+x;
+    layer.fields.humidity[i]=value.humidity;layer.fields.cloudWater[i]=value.cloudWater;
   }
   state.revision++;
 }
