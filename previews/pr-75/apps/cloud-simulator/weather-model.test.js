@@ -2,7 +2,7 @@
  * Consumers: Node test runner. Dependencies: weather modules, core host/fake DOM, node:test/assert/crypto. */
 import test from "node:test";import assert from "node:assert/strict";import {randomInt} from "node:crypto";
 import {defaults,createWeather,stepWeather,refreshFields,weatherSun} from "./weather-fields.js";
-import {buildWeatherLighting,renderWeather,projectionLayers,renderOrder} from "./weather-model.js";
+import {buildWeatherLighting,renderWeather,projectionLayers,renderOrder,interpolateRGB} from "./weather-model.js";
 import {weather} from "./weather-experiment.js";
 import {defaultParams,validateExperiment} from "./core/experiment.js";
 import {mountExperiment} from "./core/host.js";
@@ -65,4 +65,24 @@ test("sun disc survives the coarse sky grid, moves across the view and sets belo
   const left=disc({elevation:10,azimuth:-12}),right=disc({elevation:10,azimuth:12});
   assert.ok(left.length>0&&right.length>0,"small sun must not disappear between coarse sky samples");
   assert.ok(Math.max(...left)<Math.min(...right));assert.equal(disc({elevation:-5,azimuth:0}).length,0);
+});
+
+test("linear-light interpolation reconstructs a gradient and clamps at sample edges",()=>{
+  const grid=[[0,0,0],[2,4,6],[4,8,12],[6,12,18]];
+  assert.deepEqual(interpolateRGB(grid,2,2,.5,.5),[3,6,9]);
+  assert.deepEqual(interpolateRGB(grid,2,2,0,0),grid[0]);assert.deepEqual(interpolateRGB(grid,2,2,1,1),grid[3]);
+  assert.deepEqual(interpolateRGB(grid.map(direct=>({direct})),2,2,.5,.5,"direct"),[3,6,9]);
+  assert.ok(interpolateRGB(grid,2,2,.49,.5)[0]<3&&interpolateRGB(grid,2,2,.51,.5)[0]>3);
+});
+test("lighting modes preserve fields and share sharp output-resolution visibility",()=>{
+  const state=createWeather(seeds[0]),saved=JSON.stringify(state),sun={elevation:8,azimuth:-12};
+  const low=buildWeatherLighting(state,defaults,sun,48,30),full=buildWeatherLighting(state,{...defaults,lightingMode:"full"},sun,48,30);
+  assert.equal(JSON.stringify(state),saved);assert.deepEqual(low.visibility,full.visibility);
+  assert.equal(low.sky.length,48*30);assert.equal(full.sky.length,48*30);assert.equal(full.colors[0].length,48*30);
+  assert.equal(low.work.skySamples,640);assert.equal(low.work.surfaceSamples,288);assert.equal(full.work.skySamples,48*30);assert.equal(full.work.surfaceSamples,3*48*30);
+  assert.notDeepEqual(low.sky,full.sky);
+  const schema=weather.params.find(p=>p.key==="lightingMode");assert.equal(schema.display,"radio");assert.equal(schema.randomize,false);
+  const instance=weather.create({width:48,height:30,params:defaults});instance.render({sun});assert.equal(instance.metrics.lighting.length,1);
+  const before=JSON.stringify(instance.state);instance.update({...defaults,lightingMode:"full"});assert.equal(instance.metrics.lighting.length,0);
+  instance.render({sun});assert.equal(instance.metrics.lighting.length,1);assert.equal(JSON.stringify(instance.state),before);assert.match(instance.describe(),/^full .*1440 sky \/ 4320 surface/);instance.dispose();
 });

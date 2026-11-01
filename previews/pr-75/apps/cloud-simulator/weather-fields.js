@@ -6,7 +6,7 @@ import {perlin3} from "./valley-noise.js";
 import {createLightning,stepLightning,parameters as boltParameters} from "./lightning-model.js";
 import {createTerrainObjects} from "./lightning-terrain.js";
 export const SCALE=Math.tan(58*Math.PI/360),CAMERA_LIFT=Math.tan(8*Math.PI/180),WIDTH=160,HEIGHT=100;
-export const defaults={sunElevation:1.5,sunAzimuth:-18,sunSpeed:.4,cloudAltitude:5,altitudeSpread:1,coverage:1.2,textureMix:.7,wind:.035,formationSpeed:.2,cloudOpacity:2,cloudSharpness:4,airDensity:1,aerosol:.2,exposure:2,haze:.5,shaftStrength:.6,edgeFeather:4,rainAmount:.45,storminess:.4,chargeBias:.2,near:true,middle:true,far:true,view:"scene",inspectLayer:"near",seed:42};
+export const defaults={lightingMode:"interpolated",sunElevation:1.5,sunAzimuth:-18,sunSpeed:.4,cloudAltitude:5,altitudeSpread:1,coverage:1.2,textureMix:.7,wind:.035,formationSpeed:.2,cloudOpacity:2,cloudSharpness:4,airDensity:1,aerosol:.2,exposure:2,haze:.5,shaftStrength:.6,edgeFeather:4,rainAmount:.45,storminess:.4,chargeBias:.2,near:true,middle:true,far:true,view:"scene",inspectLayer:"near",seed:42};
 export const clamp=v=>Math.max(0,Math.min(1,v));
 export const enabled=(layer,p)=>p[layer.name]!==false;
 export function cloudAltitude(layer,p){return Math.max(.25,p.cloudAltitude+[-2.3,-.6,2.8][layer.index]*p.altitudeSpread);}

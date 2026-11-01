@@ -17,7 +17,7 @@ One cloud-water grid feeds three consumers: optical cloud opacity/color, thresho
 | Middle | 24 km | 32×20 | 12×6 | Camera frustum at 24 km |
 | Far | 65 km | 48×30 | 12×6 | Camera frustum at 65 km |
 
-The camera uses a 58° vertical frustum and a 1.6 aspect ratio, shifted upward by tan(8°) in the projection plane to leave more room for sky. Field sampling, sun projection and terrain share that offset. Grid cell sizes derive from distance and extent. Altitudes and atmospheric paths use km; cloud water, humidity, rain and charge are normalized artistic quantities. Output is 160×100; sky optics are 32×20, visibility masks 64×40, and per-depth atmospheric colors 12×8. Resolution choices are explicit and provisional.
+The camera uses a 58° vertical frustum and a 1.6 aspect ratio, shifted upward by tan(8°) in the projection plane to leave more room for sky. Field sampling, sun projection and terrain share that offset. Grid cell sizes derive from distance and extent. Altitudes and atmospheric paths use km; cloud water, humidity, rain and charge are normalized artistic quantities. Output is 160×100; interpolated sky optics use 32×20 and per-depth atmospheric colors use 12×8 source samples; Full resolution uses 160×100 for both. Visibility coverage is 160×100 in either mode. Resolution choices are explicit and provisional.
 
 ## Scene layers versus render passes
 
@@ -67,3 +67,9 @@ The default inspector is the Field graph with small 48px full thumbnails. Strip 
 The selected field/pass description now occupies a permanently visible panel above an independently scrolling graph/composition area. The inspector has a larger bounded height (44dvh desktop, 34dvh mobile); long descriptions scroll within their own panel.
 
 Weather now consumes the common host frame.sun for sky, visibility and cloud illumination, with lighting cache invalidation on changes even while paused. Its old local sun controls are removed from the module UI; legacy links use the host’s nearest-phase migration. The pure weather model retains its optional local-sun fallback for standalone callers. Atmospheric scattering stays coarse, but the 0.55-degree sun disc is sampled separately at final pixel resolution before cloud/terrain occlusion.
+
+## Lighting resolution comparison
+
+`lightingMode` is a radio control: Interpolated (default) calculates atmospheric scattering on 32×20 and direct light/transmission on 12×8 per depth, then bilinearly reconstructs linear RGB at output resolution. Full resolution calculates the same optical equations at every output pixel. Both use the same weather grids, time, sun disc, exposure and output-resolution visibility polygons; ray edges are never interpolated. Switching modes preserves weather state, rebuilds lighting, and resets the optical/drawing/inspection timing windows. The readout includes mode and optical sample counts. The control is excluded from Randomize so it remains a deliberate performance choice. Pause and disable Drift for visual comparisons. Full resolution can take hundreds of milliseconds or more per lighting update depending on device.
+
+The inspector and accumulated composition previews read the same reconstructed lighting maps as the final scene. Raw field previews retain their native grid presentation.
