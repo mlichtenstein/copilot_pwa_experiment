@@ -2,7 +2,7 @@
  * Consumers: weather-inspector.js, weather-experiment.js and inspector tests.
  * Dependencies: weather field/model helpers and shared visibility/terrain functions; no DOM. */
 import {SCALE,clamp,cloudIngredients,terrainY} from "./weather-fields.js";
-import {renderWeather,boltLight,projectionLayers,renderOrder} from "./weather-model.js";
+import {renderWeather,boltLight,projectionLayers,renderOrder,lightingIndex} from "./weather-model.js";
 import {thresholdMask,combinedCoverage} from "./visibility-model.js";
 import {sampleCloud} from "./shafts-model.js";
 import {terrainShadowAt,groundLightRadius,drawTerrainObjects} from "./lightning-terrain.js";
@@ -70,13 +70,13 @@ export function renderInspection(state,p,maps,width=160,height=100){
       const hit=bolt.contact,distance=hit?Math.hypot((u-hit.x)*1.6,v-hit.y):Infinity;
       const pool=v>=terrainY(layer,u)&&bolt.power>0?bolt.power*Math.max(0,1-distance/groundLightRadius)**2*terrainShadowAt(layer.objects,hit,u,v):0;rgb=[.8,.85,1].map(c=>pool*c);
     } else {
-      const mi=Math.min(39,Math.floor(v*40))*64+Math.min(63,Math.floor(u*64));
+      const mi=lightingIndex(maps,u,v);
       if(p.view==="visibility"){const value=maps.visibility.bands[1].layers[index].coverage[mi];rgb=[value,value,value];}
       else if(p.view==="shafts")for(const band of maps.visibility.bands){const amount=p.shaftStrength*p.haze*.22*band.weight*combinedCoverage(band.layers,index,mi)*clamp((maps.sun.elevation+6)/6);rgb=rgb.map((c,k)=>c*(1-amount)+maps.veilColors[index][k]*band.brightness*amount);}
       else if(p.view==="cloudColor"){
         const rx=(2*u-1)*SCALE*1.6,ry=(1-2*v)*SCALE,density=sampleCloud(projected[index],rx*layer.distance,ry*layer.distance),alpha=1-Math.exp(-p.cloudOpacity*density);
-        const color=maps.colors[index][Math.min(7,Math.floor(v*8))*12+Math.min(11,Math.floor(u*12))];let lit=0;for(const band of maps.visibility.bands)lit+=band.weight*band.brightness*combinedCoverage(band.layers,index+1,mi);
-        const sky=maps.sky[Math.min(19,Math.floor(v*20))*32+Math.min(31,Math.floor(u*32))];rgb=rgb.map((c,k)=>alpha*(([.018,.025,.045][k]+color.direct[k]*lit*.65)*color.transmission[k]+sky[k]*(1-color.transmission[k])));
+        const color=maps.colors[index][mi];let lit=0;for(const band of maps.visibility.bands)lit+=band.weight*band.brightness*combinedCoverage(band.layers,index+1,mi);
+        const sky=maps.sky[mi];rgb=rgb.map((c,k)=>alpha*(([.018,.025,.045][k]+color.direct[k]*lit*.65)*color.transmission[k]+sky[k]*(1-color.transmission[k])));
       }
     }
     const isLinear=["cloudColor","shafts","lightning","groundLight"].includes(p.view);
