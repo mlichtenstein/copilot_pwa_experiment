@@ -59,3 +59,5 @@ Thumbnails are 32×20 and update with each new displayed frame while the panel i
 The supplier sample was extracted into one read-only helper, so bitmap/noise thumbnails use the same calculation as cloud-water updates. No dynamics rules changed. Replay comparisons against the preceding revision verified identical scene state and final pixels on three runs.
 
 The inspector uses collapsible depth frames (near open initially). On mobile they stack at full width, with two field cards per row. Closed frames retain their dependency endpoints at the summary and skip preview work. Selecting a field highlights incoming links amber and outgoing links mint, fading unrelated edges. Descriptions distinguish scalar, boolean, RGB and geometry data, list inputs, and explain ingestion/update/render rules.
+
+Inspector previews default to cropped central strips; the preview-style menu also offers full thumbnails and labels only. Labels mode skips preview rasterization. Selected-field contracts live in a closed expander; the main viewport caption stays short. Mobile reserves a bounded simulation row and caps the inspector at 28dvh so it cannot consume the canvas.

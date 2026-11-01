@@ -6,10 +6,15 @@ export function mountWeatherInspector({doc,root,select}){
   if(!root)return {update(){}};
   const make=(tag,props={},...children)=>{const node=Object.assign(doc.createElement(tag),props);node.append(...children);return node;};
   const svgNode=(tag,attrs)=>{const node=doc.createElementNS(SVG,tag);for(const [key,value] of Object.entries(attrs))node.setAttribute(key,String(value));return node;};
-  let mode="fields",latest;
+  let mode="fields",latest;root.setAttribute("data-previews","strips");
   const tabs=make("div",{className:"inspector-tabs"}),fieldTab=make("button",{type:"button",textContent:"Ingredients",title:"Show the fields and their real data dependencies"}),passTab=make("button",{type:"button",textContent:"Composition",title:"Show the image accumulating through the actual render passes"}),full=make("button",{type:"button",textContent:"Full scene",title:"Return the main viewport to the final combined image"});
   const help=make("p",{className:"inspector-help",textContent:"Click any tile to inspect it in the main viewport. Select a field: amber arrows enter it; mint arrows leave it. Unselected links fade. Collapse a depth to its header to simplify the graph. Black light tiles mean no contribution right now."});
   const detail=make("p",{className:"inspector-detail"});detail.setAttribute("role","status");
+  const explanation=make("details",{className:"inspector-explanation"},make("summary",{textContent:"Selected field details",title:"Data type, ingredients and ingestion or rendering rule"}),detail);
+  const previewMode=make("select",{title:"Choose full thumbnails, a cropped central strip, or labels only"});
+  for(const [value,label] of [["strips","Preview strips"],["full","Full previews"],["labels","Labels only"]])previewMode.append(make("option",{value,textContent:label}));
+  previewMode.value="strips";previewMode.setAttribute("aria-label","Field preview style");
+  previewMode.addEventListener("change",()=>{root.setAttribute("data-previews",previewMode.value);if(latest)update(...latest);});
   const board=make("div",{className:"weather-graph-board"}),wire=svgNode("svg",{"aria-hidden":"true",class:"weather-graph-wires"}),defs=svgNode("defs",{});
   for(const [id,color] of [["weather-arrow","#76b7d0"],["weather-cross-arrow","#e4b36a"],["weather-input-arrow","#ffc266"],["weather-output-arrow","#6bffcf"]]){const marker=svgNode("marker",{id,viewBox:"0 0 10 10",refX:9,refY:5,markerWidth:5,markerHeight:5,orient:"auto-start-reverse"});marker.append(svgNode("path",{d:"M 0 0 L 10 5 L 0 10 z",fill:color}));defs.append(marker);}wire.append(defs);board.append(wire);
   const refs=new Map(),tiles=[];
@@ -33,7 +38,7 @@ export function mountWeatherInspector({doc,root,select}){
   board.append(columns);
   const composition=make("ol",{className:"weather-composition",hidden:true}),passTiles=[];
   for(const pass of passes){const button=tile(`pass-${pass.index}`,`${pass.index+1}. ${pass.label}`,pass.view,null,`Accumulated image after ${pass.label}. Uses the same renderer as the final scene.`);passTiles.push(tiles.at(-1));composition.append(make("li",{},button));}
-  tabs.append(fieldTab,passTab,full);root.append(tabs,help,detail,board,composition);
+  tabs.append(fieldTab,passTab,full,previewMode);root.append(tabs,help,explanation,board,composition);
   const paths=graphEdges().map(edge=>{const path=svgNode("path",{fill:"none",stroke:edge.cross?"#e4b36a":"#76b7d0","stroke-width":edge.cross?1.7:1.2,"stroke-dasharray":edge.cross?"5 3":"none","marker-end":`url(#${edge.cross?"weather-cross-arrow":"weather-arrow"})`});wire.append(path);return {edge,path};});
   function drawWires(){
     if(!board.getBoundingClientRect)return;
@@ -52,7 +57,7 @@ export function mountWeatherInspector({doc,root,select}){
     const selected=nodes.find(node=>node.id===params.view),pass=passes.find(pass=>pass.view===params.view),layer=instance.state.layers.find(l=>l.name===params.inspectLayer);
     const description=params.view==="scene"?"Final combined scene.":selected?`${params.inspectLayer} · ${selected.label}: ${describeNode(selected)}`:params.view==="sky"?"Sky: atmospheric background before any light veils or scene layers.":pass?`Composition ${pass.index+1}/6: accumulated image ${pass.label}.`:"Final combined scene.";
     if(detail.textContent!==description)detail.textContent=description;
-    const caption=doc.getElementById("inspection-caption");if(caption&&caption.textContent!==description)caption.textContent=description;
+    const caption=doc.getElementById("inspection-caption");if(caption)caption.textContent=selected?`${params.inspectLayer} · ${selected.label}`:description;
     if(!root.open)return;
     for(let i=0;i<headers.length;i++)headers[i].textContent=`${["near","middle","far"][i]} · ${[8,24,65][i]} km${params[["near","middle","far"][i]]?"":" · hidden (fields retained)"}`;
     const selectedId=params.view==="sky"?"sun":selected?`${params.inspectLayer}:${params.view}`:null;
@@ -62,7 +67,7 @@ export function mountWeatherInspector({doc,root,select}){
       path.setAttribute("marker-end",`url(#${incoming?"weather-input-arrow":outgoing?"weather-output-arrow":edge.cross?"weather-cross-arrow":"weather-arrow"})`);
     }
     const shown=mode==="fields"?tiles.filter(t=>!t.id.startsWith("pass-")&&(!t.layer||sections[["near","middle","far"].indexOf(t.layer)].open)):passTiles;
-    for(const t of shown){const pixels=instance.preview(t.view,t.layer??params.inspectLayer,32,20),ctx=t.canvas.getContext("2d"),image=ctx.createImageData(32,20);image.data.set(pixels);ctx.putImageData(image,0,0);t.button.setAttribute("aria-pressed",String(params.view===t.view&&(!t.layer||params.inspectLayer===t.layer)));}
+    for(const t of shown){t.button.setAttribute("aria-pressed",String(params.view===t.view&&(!t.layer||params.inspectLayer===t.layer)));if(previewMode.value==="labels")continue;const pixels=instance.preview(t.view,t.layer??params.inspectLayer,32,20),ctx=t.canvas.getContext("2d"),image=ctx.createImageData(32,20);image.data.set(pixels);ctx.putImageData(image,0,0);t.button.setAttribute("aria-pressed",String(params.view===t.view&&(!t.layer||params.inspectLayer===t.layer)));}
     if(mode==="fields")drawWires();
   }
   doc.defaultView?.addEventListener("resize",()=>{if(root.open&&mode==="fields")drawWires();});

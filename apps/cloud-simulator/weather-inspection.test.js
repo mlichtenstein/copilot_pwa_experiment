@@ -38,10 +38,13 @@ test("inspector tiles select fields/passes, update live, and stop preview work w
   doc.getElementById("inspect-far-cloudWater").fire("click");assert.deepEqual(selections.at(-1),{view:"cloudWater",inspectLayer:"far"});
   ui.update({...p,view:"cloudWater",inspectLayer:"far"},instance);assert.match(doc.getElementById("inspection-caption").textContent,/far.*Cloud water/);
   assert.ok(nodes.every(n=>n.type&&n.inputs&&n.rule));
-  assert.match(doc.getElementById("inspection-caption").textContent,/Type: Scalar field.*Inputs:.*Rule:/);
+  assert.ok(descendants(root).some(n=>/Type: Scalar field.*Inputs:.*Rule:/.test(n.textContent)));
   const near=doc.getElementById("inspect-layer-near"),far=doc.getElementById("inspect-layer-far");
   const paintedBefore=painted;near.open=false;far.open=true;far.fire("toggle");assert.equal(painted-paintedBefore,15);
   const buttons=descendants(root).filter(n=>n.tagName==="BUTTON");assert.ok(buttons.every(b=>b.title));buttons.find(b=>b.textContent==="Composition").fire("click");
   doc.getElementById("inspect-pass-2").fire("click");assert.deepEqual(selections.at(-1),{view:"pass-2"});
+  const picker=descendants(root).find(n=>n.tagName==="SELECT");
+  const beforeLabels=painted;picker.value="labels";picker.fire("change");assert.equal(root.attributes["data-previews"],"labels");assert.equal(painted,beforeLabels);
+  picker.value="full";picker.fire("change");assert.ok(painted>beforeLabels);
   const count=painted;root.open=false;stepWeather(instance.state,.1,p);ui.update(p,instance);assert.equal(painted,count);instance.dispose();
 });
