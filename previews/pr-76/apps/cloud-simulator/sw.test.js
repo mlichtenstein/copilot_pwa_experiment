@@ -33,7 +33,7 @@ function reachable() {
 }
 
 test("the service worker precaches every file a page needs, and only files that exist", () => {
-  assert.match(sw, /CACHE_PREFIX \+ "v6"/);
+  assert.match(sw, /CACHE_PREFIX \+ "v7"/);
   const needed = [...reachable(), ...experiments.map(thumbnailFor)];
   for (const path of needed) assert.ok(FILES.includes(path), `${path} is precached`);
   for (const path of FILES.filter(path => path !== "./")) assert.ok(existsSync(new URL(path, root)), `${path} exists`);

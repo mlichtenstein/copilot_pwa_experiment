@@ -34,6 +34,7 @@ function pageDocument() {
 }
 
 const EXPECTED = {
+  weather: ["airDensity", "aerosol", "exposure", "cloudAltitude", "altitudeSpread", "coverage", "textureMix", "wind", "formationSpeed", "cloudOpacity", "cloudSharpness", "haze", "shaftStrength", "edgeFeather", "rainAmount", "storminess", "chargeBias"],
   sunset: ["extinction", "slabDepth", "albedo", "g", "airOpticalDepth", "ambient", "exposure"],
   horizon: ["cloudAltitude", "altitudeSpread", "distanceScale", "airDensity", "aerosol", "exposure"],
   shafts: ["cloudOpacity", "haze", "cloudSharpness", "sourceRadius", "edgeFeather"],
@@ -67,7 +68,7 @@ for (const entry of experiments) {
     assert.equal(speedLabel.className, "drift-speed help-host"); assert.equal(speedLabel.parentNode, row);
     assert.equal(randomizeRow.className, "panel-row buttons"); assert.equal(randomizeRow.parentNode, $("playback"));
     assert.match(helpOf(doc, $("drift-speed")), /Scales each drift step|0\.1× to 10×/);
-    assert.match(helpOf(doc, $("randomize")), /Every setting of this experiment jumps to a random value/); assert.ok(!$("randomize").title);
+    assert.match(helpOf(doc, $("randomize")), /Randomizes scene settings: sliders/); assert.ok(!$("randomize").title);
     assert.equal(page.getParams().driftSpeed, 1); assert.equal(Number($("drift-speed").value), 0);
 
     const before = page.getParams();

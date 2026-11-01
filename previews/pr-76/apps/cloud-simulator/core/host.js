@@ -51,7 +51,7 @@ export const PANEL_TEXT = {
   hint: "Hold any control to see what it does",
   playNote: "Starts or stops this page's one clock: the sun, wind, simulation and Drift all move with it.",
   stepNote: "Pauses, then moves the clock on by one step (one simulation tick, or one second).",
-  randomizeNote: "Every setting of this experiment jumps to a random value: sliders (greyed-out ones too), menus, toggles and seeds, plus the time of day and the sun path's shape. Play/Pause, Drift, its speed, the grid size and playback speeds stay.",
+  randomizeNote: "Randomizes scene settings: sliders (greyed-out ones too), scene menus, toggles and seeds, plus time of day and sun path shape. Inspection views, selected field layers, layer visibility and lighting comparison mode stay, along with Play/Pause, Drift, grid size and playback speeds.",
   driftNote: "On by default (links and ratings keep their own setting; older ones load with it off). While playing, the experiment's sliders wander slowly on a random walk, anywhere in their range; drag one to steer it. Greyed-out sliders, playback speeds, seeds, menus, toggles and the sun stay put.",
   speedNote: "How fast Drift moves, 0.1× to 10× on a log scale: 1× crosses a slider's range in about 7 minutes, 10× in seconds, 0.1× in hours.",
   newSeedNote: "A new seed for the experiment's randomness (cloud layout, noise, run or strike); your slider settings stay.",
