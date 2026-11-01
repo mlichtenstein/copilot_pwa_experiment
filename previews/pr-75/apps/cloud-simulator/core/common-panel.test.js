@@ -102,7 +102,7 @@ const navOf = header => descendants(header.children.find(child => child.tagName 
 test("every page has the same header and nav, built from the registry", async () => {
   const pages = await mountAll();
   const all = experiments.map(entry => `${entry.nav} -> ${entry.href}`);
-  assert.deepEqual(experiments.map(entry => entry.nav), ["Weather", "Sunset", "Convection", "Horizon", "Shafts", "Noise", "Valley", "Lightning"]);
+  assert.deepEqual(experiments.map(entry => entry.nav), ["Combined layers", "Sunset", "Convection", "Horizon", "Shafts", "Noise", "Valley", "Lightning"]);
   for (const { entry, $ } of pages) {
     const header = $("header");
     assert.equal(header.className, "experiment-header");
