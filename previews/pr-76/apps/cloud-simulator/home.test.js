@@ -1,6 +1,7 @@
 /* Purpose: The front page (index.html, home.js) lists every registered experiment with its
  *   picture, title, one line and link; has the shared header, 🎲 Random and ❤️ Random; explains
- *   the common panel, hold for help, ratings and 🔗; and no longer redirects.
+ *   the common panel, hold for help, ratings and 🔗; opens with a welcome before the buttons
+ *   and cards; and no longer redirects.
  * Consumers: Node test runner.
  * Dependencies: node:test, node:assert, node:fs, home.js, core/registry.js, core/launch.js,
  *   core/fake-dom.js. */
@@ -40,5 +41,9 @@ test("index.html explains the pages and no longer redirects", () => {
   const html = readFileSync(new URL("index.html", import.meta.url), "utf8");
   assert.doesNotMatch(html, /http-equiv="refresh"|location\.replace/);
   assert.match(html, /<script type="module" src="home.js">/);
+  const intro = html.indexOf('class="home-intro"');
+  assert.ok(intro > 0 && intro < html.indexOf('id="launch"') && intro < html.indexOf('id="experiments"'), "the welcome comes before the buttons and cards");
+  assert.match(html, /Welcome to my sunset simulator experiments\./);
+  assert.match(html, /emoji bar \(❤️ 🎨 🤮 ⬜\)/);
   for (const words of [/Play<\/b>/, /Step<\/b>/, /Randomize<\/b>/, /Drift<\/b>/, /driftSpeed/, /New seed<\/b>/, /timeOfDay/, /Hold for help/, /❤️ 🎨 🤮/, /🔗/]) assert.match(html, words);
 });

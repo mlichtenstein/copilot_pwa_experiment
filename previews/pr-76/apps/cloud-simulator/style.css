@@ -123,6 +123,8 @@ a { color: #9ed8ec; }
 .home-layout { max-width: 960px; padding: 12px 14px 32px; }
 .home .header-actions { display: none; }
 .home .experiment-header h1 { white-space: normal; }
+.home-intro { margin: 10px 0 0; max-width: 68ch; line-height: 1.5; }
+.home-intro p { margin: 0 0 6px; }
 .home-start { margin: 12px 0 4px; }
 .home-launch { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .home-launch .launch { display: grid; flex: 1 1 160px; }

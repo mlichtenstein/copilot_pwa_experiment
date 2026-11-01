@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- Purpose: Cloud simulator front page (the manifest's start_url and the app folder's link):
-     what the experiments are, how every page works (the common panel, hold for help, the
+     a welcome (why the site exists and why ratings help), what the experiments are, how every page works (the common panel, hold for help, the
      emoji ratings and 🔗 links), 🎲 Random and a random ❤️, and every experiment with a
      picture, its one line and a link. Consumers: browser.
      Dependencies: style.css, home.js (builds the header, the buttons and the list from
@@ -18,6 +18,10 @@
 <body class="home">
 <main class="home-layout">
   <header id="header" class="experiment-header"></header>
+  <section class="home-intro" aria-label="Welcome">
+    <p>Welcome to my sunset simulator experiments. I'm trying to learn what makes sunsets beautiful, and to build a system that generates sunsets with interesting weather. The goal is something that feels like watching real, beautiful weather, but keeps surprising you.</p>
+    <p>You can help: as you play around, use the emoji bar (❤️ 🎨 🤮 ⬜) at the top of each page to tell me when a scene is lovely, gross or boring. That feedback shows me which settings are worth exploring further. Have fun!</p>
+  </section>
   <section class="home-start" aria-label="Start somewhere">
     <div id="launch" class="home-launch"></div>
     <p class="hold-hint">ⓘ Hold any button or control to see what it does.</p>
