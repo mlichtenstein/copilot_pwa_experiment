@@ -15,7 +15,7 @@
 .weather-graph-source .weather-node { min-width: 130px; }
 .weather-graph-source p { font-size: .75rem; padding: 8px; background: #0e1828; }
 .weather-graph-columns { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 24px; }
-.weather-graph-column h3 { position: relative; z-index: 1; background: #0e1828; font-size: .85rem; margin: 0 0 18px; }
+.weather-graph-column > summary { position: relative; z-index: 1; background: #0e1828; font-size: .85rem; margin: 0 0 18px; }
 .weather-node-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 24px 14px; }
 .weather-node { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: stretch; gap: 5px; padding: 7px; width: 100%; min-width: 0; background: #142237; border: 1px solid #45617a; border-radius: 6px; }
 .weather-node canvas { width: 100%; height: auto; aspect-ratio: 1.6; image-rendering: pixelated; background: #03070d; }
@@ -25,4 +25,19 @@
 @media(max-width:760px) {
   .weather-inspector { max-height: 30dvh; }
   .simulation-pane:has(.weather-inspector[open]) .canvas-fit canvas { width: min(100%, 28dvh * var(--fit-ar)); }
+}
+
+/* Collapsed depth headers remain connection endpoints; mobile uses one readable column. */
+.weather-graph-column > summary { cursor: pointer; padding: 10px; border: 1px solid #45617a; border-radius: 6px; }
+.weather-graph-column:not([open]) { align-self: start; }
+@media(max-width:760px) {
+  .weather-inspector { max-height: 55dvh; }
+  .weather-graph-board { min-width: 0; }
+  .weather-graph-columns { grid-template-columns: 1fr; gap: 20px; }
+  .weather-node-grid { gap: 20px 16px; }
+  .weather-node span { font-size: .8rem; }
+  .weather-graph-source { flex-direction: column; align-items: stretch; }
+  .weather-graph-source .weather-node { max-width: 160px; }
+  .weather-composition { min-width: 0; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .inspector-detail { font-size: .85rem; }
 }
