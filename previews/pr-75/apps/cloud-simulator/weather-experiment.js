@@ -10,9 +10,9 @@ const now=()=>globalThis.performance?.now()??Date.now();
 const slider=(key,min,max,step,help,group)=>({key,kind:"range",min,max,step,default:defaults[key],help,group});
 const toggle=(key,help)=>({key,kind:"toggle",default:defaults[key],help,group:"Layers"});
 function summary(values){const sorted=[...values].sort((a,b)=>a-b);return sorted.length?`${sorted[Math.floor((sorted.length-1)*.5)].toFixed(0)}/${sorted[Math.floor((sorted.length-1)*.95)].toFixed(0)}`:"—";}
-export const weather={id:"weather",title:"Weather layers",app:"cloud-simulator/weather",width:160,height:100,sun:false,frameInterval:250,playLabels:["Play weather","Pause weather"],
+export const weather={id:"weather",title:"Weather layers",app:"cloud-simulator/weather",width:160,height:100,sun:false,frameInterval:250,seed:"seed",stepSeconds:.1,
   params:[
-    {key:"seed",kind:"seed",default:42,random:true,hidden:true,newLabel:"New weather",newTitle:"Generate fresh fields and terrain; internal seeds are saved in links"},
+    {key:"seed",kind:"seed",default:42,random:true,hidden:true},
     toggle("near","Show the near cloud/rain/lightning/terrain layer, 8 km away."),toggle("middle","Show the middle layer, 24 km away."),toggle("far","Show the far layer, 65 km away."),
     {key:"view",kind:"select",label:"View",default:"scene",options:[["scene","Combined scene"],...nodes.map(node=>[node.id,node.label]),["sky","Sky / atmospheric light"],...passes.filter(pass=>pass.view!=="scene").map(pass=>[pass.view,`Composition ${pass.index+1}: ${pass.label}`])],help:"Inspect a field, derived rendering input, or accumulated render pass. The graph shows their connections.",group:"Inspect"},
     {key:"inspectLayer",kind:"select",label:"Field layer",default:"near",options:[["near","Near · 24×15"],["middle","Middle · 32×20"],["far","Far · 48×30"]],help:"Which distance layer supplies the field view; charge is 12×6 in each.",group:"Inspect"},
@@ -37,9 +37,7 @@ export const weather={id:"weather",title:"Weather layers",app:"cloud-simulator/w
     slider("storminess",0,2,.1,"Charge buildup rate; zero hides and stops lightning while other fields continue.","Light and weather"),
     slider("chargeBias",-1,1,.05,"Mean signed charge buildup; either polarity can favor ground strikes.","Light and weather")
   ],
-  actions:[{id:"step-weather",label:"Step 0.1 s",title:"Pause and advance two fixed weather ticks",run:page=>{page.setPlaying(false);page.instance.step(.1);}},
-    {id:"reset-weather",label:"Reset weather",title:"Pause and restore default settings with fresh weather",run:page=>{page.setPlaying(false);page.resetToDefaults();}}],
-  decorate({doc}){for(const param of weather.params){const input=doc.getElementById(param.key);if(input)input.title=param.help??param.key;}return ()=>{};},
+  actions:[{id:"reset-weather",label:"Reset weather",title:"Pause and restore default settings with fresh weather",run:page=>{page.setPlaying(false);page.resetToDefaults();}}],
   create({width,height,params}){
     let current=params,state=createWeather(params.seed,params),maps=null;
     const samples={dynamics:[],lighting:[],drawing:[],inspection:[]},record=(key,value)=>{samples[key].push(value);if(samples[key].length>60)samples[key].shift();};

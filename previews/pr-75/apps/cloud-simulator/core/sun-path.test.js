@@ -1,11 +1,12 @@
 /* Purpose: Check the shared vertical figure-eight sun path: a closed loop whose top and
  *   bottom lobes cross once in the middle, that dips below the horizon with the defaults,
  *   that the four shared path settings scale and offset as stated, and that it is the same
- *   for the same time.
+ *   for the same time; the time of day (noon highest, midnight lowest, old phases kept) and
+ *   that the default path reaches a real night.
  * Consumers: Node test runner. Dependencies: node:test, node:assert and sun-path.js. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_SUN_SHAPE, SUN_PATH, SUN_PATH_PARAMS, nearestPhase, sunAt, sunAtPhase, sunPhase, timeForPhase } from "./sun-path.js";
+import { DEFAULT_SUN_SHAPE, LEGACY_SUN_SHAPE, SUN_PATH, clockText, phaseForTimeOfDay, timeOfDay, SUN_PATH_PARAMS, nearestPhase, sunAt, sunAtPhase, sunPhase, timeForPhase } from "./sun-path.js";
 
 const close = (a, b, message, tolerance = 1e-9) => assert.ok(Math.abs(a - b) < tolerance, `${message}: ${a} vs ${b}`);
 const samples = (shape = {}, count = 720) => Array.from({ length: count }, (_, i) => sunAt(i * SUN_PATH.period / count, shape));
@@ -103,4 +104,33 @@ test("nearestPhase finds the point on the path closest to an old fixed sun posit
   const target = [-15, -1.2], phase = nearestPhase(...target), sun = sunAtPhase(phase);
   const distance = Math.hypot(sun.azimuth - target[0], sun.elevation - target[1]);
   assert.ok(samples().every(point => Math.hypot(point.azimuth - target[0], point.elevation - target[1]) >= distance - 1e-9));
+});
+
+test("time of day: noon is the top of the path, midnight the bottom, 06:00 and 18:00 between", () => {
+  close(timeOfDay(0), 6, "phase 0"); close(timeOfDay(0.25), 12, "noon"); close(timeOfDay(0.5), 18, "dusk");
+  close(timeOfDay(0.75), 0, "midnight"); close(timeOfDay(0.125), 9, "the default phase (0.125) is 09:00");
+  for (const shape of [DEFAULT_SUN_SHAPE, LEGACY_SUN_SHAPE, { sunPathHeight: 12, sunPathY: -4 }]) {
+    const elevations = Array.from({ length: 1440 }, (_, minute) => sunAtPhase(phaseForTimeOfDay(minute / 60), shape).elevation);
+    close(Math.max(...elevations), elevations[720], "highest at 12:00");
+    close(Math.min(...elevations), elevations[0], "lowest at 00:00");
+    close(elevations[360], elevations[1080], "06:00 and 18:00 at the same height");
+  }
+  // Round trips, wrapping, and the clock text.
+  for (const hours of [0, 0.5, 6, 9.25, 12, 18, 23.99]) close(timeOfDay(phaseForTimeOfDay(hours)), hours, `${hours} h`, 1e-9);
+  for (const phase of [0, 0.125, 0.3, 0.75, 0.999]) close(phaseForTimeOfDay(timeOfDay(phase)), phase, `phase ${phase}`, 1e-9);
+  close(phaseForTimeOfDay(24), phaseForTimeOfDay(0), "24:00 is 00:00"); close(phaseForTimeOfDay(-6), phaseForTimeOfDay(18), "wraps");
+  assert.deepEqual([0, 9, 12.5, 20.4, 23.999].map(clockText), ["00:00", "09:00", "12:30", "20:24", "00:00"]);
+  // A day is still one sun period (90 s of Play).
+  assert.equal(SUN_PATH.period, 90);
+});
+
+test("the default path reaches a real night; old links keep their old path", () => {
+  const [lowest, highest] = range(samples().map(point => point.elevation));
+  assert.ok(lowest <= -15 && lowest >= -20, `night bottoms out at ${lowest}°`);
+  assert.ok(highest >= 20, `midday at ${highest}°`);
+  // Links saved before the path had settings used the old shape, which the host restores, so
+  // the same saved phase still gives the same sun.
+  assert.deepEqual(LEGACY_SUN_SHAPE, { ...DEFAULT_SUN_SHAPE, sunPathHeight: 32, sunPathY: 9 });
+  const old = sunAtPhase(0.6, LEGACY_SUN_SHAPE);
+  close(old.elevation, 9 + 16 * Math.sin(2 * Math.PI * 0.6), "old elevation formula");
 });

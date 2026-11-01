@@ -7,8 +7,8 @@ import {thresholdMask,combinedCoverage} from "./visibility-model.js";
 import {sampleCloud} from "./shafts-model.js";
 import {terrainShadowAt,groundLightRadius,drawTerrainObjects} from "./lightning-terrain.js";
 export const nodes=[
-  {id:"bitmap",label:"Grayscale bitmap",description:"Fixed Horizon mask, sampled with this layer’s altitude and wind. Produces part of cloud water."},
-  {id:"reveal",label:"Evolving noise",description:"Current Perlin reveal factor. Shares its noise sample with diagnostic humidity and the cloud supplier."},
+  {id:"bitmap",label:"Cloud texture",description:"Fixed Horizon mask, sampled with this layer’s altitude and wind. Produces part of cloud water."},
+  {id:"reveal",label:"Cloud reveal noise",description:"Current Perlin reveal factor. Shares its noise sample with diagnostic humidity and the cloud supplier."},
   {id:"humidity",label:"Humidity",description:"Normalized diagnostic field from the supplier noise. It does not currently drive rain or cloud water."},
   {id:"cloudWater",label:"Cloud water",description:"Bitmap/noise mixture times coverage and reveal. Read by opacity, visibility masks and the current simple rain source."},
   {id:"opacity",label:"Cloud opacity",description:"1 − exp(−cloudOpacity × cloud water), in the native field grid. Controls cloud-body blending."},

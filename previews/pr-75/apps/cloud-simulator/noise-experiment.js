@@ -33,10 +33,12 @@ export const noise = {
   height: 96,
   sun: false,
   autoplay: true,
-  drift: true,
+  // The common New seed starts a new run; Step is one tick.
+  seed: "seed",
+  stepSeconds: 1 / TICKS_PER_SECOND,
   groupNotes: { [SKY]: "", [LAYER]: "Clouds form only in this band of height.", [RAIN]: "" },
   params: [
-    { key: "view", kind: "select", label: "View", wide: true, default: "sunset",
+    { key: "view", kind: "select", wide: true, default: "sunset",
       options: [["sunset", "Sunset"], ["water", "Cloud and rain"], ["relative", "Cloud forcing"], ["humidity", "Humidity"], ["temperature", "Temperature"], ["pressure", "Pressure"]] },
     slider("cloudiness", 0.2, 0.7, 0.01, "More moisture: more and bigger clouds.", SKY),
     slider("featureSize", 8, 96, 1, "Size of cloud clumps, in pixels.", SKY),
@@ -50,11 +52,7 @@ export const noise = {
     slider("rainAmount", 0, 0.015, 0.0005, "How much rain dense, lasting clouds drop (and how fast that thins them).", RAIN),
     slider("fallSpeed", 0.05, 1, 0.01, "Pixels per tick the rain falls.", RAIN),
     // Seeds only make a run reproducible; behavior should look alike on any seed.
-    { key: "seed", kind: "seed", default: 1, random: true, hidden: true, newLabel: "New seed", newTitle: "Start a new run on a random seed" }
-  ],
-  actions: [
-    { id: "step", label: "Step", title: "Pause and advance one tick", run: page => { page.setPlaying(false); page.instance.tick(); } },
-    { id: "reset", label: "Reset", title: "Restart the run on the same seed and settings", run: page => page.instance.restart() }
+    { key: "seed", kind: "seed", default: 1, random: true, hidden: true }
   ],
   readouts: { legend: params => legends[params.view] },
   stats: (params, frame, { simulation }) => {
