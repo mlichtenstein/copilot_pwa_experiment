@@ -2,7 +2,7 @@
  * Consumers: weather-experiment.js, weather-inspection.js and weather tests.
  * Dependencies: weather-fields.js, atmosphere/visibility/shafts models, and lightning terrain helpers. */
 import {SCALE,CAMERA_LIFT,clamp,enabled,cloudAltitude,terrainY,weatherSun} from "./weather-fields.js";
-import {skyRadiance,sunDirection,pointAtAltitude,directSunlight,viewTransmission} from "./atmosphere-model.js";
+import {skyRadiance,sunDirection,pointAtAltitude,directSunlight,viewTransmission,EARTH_RADIUS,CAMERA_HEIGHT,earthBlocks,dot} from "./atmosphere-model.js";
 import {buildLayeredVisibility,combinedCoverage} from "./visibility-model.js";
 import {sampleCloud} from "./shafts-model.js";
 import {groundAt} from "./lightning-model.js";
@@ -10,11 +10,11 @@ import {terrainShadowAt,drawTerrainObjects,groundLightRadius} from "./lightning-
 export const renderOrder=["sky","all-light-veils","far-cloud-rain-lightning-terrain","middle-cloud-rain-lightning-terrain","near-cloud-rain-lightning-terrain","terrain-props"];
 export function projectionLayers(state,p){return state.layers.map(l=>({...l,density:enabled(l,p)?l.fields.cloudWater:l.fields.cloudWater.map(()=>0)}));}
 function rayAt(u,v){const ray=[(2*u-1)*SCALE*1.6,(1-2*v)*SCALE+CAMERA_LIFT,1],len=Math.hypot(...ray);return ray.map(x=>x/len);}
-export function buildWeatherLighting(state,p){
-  const sun=weatherSun(state,p),direction=sunDirection(sun.elevation,sun.azimuth),layers=projectionLayers(state,p);
+export function buildWeatherLighting(state,p,sunOverride){
+  const sun=sunOverride??weatherSun(state,p),direction=sunDirection(sun.elevation,sun.azimuth),layers=projectionLayers(state,p);
   const options={...p,sunElevation:Math.atan(Math.tan(sun.elevation*Math.PI/180)-CAMERA_LIFT*Math.cos(sun.azimuth*Math.PI/180))*180/Math.PI,sunAzimuth:sun.azimuth,sourceRadius:6};
   const visibility=buildLayeredVisibility({layers},options,64,40);
-  const sky=Array.from({length:32*20},(_,i)=>skyRadiance(rayAt((i%32+.5)/32,(Math.floor(i/32)+.5)/20),direction,p));
+  const sky=Array.from({length:32*20},(_,i)=>skyRadiance(rayAt((i%32+.5)/32,(Math.floor(i/32)+.5)/20),direction,p,false));
   const colors=state.layers.map(layer=>Array.from({length:12*8},(_,i)=>{
     const u=(i%12+.5)/12,v=(Math.floor(i/12)+.5)/8,lateral=(2*u-1)*SCALE*1.6*layer.distance;
     const altitude=Math.max(.02,.15+((1-2*v)*SCALE+CAMERA_LIFT)*layer.distance+layer.distance**2/(2*6371));
@@ -22,7 +22,8 @@ export function buildWeatherLighting(state,p){
     return {direct:directSunlight(point,direction,p),transmission:viewTransmission(point,p)};
   }));
   const veilColors=state.layers.map(layer=>directSunlight(pointAtAltitude(layer.distance,cloudAltitude(layer,p)),direction,p));
-  return {sun,visibility,sky,colors,veilColors,work:{cells:state.layers.reduce((n,l)=>n+l.width*l.height,0),segments:visibility.bands.reduce((n,b)=>n+b.layers.reduce((k,l)=>k+l.segments.length,0),0)}};
+  const camera=[0,EARTH_RADIUS+CAMERA_HEIGHT,0],sunlight=directSunlight(camera,direction,p);
+  return {sun,direction,camera,sunlight,visibility,sky,colors,veilColors,work:{cells:state.layers.reduce((n,l)=>n+l.width*l.height,0),segments:visibility.bands.reduce((n,b)=>n+b.layers.reduce((k,l)=>k+l.segments.length,0),0)}};
 }
 function mapBolt(layer,node,p){
   const top=.5-((cloudAltitude(layer,p)-.15)/layer.distance-CAMERA_LIFT)/(2*SCALE)-.09;
@@ -50,6 +51,8 @@ export function renderWeather(state,p,maps,width=160,height=100,throughPass=5){
   for(let y=0;y<height;y++)for(let x=0;x<width;x++){
     const u=(x+.5)/width,v=(y+.5)/height,rx=(2*u-1)*SCALE*1.6,ry=(1-2*v)*SCALE,index=y*width+x;
     const sky=maps.sky[Math.min(19,Math.floor(v*20))*32+Math.min(31,Math.floor(u*32))];let rgb=sky.slice();
+    // Sample the small disc on the final pixel grid, rather than the coarse sky grid.
+    const ray=rayAt(u,v);if(dot(ray,maps.direction)>Math.cos(.55*Math.PI/180)&&!earthBlocks(maps.camera,ray))rgb=rgb.map((c,k)=>c+maps.sunlight[k]*5);
     const mi=Math.min(39,Math.floor(v*40))*64+Math.min(63,Math.floor(u*64));
     // Veils precede bodies: the same field supplies both the silhouettes and cloud opacity.
     for(let j=2;j>=0&&throughPass>=1;j--)if(enabled(state.layers[j],p))for(const band of vMaps.bands){

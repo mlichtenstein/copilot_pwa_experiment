@@ -64,3 +64,16 @@
 .weather-inspector[data-previews=full] .weather-node canvas { height: 48px; aspect-ratio: auto; object-fit: contain; }
 .weather-node-grid { row-gap: 22px; }
 .weather-graph-wires { opacity: 1; }
+
+/* Description and graph have independent scroll areas; neither scrolls the other away. */
+.weather-inspector[open] { display: grid; height: 44dvh; max-height: 44dvh; grid-template-rows: auto auto auto auto minmax(0,1fr); overflow: hidden; }
+.weather-inspector > summary { position: static; }
+.inspector-explanation { border-block: 1px solid #344b63; max-height: 12dvh; overflow: auto; min-height: 2em; padding: 3px 4px; background: #142237; }
+.inspector-detail { margin: 0; font-size: .72rem; line-height: 1.35; }
+.inspector-scroll { min-height: 0; overflow: auto; padding-top: 6px; }
+@media(max-width:760px) {
+  .weather-inspector[open] { height: 34dvh; max-height: 34dvh; }
+  .inspector-explanation { max-height: 10dvh; }
+  .inspector-help { display: none; }
+  .weather-inspector[open] { grid-template-rows: auto auto auto minmax(0,1fr); }
+}

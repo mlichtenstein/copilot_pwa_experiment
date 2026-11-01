@@ -34,7 +34,7 @@ function pageDocument() {
 }
 
 const EXPECTED = {
-  weather: ["sunElevation", "sunAzimuth", "sunSpeed", "airDensity", "aerosol", "exposure", "cloudAltitude", "altitudeSpread", "coverage", "textureMix", "wind", "formationSpeed", "cloudOpacity", "cloudSharpness", "haze", "shaftStrength", "edgeFeather", "rainAmount", "storminess", "chargeBias"],
+  weather: ["airDensity", "aerosol", "exposure", "cloudAltitude", "altitudeSpread", "coverage", "textureMix", "wind", "formationSpeed", "cloudOpacity", "cloudSharpness", "haze", "shaftStrength", "edgeFeather", "rainAmount", "storminess", "chargeBias"],
   sunset: ["extinction", "slabDepth", "albedo", "g", "airOpticalDepth", "ambient", "exposure"],
   horizon: ["cloudAltitude", "altitudeSpread", "distanceScale", "airDensity", "aerosol", "exposure"],
   shafts: ["cloudOpacity", "haze", "cloudSharpness", "sourceRadius", "edgeFeather"],
