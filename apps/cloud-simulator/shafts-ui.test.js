@@ -8,10 +8,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { shafts, sceneSun, SUN_LIMITS } from "./shafts-experiment.js";
 import { mountExperiment } from "./core/host.js";
-import { DEFAULT_SUN_SHAPE, SUN_PATH_KEYS, sunAt } from "./core/sun-path.js";
+import { LEGACY_SUN_SHAPE, SUN_PATH_KEYS, sunAt } from "./core/sun-path.js";
 import { fakeDocument, fakeCanvas, manualFrames, controlIds } from "./core/fake-dom.js";
 
-test("Light shafts: strategies, patterns, Randomize keeps the strategy, the shared sun stays in the scene's limits", () => {
+test("Light shafts: strategies, patterns, Randomize picks every setting, the shared sun stays in the scene's limits", () => {
   const doc = fakeDocument(["sky", "presets", "playback", "controls", "stats", "status", "patterns", "pattern-buttons"]);
   const canvas = fakeCanvas(doc, 32, 20), { raf, frame } = manualFrames(), $ = id => doc.getElementById(id);
   const page = mountExperiment(shafts, { doc, raf, presets: false, serviceWorker: null });
@@ -22,7 +22,7 @@ test("Light shafts: strategies, patterns, Randomize keeps the strategy, the shar
   };
   frame();
   const first = canvas.pixels();
-  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "drift", "drift-speed", "reset-sun", "sunPhase", ...SUN_PATH_KEYS]);
+  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "drift", "drift-speed", "reset-sun", "timeOfDay", ...SUN_PATH_KEYS]);
   assert.deepEqual($("pattern-buttons").children.map(button => button.textContent), ["Change near", "Change middle", "Change far"]);
   assert.equal($("patterns").textContent, "near: 42 · middle: 1039 · far: 2036");
   assert.match($("stats").textContent, /^3 cloud layers · layered visibility · \d+ ms\/frame$/);
@@ -40,8 +40,9 @@ test("Light shafts: strategies, patterns, Randomize keeps the strategy, the shar
   assert.notDeepEqual(canvas.pixels(), first);
   strategy("geometric"); input("haze", 0.8);
   $("randomize").fire("click"); frame();
-  assert.equal($("patterns").textContent, "near: 43 · middle: 1039 · far: 2036", "Randomize keeps the patterns");
-  assert.equal($("strategy-geometric").checked, true, "Randomize keeps the strategy");
+  assert.notEqual($("patterns").textContent, "near: 43 · middle: 1039 · far: 2036", "Randomize picks new patterns");
+  assert.ok(["visibility", "layered", "geometric"].includes(page.getParams().strategy));
+  assert.equal($(`strategy-${page.getParams().strategy}`).checked, true, "the strategy radio shows the random pick");
   assert.ok(Number($("haze").value) >= 0 && Number($("haze").value) <= 1);
   strategy("layered");
 
@@ -55,7 +56,7 @@ test("Light shafts: strategies, patterns, Randomize keeps the strategy, the shar
   // Old links: the fixed sun angles go to the nearest point on the path; sunSpeed is dropped;
   // the strategy and lighting come back.
   page.applyParams({ sunElevation: 8, sunAzimuth: -8, sunSpeed: 3, haze: 0.5, strategy: "visibility" });
-  const sun = sunAt(page.clock.time, DEFAULT_SUN_SHAPE);
+  const sun = sunAt(page.clock.time, LEGACY_SUN_SHAPE);
   assert.ok(Math.hypot(sun.azimuth + 8, sun.elevation - 8) < 4);
   assert.equal(page.getParams().strategy, "visibility"); assert.equal(page.getParams().haze, 0.5);
   assert.equal($("play").textContent, "Play");

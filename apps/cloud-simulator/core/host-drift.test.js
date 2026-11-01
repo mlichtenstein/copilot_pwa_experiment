@@ -62,7 +62,7 @@ for (const entry of experiments) {
     assert.equal(speedLabel.className, "drift-speed help-host"); assert.equal(speedLabel.parentNode, row);
     assert.equal(randomizeRow.className, "panel-row buttons"); assert.equal(randomizeRow.parentNode, $("playback"));
     assert.match(helpOf(doc, $("drift-speed")), /Scales each drift step|0\.1× to 10×/);
-    assert.match(helpOf(doc, $("randomize")), /random value in its range/); assert.ok(!$("randomize").title);
+    assert.match(helpOf(doc, $("randomize")), /Every setting of this experiment jumps to a random value/); assert.ok(!$("randomize").title);
     assert.equal(page.getParams().driftSpeed, 1); assert.equal(Number($("drift-speed").value), 0);
 
     const before = page.getParams();
@@ -87,19 +87,18 @@ for (const entry of experiments) {
       assert.ok(page.clock.time > time, "the sun kept moving on its own clock");
     }
 
-    // Randomize: only the sliders Drift moves jump, each to a value inside its range; the sun,
-    // its path, seeds, choices, toggles and the speed slider stay.
+    // Randomize (randomize.test.js covers it in depth): the Drift sliders jump inside their
+    // ranges and show it; Drift and its speed stay.
     const preRandom = page.getParams();
     $("randomize").fire("click"); frame();
     const randomized = page.getParams();
     assert.ok(EXPECTED[experiment.id].filter(key => randomized[key] !== preRandom[key]).length >= 2, "Randomize moved the sliders");
-    for (const param of experiment.params) {
-      if (drifting.has(param.key)) {
-        assert.ok(randomized[param.key] >= param.min && randomized[param.key] <= param.max, `${param.key} randomized in range`);
-        assert.equal(randomized[param.key], Number($(param.key).value), `${param.key} shows its random value`);
-      } else if (param.key !== "resolution") assert.deepEqual(randomized[param.key], preRandom[param.key], `${param.key} is not randomized`);
+    for (const param of experiment.params) if (drifting.has(param.key)) {
+      assert.ok(randomized[param.key] >= param.min && randomized[param.key] <= param.max, `${param.key} randomized in range`);
+      assert.equal(randomized[param.key], Number($(param.key).value), `${param.key} shows its random value`);
     }
-    for (const key of ["driftSpeed", "drift", "sunPhase", ...SUN_PATH_PARAMS.map(param => param.key)]) assert.equal(randomized[key], preRandom[key], `${key} is not randomized`);
+    for (const key of ["driftSpeed", "drift"]) assert.equal(randomized[key], preRandom[key], `${key} is not randomized`);
+    page.applyParams(preRandom); frame();
 
     // The speed slider: log scale, 1× in the middle, 10× at the right.
     $("drift-speed").value = "1"; $("drift-speed").fire("input");
@@ -122,7 +121,7 @@ for (const entry of experiments) {
     assert.equal(page.getParams().driftSpeed, 0.1); assert.equal(Number($("drift-speed").value), -1);
     const { drift, driftSpeed, ...old } = before;
     page.applyParams(old); frame();
-    assert.deepEqual(page.getParams(), { ...before, drift: false, driftSpeed: 1, ...(experiment.sun ? { sunPhase: page.getParams().sunPhase } : {}) });
+    assert.deepEqual(page.getParams(), { ...before, drift: false, driftSpeed: 1, sunPhase: page.getParams().sunPhase });
     page.dispose();
   });
 }
@@ -151,11 +150,12 @@ test("Drift: an experiment can opt out, and greyed-out sliders hold still", () =
   $("drift").checked = true; $("drift").fire("change"); page.setPlaying(true);
   for (let i = 0; i < 200; i++) frame(500);
   assert.notEqual(page.params.gain, 5); assert.equal(page.params.level, 5, "disabled: holds still");
-  // Randomize also leaves greyed-out sliders alone, and the select.
+  // Randomize gives greyed-out sliders and the select random values too.
   page.setPlaying(false);
-  const values = new Set();
-  for (let i = 0; i < 20; i++) { $("randomize").fire("click"); frame(); values.add(page.params.gain); assert.equal(page.params.level, 5); assert.equal(page.params.mode, "a"); }
+  const values = new Set(), levels = new Set(), modes = new Set();
+  for (let i = 0; i < 20; i++) { $("randomize").fire("click"); frame(); values.add(page.params.gain); levels.add(page.params.level); modes.add(page.params.mode); }
   assert.ok(values.size >= 5, `Randomize spreads gain over its range: ${[...values]}`);
+  assert.ok(levels.size >= 5, "and the greyed-out level"); assert.deepEqual([...modes].sort(), ["a", "b"]);
 });
 
 test("Drift: its slider changes redraw at the experiment's frame rate, not every frame", () => {

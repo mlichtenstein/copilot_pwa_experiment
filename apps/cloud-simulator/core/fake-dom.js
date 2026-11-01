@@ -81,3 +81,21 @@ export function imageDocument() {
 
 // The hidden hold-to-see description of a control (via its aria-describedby), or undefined.
 export const helpOf = (doc, node) => doc.getElementById(node?.attributes?.["aria-describedby"])?.textContent;
+
+// Every page's containers, with canvases that can decode Valley's bitmaps; it remembers every
+// element made so the whole page can be searched.
+export function pageDocument() {
+  const doc = fakeDocument(["header", "sky", "presets", "playback", "controls", "stats", "status", "legend", "cloud-status", "patterns", "pattern-buttons"]);
+  const images = imageDocument(), make = doc.createElement;
+  doc.made = [];
+  doc.createElement = tag => {
+    const node = make(tag);
+    doc.made.push(node);
+    if (tag === "canvas") {
+      const decoder = images.createElement("canvas").getContext("2d");
+      node.getContext = () => ({ ...decoder, createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData: () => {} });
+    }
+    return node;
+  };
+  return doc;
+}

@@ -5,15 +5,16 @@
  *   getParams/applyParams. It alone builds the page header (core/header.js: title, tagline
  *   and the nav to every experiment, from the registry) and the common panel, identical on
  *   every page in compact rows (Play/Pause, Step, Randomize and, with `seed`, New seed; Drift
- *   and its speed; with `sun`, the Sun group, its path shape in a closed disclosure), and below
- *   it the experiment's own section under its title. Every description is hidden and shown on
+ *   and its speed; the time of day, inside the Sun group with `sun`, its path shape in a
+ *   closed disclosure), and below it the experiment's own section under its title. After each
+ *   render it darkens the frame for night from the shared sun (core/daylight.js). Every description is hidden and shown on
  *   hold, hover or focus by the one core/hold-help.js mechanism. Optional
  *   capabilities (autoplay, Drift, seed, stepSeconds, actions, migrate, readouts, a grid-size
  *   switch, linked params, custom decorations, async loading) are all generic.
  * Consumers: every experiment page script (../sunset.js, ../convection.js, ../horizon.js,
  *   ../shafts.js, ../noise.js, ../valley.js, ../lightning.js); the core tests (common-panel.test.js
  *   among them) and the per-experiment UI tests.
- * Dependencies: experiment.js, clock.js, sun-path.js, header.js, hold-help.js, ../../shared/presets-panel.js,
+ * Dependencies: experiment.js, clock.js, sun-path.js, daylight.js, header.js, hold-help.js, ../../shared/presets-panel.js,
  *   ../../shared/drift.js; the page's DOM contract: <canvas id="sky">, and empty containers
  *   <header id="header"> (the header and nav),
  *   #presets (rating bar), #playback (the common panel), #stats (moved under the experiment's
@@ -21,16 +22,17 @@
  *   #status, plus any element an experiment's readouts name; Canvas 2D,
  *   requestAnimationFrame and optionally matchMedia and the service worker API.
  */
-import { validateExperiment, validateInstance, cleanParams, cleanParam, defaultParams, driftableParams, parseSize } from "./experiment.js";
+import { validateExperiment, validateInstance, cleanParams, cleanParam, defaultParams, driftableParams, parseSize, randomParams, randomValue } from "./experiment.js";
 import { createClock, startLoop } from "./clock.js";
-import { DEFAULT_SUN_SHAPE, SUN_PATH_PARAMS, nearestPhase, sunAt, sunPhase, timeForPhase } from "./sun-path.js";
+import { DEFAULT_SUN_SHAPE, LEGACY_SUN_SHAPE, SUN_PATH_PARAMS, clockText, nearestPhase, phaseForTimeOfDay, sunAt, sunPhase, timeForPhase, timeOfDay } from "./sun-path.js";
+import { NIGHT, applyNight, daylight } from "./daylight.js";
 import { mountPresetBar } from "../../shared/presets-panel.js";
 import { bindDrift, seededRandom, DRIFT } from "../../shared/drift.js";
 import { createHoldHelp } from "./hold-help.js";
 import { mountHeader } from "./header.js";
 
-// Where the sun starts and where Reset sun puts it: an eighth of the way round, in the top
-// lobe, high and to the right (15° across and about 20° up with the default path shape).
+// Where the clock starts and where Reset sun puts it: an eighth of the way round, 09:00, in
+// the top lobe, high and to the right (15° across and about 21° up with the default path).
 export const DEFAULT_SUN_PHASE = 0.125;
 
 const make = (doc, tag, props = {}, ...children) => {
@@ -45,12 +47,12 @@ export const PANEL_TEXT = {
   hint: "Hold any control to see what it does",
   playNote: "Starts or stops this page's one clock: the sun, wind, simulation and Drift all move with it.",
   stepNote: "Pauses, then moves the clock on by one step (one simulation tick, or one second).",
-  randomizeNote: "Every slider Drift moves jumps to a random value in its range. Greyed-out sliders, playback speeds, seeds, menus, toggles and the sun stay.",
+  randomizeNote: "Every setting of this experiment jumps to a random value: sliders (greyed-out ones too), menus, toggles and seeds, plus the time of day and the sun path's shape. Play/Pause, Drift, its speed, the grid size and playback speeds stay.",
   driftNote: "While playing, the experiment's sliders wander slowly on a random walk, anywhere in their range; drag one to steer it. Greyed-out sliders, playback speeds, seeds, menus, toggles and the sun stay put.",
   speedNote: "How fast Drift moves, 0.1× to 10× on a log scale: 1× crosses a slider's range in about 7 minutes, 10× in seconds, 0.1× in hours.",
   newSeedNote: "A new seed for the experiment's randomness (cloud layout, noise, run or strike); your slider settings stay.",
-  resetSunNote: "Stops the sun and puts it back at its starting point on the path; the path's shape stays.",
-  sunPhaseNote: "Sun position on the shared vertical figure-eight path (0 to 1), the same in every experiment with a sun. Moving it stops the sun.",
+  resetSunNote: "Stops the sun and puts it back at 09:00, its starting point on the path; the path's shape stays.",
+  timeOfDayNote: "Time of day on the shared clock, 00:00 to 24:00: the sun is highest at noon and lowest at midnight, and a day takes 90 s of Play. Once the sun is below the horizon the page darkens to night (dim blue, not black). Moving it pauses the clock.",
   sunPathSummary: "Sun path shape"
 };
 
@@ -118,7 +120,9 @@ export function mountExperiment(experiment, {
   playing = experiment.autoplay === true && !globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
   raf = globalThis.requestAnimationFrame,
   presets = true,
-  serviceWorker = globalThis.navigator?.serviceWorker
+  serviceWorker = globalThis.navigator?.serviceWorker,
+  // Randomize's random numbers (() => [0, 1)); tests pass a seeded one.
+  random = seededRandom(randomSeed())
 } = {}) {
   validateExperiment(experiment);
   const element = id => doc.getElementById(id);
@@ -136,6 +140,11 @@ export function mountExperiment(experiment, {
   // settings every sun-bearing experiment shows and saves the same way.
   let sunShape = { ...DEFAULT_SUN_SHAPE };
   const frameInfo = () => ({ time: clock.time, sun: sunAt(clock.time, sunShape) });
+  // Night on every page (daylight.js): how much daylight the frame keeps, from the shared sun.
+  // Sun-lit experiments shade their own dusk, so their ramp starts at the horizon instead of
+  // +6°; a scene that lights itself (instance.selfLight, a lightning flash) stays that bright.
+  const nightLight = frame => Math.max(daylight(frame.sun.elevation, experiment.sun ? { top: 0 } : {}), instance.selfLight?.() ?? 0);
+  let renderedLight = 1;
   let dirty = true, sinceRender = Infinity, decorDirty = true, loading = false, instance = null;
   const controls = new Map();
   const status = text => { const line = element("status"); if (line) line.textContent = text; };
@@ -160,16 +169,19 @@ export function mountExperiment(experiment, {
   function render() {
     const frame = frameInfo();
     const pixels = instance.render(frame);
+    renderedLight = nightLight(frame);
     if (pixels) {
       const image = context.createImageData(canvas.width, canvas.height);
       image.data.set(pixels);
+      // Night: the copy (never the instance's own buffer) darkens toward the night floor.
+      applyNight(image.data, renderedLight, experiment.sun ? { keep: NIGHT.sunKeep } : {});
       context.putImageData(image, 0, 0);
     }
     for (const control of controls.values()) if (control.output) control.output.textContent = control.read();
-    if (sunControl) {
-      sunControl.input.value = String(frame.sun.phase);
-      sunControl.output.textContent = `${frame.sun.azimuth.toFixed(0)}° across, ${frame.sun.elevation.toFixed(1)}° up`;
-    }
+    const hours = timeOfDay(frame.sun.phase);
+    timeControl.input.value = String(hours);
+    timeControl.output.textContent = experiment.sun
+      ? `${clockText(hours)} · ${frame.sun.elevation.toFixed(0)}° up` : clockText(hours);
     const stats = element("stats");
     if (stats && experiment.stats && !loading) stats.textContent = experiment.stats(params, frame, instance);
     for (const [id, readout] of Object.entries(experiment.readouts ?? {})) {
@@ -317,8 +329,8 @@ export function mountExperiment(experiment, {
   }
   panel.prepend(...ownHead, ...(ownButtons.length ? [row("own-actions", ...ownButtons)] : []));
 
-  // 2–4. Randomize, Drift and Drift speed (every experiment with a driftable slider, unless
-  // it sets drift: false). While playing, those sliders wander on their own slow random walk
+  // 2–4. Randomize, Drift and Drift speed (Drift on every experiment with a driftable slider,
+  // unless it sets drift: false). While playing, those sliders wander on their own slow random walk
   // across their whole range (own random numbers, so simulation seeds are untouched).
   // Dragging a slider takes it over; greyed-out sliders hold still. The walk moves by the
   // clock time that passes, so it stops when paused; drift changes redraw at the
@@ -332,10 +344,23 @@ export function mountExperiment(experiment, {
     speedOutput.textContent = `${speed < 1 ? speed.toFixed(2) : speed.toFixed(1)}×`;
     drift.walk.setSpeed(speed);
   };
+  // Randomize (every page): every setting gets a random value (randomParams: menus and
+  // toggles first, then sliders, greyed-out ones included, and seeds), plus a random time of
+  // day and sun path shape. Play/Pause, Drift, its speed and the grid size stay.
+  const randomize = button("randomize", "Randomize");
+  buttonRow.append(described(randomize, PANEL_TEXT.randomizeNote));
+  lockable.push(randomize);
+  randomize.addEventListener("click", () => {
+    const next = randomParams(experiment, params, random);
+    clock.set(timeForPhase(random()));
+    if (experiment.sun) {
+      sunShape = Object.fromEntries(SUN_PATH_PARAMS.map(param => [param.key, randomValue(param, random)]));
+      for (const param of SUN_PATH_PARAMS) controls.get(param.key).write(sunShape[param.key]);
+    }
+    setParams(next, { linked: true });
+    drift?.sync();
+  });
   if (driftSliders.length) {
-    // Randomize: every slider Drift moves (not the sun, its path, seeds, menus, toggles or
-    // greyed-out sliders) to a uniformly random value in its range, from its own random numbers.
-    const randomize = button("randomize", "Randomize");
     driftBox = make(doc, "input", { id: "drift", type: "checkbox", checked: false });
     const driftLabel = make(doc, "label", { className: "drift" }, driftBox, " Drift");
     help.attach(driftLabel, PANEL_TEXT.driftNote, driftBox);
@@ -345,24 +370,11 @@ export function mountExperiment(experiment, {
     speedInput.setAttribute("aria-label", "Drift speed");
     const speedLabel = make(doc, "label", { className: "drift-speed" }, "Speed ", speedInput, speedOutput = make(doc, "output", { textContent: "1.0×" }));
     help.attach(speedLabel, PANEL_TEXT.speedNote, speedInput);
-    buttonRow.append(described(randomize, PANEL_TEXT.randomizeNote));
     commonPanel.append(row("drift-row", driftLabel, speedLabel));
-    lockable.push(randomize);
     let moved = null;
     drift = bindDrift(driftSliders, { seed: randomSeed(), onChange: slider => { (moved ??= {})[slider.id] = slider.value; } });
     driftBox.addEventListener("change", () => drift.sync());
     speedInput.addEventListener("input", () => setDriftSpeed(10 ** Number(speedInput.value)));
-    const randomizeRandom = seededRandom(randomSeed());
-    randomize.addEventListener("click", () => {
-      const next = {};
-      for (const param of driftParams) {
-        if (controls.get(param.key).input.disabled) continue;
-        const steps = Math.floor((param.max - param.min) / param.step + 1e-9);
-        next[param.key] = Math.min(param.max, Number((param.min + Math.floor(randomizeRandom() * (steps + 1)) * param.step).toFixed(10)));
-      }
-      setParams({ ...params, ...next }, { linked: true });
-      drift.sync();
-    });
     // Returns true when a slider moved; the redraw then waits for frameInterval like any
     // other playback frame rather than forcing one every animation frame.
     drift.advance = dt => {
@@ -379,14 +391,16 @@ export function mountExperiment(experiment, {
   // buttons row (after Randomize, or after Step with no Drift).
   if (newSeed) buttonRow.append(described(newSeed, PANEL_TEXT.newSeedNote, "new-seed"));
 
-  // 6. The Sun group (experiment.sun): Reset sun and the sun's place on the shared path, then
-  // the path's shape behind a disclosure (closed), the same in every experiment with a sun.
-  const sunControl = experiment.sun ? buildControl(doc, { key: "sunPhase", kind: "range", min: 0, max: 1, step: 0.001,
-    help: PANEL_TEXT.sunPhaseNote }, sunPhase(clock.time), help) : null;
-  if (sunControl) {
-    sunControl.input.step = "any";
-    sunControl.listen(() => { setPlaying(false); clock.set(timeForPhase(Number(sunControl.read()))); dirty = true; });
-    // The path's size and position follow the sun slider; they do not stop the sun.
+  // 6. The time of day (every page): one slider from 00:00 to 24:00 on the shared clock
+  // (sun-path.js: noon is the sun's highest point, midnight its lowest). Saved as sunPhase.
+  // With experiment.sun it sits in the Sun group with Reset sun, then the path's shape behind
+  // a disclosure (closed), the same in every experiment with a sun.
+  const timeControl = buildControl(doc, { key: "timeOfDay", kind: "range", min: 0, max: 24, step: 1 / 60,
+    help: PANEL_TEXT.timeOfDayNote }, timeOfDay(sunPhase(clock.time)), help);
+  timeControl.input.step = "any";
+  timeControl.listen(() => { setPlaying(false); clock.set(timeForPhase(phaseForTimeOfDay(Number(timeControl.read())))); dirty = true; });
+  if (experiment.sun) {
+    // The path's size and position follow the time slider; they do not stop the sun.
     const sunShapeControls = SUN_PATH_PARAMS.map(param => {
       const control = buildControl(doc, param, sunShape[param.key], help);
       control.listen(() => { sunShape = { ...sunShape, [param.key]: cleanParam(param, control.read()) }; dirty = true; });
@@ -398,8 +412,8 @@ export function mountExperiment(experiment, {
     const pathShape = make(doc, "details", { className: "sun-path" }, make(doc, "summary", { textContent: PANEL_TEXT.sunPathSummary }),
       ...sunShapeControls.map(control => control.element));
     commonPanel.append(make(doc, "fieldset", { className: "panel-sun" }, make(doc, "legend", { textContent: "Sun" }),
-      row("sun-row", described(resetSun, PANEL_TEXT.resetSunNote, "reset-sun"), sunControl.element), pathShape));
-  }
+      row("sun-row", described(resetSun, PANEL_TEXT.resetSunNote, "reset-sun"), timeControl.element), pathShape));
+  } else commonPanel.append(row("time-row", timeControl.element));
 
   // The optional custom-control hook: pieces of page an experiment adds next to its
   // generated controls (Valley's texture previews), refreshed after params change or load.
@@ -414,17 +428,20 @@ export function mountExperiment(experiment, {
     let changed = false;
     if (advanced) {
       const drifted = drift && driftBox.checked ? drift.advance(advanced) : false;
-      changed = instance.step(advanced, frameInfo()) !== false || experiment.sun || drifted;
+      // Night follows the clock on every page, so a change in daylight redraws too.
+      changed = instance.step(advanced, frameInfo()) !== false || experiment.sun || drifted
+        || Math.abs(nightLight(frameInfo()) - renderedLight) > 0.002;
     }
     sinceRender += dt * 1000;
     if (dirty || (changed && sinceRender >= (experiment.frameInterval ?? 0))) render();
   }, { raf, doc });
 
-  // Ratings and links: every param, the sun's place on the path and the path's shape, the
-  // grid size, Drift and its speed.
+  // Ratings and links: every param, the time of day (as sunPhase, the place on the path) and
+  // the path's shape, the grid size, Drift and its speed.
   const getParams = () => ({
     ...params,
-    ...(experiment.sun ? { sunPhase: sunPhase(clock.time), ...sunShape } : {}),
+    sunPhase: sunPhase(clock.time),
+    ...(experiment.sun ? sunShape : {}),
     ...(sizeParam ? {} : { resolution: `${canvas.width}x${canvas.height}` }),
     ...(driftBox ? { drift: driftBox.checked, driftSpeed: drift.walk.speed } : {})
   });
@@ -435,14 +452,15 @@ export function mountExperiment(experiment, {
     const source = migrated && typeof migrated === "object" ? migrated : {};
     if (experiment.sun) {
       setPlaying(false);
-      // Saved before the path had settings: the default shape. Saved with a fixed sun
-      // (sunAzimuth/sunElevation sliders): the nearest point on the path. Other old keys,
-      // such as sunSpeed, are dropped by cleanParams.
-      sunShape = Object.fromEntries(SUN_PATH_PARAMS.map(param => [param.key, cleanParam(param, source[param.key])]));
+      // Saved before the path had settings: the shape it had then (LEGACY_SUN_SHAPE), so the
+      // sun lands where it was. Saved with a fixed sun (sunAzimuth/sunElevation sliders): the
+      // nearest point on the path. Other old keys, such as sunSpeed, are dropped by cleanParams.
+      const legacy = !SUN_PATH_PARAMS.some(param => param.key in source);
+      sunShape = Object.fromEntries(SUN_PATH_PARAMS.map(param => [param.key, cleanParam(param, source[param.key], (legacy ? LEGACY_SUN_SHAPE : DEFAULT_SUN_SHAPE)[param.key])]));
       for (const param of SUN_PATH_PARAMS) controls.get(param.key).write(sunShape[param.key]);
       if (finite(source.sunPhase)) clock.set(timeForPhase(source.sunPhase));
       else if (finite(source.sunAzimuth) && finite(source.sunElevation)) clock.set(timeForPhase(nearestPhase(source.sunAzimuth, source.sunElevation, sunShape)));
-    }
+    } else if (finite(source.sunPhase)) clock.set(timeForPhase(source.sunPhase));
     if (driftBox && typeof source.drift === "boolean") driftBox.checked = source.drift;
     // Links from before the speed slider load at 1×.
     if (driftBox) setDriftSpeed(source.driftSpeed);
