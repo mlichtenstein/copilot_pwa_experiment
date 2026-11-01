@@ -87,7 +87,7 @@ test("generic controls: groups, radios, toggles, enabled rules, linked params an
   // own hidden seed steps with its own button, in its section.
   assert.ok(Number.isInteger(page.params.seed));
   const seed = page.params.seed; $("new-seed").fire("click"); assert.notEqual(page.params.seed, seed);
-  assert.equal($("new-seed").parentNode.parentNode, $("playback")); assert.equal($("new-layout").parentNode.parentNode, $("controls"));
+  assert.ok($("playback").contains($("new-seed"))); assert.ok($("controls").contains($("new-layout"))); assert.ok(!$("playback").contains($("new-layout")));
   $("new-layout").fire("click"); frame(); assert.equal(page.params.layout, 2); assert.match($("stats").textContent, /layout 2$/);
 
   // migrate converts an old saved format first.
@@ -103,7 +103,7 @@ test("generic controls: groups, radios, toggles, enabled rules, linked params an
 test("playback: the common panel, own actions, Step by stepSeconds, frame gating, Drift and reset", () => {
   const { experiment, log } = toy();
   const { page, frame, canvas, $ } = mount(experiment, { playing: true });
-  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "drift", "drift-speed", "new-seed"]);
+  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed"]);
   assert.equal($("play").textContent, "Pause");
   // The experiment's own section: heading, stats, then its actions with help beside them.
   assert.equal($("controls").children[0].className, "experiment-heading"); assert.equal($("controls").children[1], $("stats"));

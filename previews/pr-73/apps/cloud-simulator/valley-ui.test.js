@@ -30,7 +30,7 @@ test("Valley textures: loading lock, previews, wind clock, Step, brush layout, R
   const doc = valleyDocument(), canvas = fakeCanvas(doc, 48, 30), { raf, frame } = manualFrames(), $ = id => doc.getElementById(id);
   const page = mountExperiment(valley, { doc, raf, presets: false, serviceWorker: null });
   const buttons = () => ["play", "step", "randomize", "new-seed"].map($);
-  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "drift", "drift-speed", "new-seed"]);
+  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed"]);
   assert.ok(buttons().every(button => button.disabled), "locked while textures load");
   frame();
   assert.equal($("stats").textContent, "", "no stats before the textures arrive");
