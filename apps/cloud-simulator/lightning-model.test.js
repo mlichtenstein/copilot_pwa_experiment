@@ -131,3 +131,15 @@ test("props block flash illumination beyond their silhouettes and the shadow con
   }
   assert.ok(shadows>2);assert.deepEqual(objects,createTerrainObjects(l.seed,l.depth,groundAt));
 });
+test(`optional cloud support: absent or all-ones is unchanged, zero support neither builds nor starts channels (seeds ${seeds})`,()=>{
+  for(const seed of seeds){
+    const plain=createCharge(seed),ones=structuredClone(plain),none=structuredClone(plain),full=Array(plain.values.length).fill(1),clear=Array(plain.values.length).fill(0);
+    for(let i=0;i<50;i++){stepCharge(plain,.1,1,.2);stepCharge(ones,.1,1,.2,full);stepCharge(none,.1,1,.2,clear);}
+    assert.deepEqual(ones,plain,"support 1 everywhere matches the standalone field");
+    assert.deepEqual(strongestGradient(plain,0,groundAt,full),strongestGradient(plain,0,groundAt));
+    assert.ok(Math.max(...none.values.map(Math.abs))<Math.max(...plain.values.map(Math.abs)),"clear air holds less charge");
+    assert.equal(strongestGradient(plain,0,groundAt,clear).gradient,0,"no channel starts in clear air");
+    const one=clear.slice();one[30]=1;const pick=strongestGradient(plain,0,groundAt,one);
+    assert.ok(pick.gradient===0||(pick.from===30&&pick.to===-1),"only the dense cell may start, and only toward ground when its neighbours are clear");
+  }
+});

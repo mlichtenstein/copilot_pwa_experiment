@@ -22,6 +22,20 @@ test("cloud opacity, visibility and rain consume the same field; zero coverage c
   const empty={...p,coverage:0};refreshFields(s,empty);const lighting=buildWeatherLighting(s,empty);
   assert.ok(s.layers.every(l=>l.fields.cloudWater.every(v=>v===0)));assert.equal(lighting.work.segments,0);
 });
+test(`charge builds and lightning starts only in dense cloud; clear sky drains and stays dark (seeds ${seeds})`,()=>{
+  for(const seed of seeds.slice(0,2)){
+    const s=createWeather(seed),last=s.layers.map(l=>l.lightning.phase);let started=0;
+    for(let t=0;t<2400;t++){stepWeather(s,.05,defaults);s.layers.forEach((l,k)=>{const storm=l.lightning;
+      if(storm.phase==="leader"&&last[k]!=="leader"){started++;assert.equal(storm.cloudSupport[storm.strike.from],1,"strikes start inside dense cloud");if(storm.strike.to>=0)assert.equal(storm.cloudSupport[storm.strike.to],1);}
+      last[k]=storm.phase;});}
+    assert.ok(started>0,"default weather still makes lightning");
+    assert.ok(s.layers.every(l=>l.lightning.cloudSupport.length===72&&l.lightning.cloudSupport.every(v=>v>=0&&v<=1)));
+  }
+  const clear={...defaults,coverage:0},s=createWeather(seeds[0],clear),strikes=s.layers.map(l=>l.lightning.strikes);
+  for(let t=0;t<600;t++)stepWeather(s,.1,clear);
+  assert.deepEqual(s.layers.map(l=>l.lightning.strikes),strikes,"no strikes from a clear sky");
+  assert.ok(s.layers.every(l=>l.lightning.phase==="quiet"&&l.lightning.charge.values.every(q=>Math.abs(q)<.05)),"clear air drains its charge");
+});
 test("wind and formation change clouds; sun relighting leaves fields untouched",()=>{
   const still={...defaults,wind:0,formationSpeed:0,storminess:0,rainAmount:0},s=createWeather(seeds[0],still),before=structuredClone(s.layers.map(l=>l.fields.cloudWater));
   stepWeather(s,.2,still);assert.deepEqual(s.layers.map(l=>l.fields.cloudWater),before);
