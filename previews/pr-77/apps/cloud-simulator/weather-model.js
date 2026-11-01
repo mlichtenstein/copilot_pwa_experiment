@@ -31,7 +31,7 @@ export function moonTerrainLight(state,p,maps){
   let opticalDepth=0;
   for(const layer of projectionLayers(state,p))opticalDepth+=Math.max(0,p.cloudOpacity*sampleCloud(layer,rx*layer.distance,ry*layer.distance));
   const night=1-clamp((maps.sun.elevation+4)/16);
-  return .035*night*Math.sqrt(Math.sin(maps.moon.elevation*Math.PI/180))*Math.exp(-opticalDepth*.5);
+  return .14*night*Math.sqrt(Math.sin(maps.moon.elevation*Math.PI/180))*Math.exp(-opticalDepth*.5);
 }
 // Local highlight on the projected ridge, using its world-space slope normal.
 export function moonTerrainHighlight(layer,maps,u,v){
@@ -40,7 +40,8 @@ export function moonTerrainHighlight(layer,maps,u,v){
   const slope=-(terrainY(layer,u+.001)-terrainY(layer,u-.001))/.002/1.6;
   const facing=Math.max(0,(-slope*mx+my)/Math.hypot(slope,1));
   const lateral=clamp(1-Math.abs(u-moonU)/.24),depth=Math.max(0,v-terrainY(layer,u));
-  return facing*lateral*lateral*Math.exp(-depth/.08);
+  // A narrow bright rim emphasizes the first one or two terrain pixels.
+  return facing*lateral*lateral*(.35*Math.exp(-depth/.06)+4*Math.exp(-depth/.012));
 }
 export const CELESTIAL_RADIUS=.55*Math.PI/180;
 export const renderOrder=["sky","all-light-veils","far-cloud-rain-lightning-terrain","middle-cloud-rain-lightning-terrain","near-cloud-rain-lightning-terrain","terrain-props"];
