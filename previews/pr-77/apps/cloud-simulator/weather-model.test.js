@@ -131,7 +131,7 @@ test("paused host time scrubbing moves moon and restores its saved phase",()=>{
   page.applyParams(saved);frames.frame();assert.deepEqual(page.instance.preview("sky","near",160,100),night);
   assert.equal(JSON.stringify(page.instance.state),before);page.dispose();
 });
-test("moon backlights nearby thin clouds, fades over six radii and is extinguished by thick cores",async()=>{
+test("moon backlights nearby thin clouds, fades over nine degrees and is extinguished by thick cores",async()=>{
   const {moonCloudLight}=await import("./weather-model.js"),{renderInspection}=await import("./weather-inspection.js"),{sunAtPhase}=await import("./core/sun-path.js");
   const p={...defaults,storminess:0,rainAmount:0},state=createWeather(42,p);
   // A uniform cloud sheet makes the radial lighting behavior directly observable.
@@ -155,11 +155,27 @@ test("moon backlights nearby thin clouds, fades over six radii and is extinguish
 test("moon faintly lights terrain at night, with cloud attenuation and no daytime fill",async()=>{
   const {moonTerrainLight}=await import("./weather-model.js"),{sunAtPhase}=await import("./core/sun-path.js");
   const p={...defaults,coverage:0,storminess:0,rainAmount:0},s=createWeather(42,p),maps=buildWeatherLighting(s,p,sunAtPhase(.82));
-  const strength=moonTerrainLight(s,p,maps);assert.ok(strength>0&&strength<.012);
-  const lit=renderWeather(s,p,maps),dark=renderWeather(s,p,{...maps,moon:null}),i=(99*160+80)*4;
+  const strength=moonTerrainLight(s,p,maps);assert.ok(strength>0&&strength<.035);
+  const lit=renderWeather(s,p,maps),dark=renderWeather(s,p,{...maps,moon:null}),i=(65*160+80)*4;
   assert.ok(lit[i+2]>dark[i+2],"landscape gains cool moonlight");
   assert.equal(moonTerrainLight(s,p,{...maps,moon:{...maps.moon,elevation:-1}}),0);
   assert.equal(moonTerrainLight(s,p,{...maps,sun:{...maps.sun,elevation:20}}),0);
   const cloudy=structuredClone(s);for(const l of cloudy.layers)l.fields.cloudWater.fill(10);
   assert.ok(moonTerrainLight(cloudy,p,maps)<strength*.01,"overcast dims landscape fill");
+});
+
+test("terrain moonlight is local and favors slopes facing the moon",async()=>{
+  const {moonTerrainHighlight,CELESTIAL_RADIUS}=await import("./weather-model.js");
+  assert.equal(CELESTIAL_RADIUS,.55*Math.PI/180);
+  const s=createWeather(42),layer=s.layers[0],maps=buildWeatherLighting(s,defaults,{elevation:-15,azimuth:0,phase:.82});
+  const {terrainY}=await import("./weather-fields.js");
+  const center=moonTerrainHighlight(layer,maps,.5,terrainY(layer,.5));
+  assert.ok(center>0);
+  assert.equal(moonTerrainHighlight(layer,maps,.05,terrainY(layer,.05)),0,"distant ridge stays dark");
+  assert.ok(moonTerrainHighlight(layer,maps,.5,terrainY(layer,.5)+.2)<center*.1,"highlight fades down the landscape");
+  const slope=-(terrainY(layer,.501)-terrainY(layer,.499))/.002/1.6;
+  // Keep the footprint centered while comparing opposing horizontal light directions.
+  const right={...maps,moonDirection:[.4,.4,100]},left={...maps,moonDirection:[-.4,.4,100]};
+  const a=moonTerrainHighlight(layer,right,.5,terrainY(layer,.5)),b=moonTerrainHighlight(layer,left,.5,terrainY(layer,.5));
+  assert.ok(slope>0?a<b:a>b,"ridge normal favors the light-facing slope");
 });
