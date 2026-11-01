@@ -50,7 +50,9 @@ export const valley = {
   height: 120,
   sun: false,
   frameInterval: 80,
-  playLabels: ["Play wind", "Pause wind"],
+  // The common New seed steps to the next stable brush layout; Step moves the wind one second.
+  seed: "brushSeed",
+  stepSeconds: 1,
   loadError: "Cloud textures could not load. Reload online to try again.",
   params: [
     { key: "textureA", kind: "select", label: "Cloud A", help: TEXTURE_HELP, group: BLEND, default: "rose", options: textureChoices },
@@ -73,11 +75,7 @@ export const valley = {
     slider("opacity", 0, 2, 0.1, "Opacity multiplier for the revealed texture."),
     slider("noiseScale", 0.5, 8, 0.5, "Spatial frequency of the two Perlin fields; larger values form smaller patches."),
     slider("noiseDrift", 0, 1, 0.05, "Opposing horizontal drift of the reveal fields, in noise cells per formation second."),
-    { key: "brushSeed", kind: "seed", default: 1, hidden: true, next: value => value + 1, newLabel: "New brush layout",
-      newTitle: "Choose another stable randomized brush layout; photographs stay unchanged" }
-  ],
-  actions: [
-    { id: "step", label: "Step 1 second", title: "Pause and move the wind clock on one second", run: page => { page.setPlaying(false); page.instance.time += 1; } }
+    { key: "brushSeed", kind: "seed", default: 1, hidden: true, next: value => value + 1 }
   ],
   stats: (params, frame, instance) =>
     `${textureFor(params.textureA).name} → ${textureFor(params.textureB).name} · ${Math.round(params.textureBlend * 100)}% B · layout ${params.brushSeed} · t ${instance.time.toFixed(1)} s · ${instance.lastMs.toFixed(0)} ms/frame`,

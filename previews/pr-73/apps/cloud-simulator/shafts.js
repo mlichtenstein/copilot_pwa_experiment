@@ -5,5 +5,5 @@
 import { shafts } from "./shafts-experiment.js";
 import { mountExperiment } from "./core/host.js";
 
-// Starts paused, as before; Play sun runs the shared clock.
+// Starts paused, as before; the common panel's Play runs the shared clock.
 export const page = mountExperiment(shafts);

@@ -1,5 +1,5 @@
-/* Purpose: Check the shared Drift checkbox on every experiment page: it heads the controls
- *   with its explanation beside it, moves only the driftable sliders (never the sun, its path
+/* Purpose: Check the shared Drift checkbox on every experiment page: it sits in the common
+ *   panel with its explanation beside it, moves only the driftable sliders (never the sun, its path
  *   sliders, playback speeds, restarting sliders, seeds, choices or toggles), only while
  *   playing, gives a dragged slider to the person, holds greyed-out sliders, saves as `drift`
  *   without breaking old links, and an experiment can opt out with drift: false; the Drift
@@ -36,11 +36,12 @@ const EXPECTED = {
   shafts: ["cloudOpacity", "haze", "cloudSharpness", "sourceRadius", "edgeFeather"],
   noise: ["cloudiness", "featureSize", "texture", "changeSpeed", "wind", "layerHeight", "layerThickness", "layerAsymmetry", "persistence", "rainAmount", "fallSpeed"],
   convection: ["inversionHeight", "lclHeight", "buoyancy", "viscosity", "heating", "cooling", "latentHeat", "expansion", "evaporation", "autoconversion", "fallSpeed", "flicker"],
-  valley: ["textureBlend", "wind", "formationSpeed", "cloudY", "bandWidth", "coverage", "maskSoftness", "windwardClearance", "leewardClearance", "textureScale", "opacity", "noiseScale", "noiseDrift"]
+  valley: ["textureBlend", "wind", "formationSpeed", "cloudY", "bandWidth", "coverage", "maskSoftness", "windwardClearance", "leewardClearance", "textureScale", "opacity", "noiseScale", "noiseDrift"],
+  lightning: ["fieldBias", "roughness", "branchChance", "leaderSpeed", "flashDuration", "flashStrength", "haze", "chargeRate", "chargeBias", "breakdownGradient"]
 };
 
 for (const entry of experiments) {
-  test(`Drift on ${entry.title}: heads the controls, moves only its sliders, only while playing`, async () => {
+  test(`Drift on ${entry.title}: in the common panel, moves only its sliders, only while playing`, async () => {
     const experiment = await entry.load();
     assert.deepEqual(driftableParams(experiment).map(param => param.key), EXPECTED[experiment.id], "which sliders drift");
     const doc = pageDocument(), $ = id => doc.getElementById(id);
@@ -50,15 +51,13 @@ for (const entry of experiments) {
     await page.instance.ready; await new Promise(resolve => setTimeout(resolve, 0));
     page.setPlaying(false); frame();
 
-    // The checkbox is the first thing in the controls, off, with its explanation beside it.
-    const label = $("controls").children[0];
-    assert.equal(label.className, "drift"); assert.equal(label.children[0], $("drift")); assert.equal($("drift").checked, false);
-    assert.match(label.children.at(-1).textContent, /every slider below wanders slowly/);
-    assert.equal(/sun and its path sliders stay put/.test(label.children.at(-1).textContent), experiment.sun);
-    assert.ok(!$("playback").children.includes(label));
-    // Next come the Drift speed slider and Randomize, each with its explanation beside it.
-    const [speedLabel, randomizeRow] = $("controls").children.slice(1, 3);
-    assert.equal(speedLabel.className, "drift drift-speed"); assert.ok(speedLabel.children.includes($("drift-speed")));
+    // The checkbox is in the common panel, off, with its explanation beside it; so are the
+    // Drift speed slider and Randomize. (common-panel.test.js checks the texts match on every page.)
+    const label = $("drift").parentNode;
+    assert.equal(label.className, "panel-row drift"); assert.equal(label.parentNode, $("playback")); assert.equal($("drift").checked, false);
+    assert.match(label.children.at(-1).textContent, /sliders wander slowly/);
+    const speedLabel = $("drift-speed").parentNode, randomizeRow = $("randomize").parentNode;
+    assert.equal(speedLabel.className, "panel-row drift-speed"); assert.equal(randomizeRow.parentNode, $("playback"));
     assert.match(speedLabel.children.at(-1).textContent, /Scales each drift step/); assert.match(speedLabel.title, /0\.1× to 10×/);
     assert.equal(randomizeRow.children[0], $("randomize")); assert.match(randomizeRow.children.at(-1).textContent, /random value in its range/);
     assert.match($("randomize").title, /random value in its range/);

@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { noise } from "./noise-experiment.js";
 import { mountExperiment } from "./core/host.js";
-import { fakeDocument, fakeCanvas, manualFrames } from "./core/fake-dom.js";
+import { fakeDocument, fakeCanvas, manualFrames, controlIds } from "./core/fake-dom.js";
 
 test("Noise weather: autoplay ticks, Step, Randomize, New seed, views, Drift and saved runs", () => {
   const doc = fakeDocument(["sky", "presets", "playback", "controls", "stats", "status", "legend"]);
@@ -15,9 +15,9 @@ test("Noise weather: autoplay ticks, Step, Randomize, New seed, views, Drift and
   const page = mountExperiment(noise, { doc, raf, presets: false, serviceWorker: null, playing: true });
   const tick = () => Number(/^Tick (\d+)/.exec($("stats").textContent)[1]);
   frame();
-  assert.deepEqual($("playback").children.map(node => node.textContent || node.className), ["Pause", "Step", "New seed"]);
-  assert.deepEqual($("controls").children.map(node => node.tagName === "FIELDSET" ? node.children[0].children[0].textContent : node.className?.startsWith("drift") ? node.className : node.children.find(child => child.tagName === "SELECT").id),
-    ["drift", "drift drift-speed", "drift randomize", "view", "Sky", "Cloud layer", "Rain"]);
+  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "drift", "drift-speed", "new-seed"]); assert.equal($("play").textContent, "Pause");
+  assert.deepEqual($("controls").children.slice(2).map(node => node.tagName === "FIELDSET" ? node.children[0].children[0].textContent : node.children.find(child => child.tagName === "SELECT").id),
+    ["view", "Sky", "Cloud layer", "Rain"]);
   assert.match($("stats").textContent, /^Tick 0 · Cloud \d+% · Rain in air \d+\.\d\d · Puddles \d+\.\d\d$/);
   assert.match($("legend").textContent, /^Sunset:/);
 

@@ -8,8 +8,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { shafts, sceneSun, SUN_LIMITS } from "./shafts-experiment.js";
 import { mountExperiment } from "./core/host.js";
-import { DEFAULT_SUN_SHAPE, sunAt } from "./core/sun-path.js";
-import { fakeDocument, fakeCanvas, manualFrames } from "./core/fake-dom.js";
+import { DEFAULT_SUN_SHAPE, SUN_PATH_KEYS, sunAt } from "./core/sun-path.js";
+import { fakeDocument, fakeCanvas, manualFrames, controlIds } from "./core/fake-dom.js";
 
 test("Light shafts: strategies, patterns, Randomize keeps the strategy, the shared sun stays in the scene's limits", () => {
   const doc = fakeDocument(["sky", "presets", "playback", "controls", "stats", "status", "patterns", "pattern-buttons"]);
@@ -22,7 +22,7 @@ test("Light shafts: strategies, patterns, Randomize keeps the strategy, the shar
   };
   frame();
   const first = canvas.pixels();
-  assert.deepEqual($("playback").children.map(button => button.textContent), ["Play sun", "Reset sun"]);
+  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "drift", "drift-speed", "reset-sun", "sunPhase", ...SUN_PATH_KEYS]);
   assert.deepEqual($("pattern-buttons").children.map(button => button.textContent), ["Change near", "Change middle", "Change far"]);
   assert.equal($("patterns").textContent, "near: 42 · middle: 1039 · far: 2036");
   assert.match($("stats").textContent, /^3 cloud layers · layered visibility · \d+ ms\/frame$/);
@@ -58,5 +58,5 @@ test("Light shafts: strategies, patterns, Randomize keeps the strategy, the shar
   const sun = sunAt(page.clock.time, DEFAULT_SUN_SHAPE);
   assert.ok(Math.hypot(sun.azimuth + 8, sun.elevation - 8) < 4);
   assert.equal(page.getParams().strategy, "visibility"); assert.equal(page.getParams().haze, 0.5);
-  assert.equal($("play").textContent, "Play sun");
+  assert.equal($("play").textContent, "Play");
 });

@@ -1,5 +1,5 @@
 /* Purpose: Run a DOM-free experiment contract with fixed time steps and normalized parameters.
- * Consumers: experiment-host.js and experiment-session.test.js. Dependencies: scene definitions. */
+ * Consumers: lightning-experiment.js, lightning-model.test.js and experiment-session.test.js. Dependencies: scene definitions. */
 export function createSession(scene, seed = 42, supplied = {}) {
   const params = Object.fromEntries(scene.parameters.map(p => [p.key, p.default]));
   let state, remainder = 0, currentSeed = seed >>> 0, currentStart = scene.defaultStart;

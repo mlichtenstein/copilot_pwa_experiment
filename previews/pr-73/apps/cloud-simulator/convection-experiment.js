@@ -37,6 +37,9 @@ export const convection = {
   height: 48,
   sun: false,
   autoplay: true,
+  // The common New seed starts a new run; Step is one tick at the current speed.
+  seed: "seed",
+  stepSeconds: params => 1 / params.speed,
   params: [
     { key: "view", kind: "select", label: "View", default: "sunset",
       options: [["sunset", "Sunset"], ["lamp", "Lava lamp"], ["water", "Cloud and rain"], ["temperature", "Temperature"], ["buoyancy", "Buoyancy"], ["humidity", "Relative humidity"]] },
@@ -69,14 +72,11 @@ export const convection = {
     { key: "water", kind: "range", min: 0, max: 0.4, step: 0.01, default: 0.11, group: START, drift: false, help: "Mean water per pixel (vapor + cloud + rain + puddles); conserved for the whole run." },
     // Seeds only make a run reproducible; behavior should look alike on any seed, so the
     // page picks one at random; New seed starts another.
-    { key: "seed", kind: "seed", default: 42, random: true, hidden: true, newLabel: "New seed", newTitle: "Start a new run on a random seed" }
+    { key: "seed", kind: "seed", default: 42, random: true, hidden: true }
   ],
   // The pixel-art style follows a resolution switch (on for 64×48, off for 128×96) and can
   // still be changed afterwards.
   adjust: (next, previous) => next.resolution !== previous.resolution ? { ...next, pixelArt: next.resolution === "64x48" } : next,
-  actions: [
-    { id: "step", label: "Step", title: "Pause and advance one tick", run: page => { page.setPlaying(false); page.instance.tick(); } }
-  ],
   readouts: { legend: params => legends[params.view === "sunset" && params.cloudStyle === "raw" ? "sunsetRaw" : params.view] },
   stats: (params, frame, { simulation }) =>
     `Tick ${simulation.tick} · Water/cell ${(totalWater(simulation) / simulation.temperature.length).toFixed(3)} · Fastest flow ${simulation.speed.toFixed(2)} px/tick`,

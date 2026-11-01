@@ -36,6 +36,9 @@ export function manualFrames() {
 // Every descendant of a node, depth first.
 export const descendants = node => node.children.flatMap(child => [child, ...descendants(child)]);
 
+// The ids of the buttons and inputs inside an element (the common panel is #playback), in order.
+export const controlIds = node => descendants(node).filter(child => ["BUTTON", "INPUT", "SELECT"].includes(child.tagName)).map(child => child.id);
+
 // A document whose canvases decode any image into a deterministic grey ramp (offset by the
 // image file name), and a stand-in Image class, for experiments that load bitmaps
 // (Valley). Installs globalThis.Image if there is none.
