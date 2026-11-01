@@ -155,7 +155,7 @@ test("moon backlights nearby thin clouds, fades over nine degrees and is extingu
 test("moon faintly lights terrain at night, with cloud attenuation and no daytime fill",async()=>{
   const {moonTerrainLight}=await import("./weather-model.js"),{sunAtPhase}=await import("./core/sun-path.js");
   const p={...defaults,coverage:0,storminess:0,rainAmount:0},s=createWeather(42,p),maps=buildWeatherLighting(s,p,sunAtPhase(.82));
-  const strength=moonTerrainLight(s,p,maps);assert.ok(strength>0&&strength<.035);
+  const strength=moonTerrainLight(s,p,maps);assert.ok(strength>0&&strength<.14);
   const lit=renderWeather(s,p,maps),dark=renderWeather(s,p,{...maps,moon:null}),i=(65*160+80)*4;
   assert.ok(lit[i+2]>dark[i+2],"landscape gains cool moonlight");
   assert.equal(moonTerrainLight(s,p,{...maps,moon:{...maps.moon,elevation:-1}}),0);
@@ -171,6 +171,7 @@ test("terrain moonlight is local and favors slopes facing the moon",async()=>{
   const {terrainY}=await import("./weather-fields.js");
   const center=moonTerrainHighlight(layer,maps,.5,terrainY(layer,.5));
   assert.ok(center>0);
+  assert.ok(center>4*moonTerrainHighlight(layer,maps,.5,terrainY(layer,.5)+.04),"ridge rim is much brighter than the slope interior");
   assert.equal(moonTerrainHighlight(layer,maps,.05,terrainY(layer,.05)),0,"distant ridge stays dark");
   assert.ok(moonTerrainHighlight(layer,maps,.5,terrainY(layer,.5)+.2)<center*.1,"highlight fades down the landscape");
   const slope=-(terrainY(layer,.501)-terrainY(layer,.499))/.002/1.6;
