@@ -5,7 +5,7 @@
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the issue/PR workflow and verification, [CODING_STANDARDS.md](CODING_STANDARDS.md) for code conventions, and [AGENTS.md](AGENTS.md) for agent instructions.
 
-One UI guideline worth knowing up front: **explanatory text sits next to the thing it explains**, for example a tooltip on each button or an About expander beside the rating bar, rather than in a separate help page. See [Explanatory text](CODING_STANDARDS.md#explanatory-text).
+One UI guideline worth knowing up front: **explanatory text sits next to the thing it explains**, for example a tooltip on each button or an About expander beside the rating bar, rather than in a separate help page. See [Explanatory text](CODING_STANDARDS.md#explanatory-text). Likewise, **control labels are their code names** (a slider shows its parameter key, a button's words match its id), so code names should be descriptive, and the longer explanation goes in the hold-to-see help; see [Control labels are code names](CODING_STANDARDS.md#control-labels-are-code-names).
 
 ## Apps
 

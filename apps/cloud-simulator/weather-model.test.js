@@ -40,7 +40,7 @@ test("existing host builds controls without numeric seed entry, steps, resets, a
   const doc=fakeDocument(),canvas=fakeCanvas(doc,64,40),frames=manualFrames();
   const page=mountExperiment(weather,{doc,raf:frames.raf,presets:false,serviceWorker:null});frames.frame();
   const inputs=descendants(doc.getElementById("controls")).filter(n=>n.tagName==="INPUT");assert.ok(inputs.every(n=>n.type!=="number"));assert.ok(canvas.pixels());
-  doc.getElementById("step-weather").fire("click");frames.frame();assert.equal(page.instance.state.time,.1);
+  doc.getElementById("step").fire("click");frames.frame();assert.equal(page.instance.state.time,.1);
   doc.getElementById("coverage").value="0";doc.getElementById("coverage").fire("input");frames.frame();assert.ok(page.instance.state.layers.every(l=>l.fields.cloudWater.every(v=>v===0)));
   const saved={...page.getParams(),sunElevation:-3,far:false};page.applyParams(saved);frames.frame();assert.equal(page.params.sunElevation,-3);assert.equal(page.params.far,false);
   doc.getElementById("reset-weather").fire("click");frames.frame();assert.equal(page.instance.state.time,0);assert.equal(page.params.coverage,defaults.coverage);page.dispose();
