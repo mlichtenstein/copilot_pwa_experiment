@@ -77,7 +77,15 @@ a { color: #9ed8ec; }
 .experiment-header { grid-area: header; min-width: 0; }
 .experiment-header h1 { font-size: 1.4rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .experiment-header p { margin: 4px 0; font-size: .9rem; }
-.experiment-header .eyebrow { margin: 0; font-size: .7rem; }
+.experiment-header .eyebrow { margin: 0; font-size: .7rem; text-decoration: none; }
+/* Its top line: the site name (a link to the front page), then 🎲 Random and ❤️ Random
+ * (launch.js); a ❤️ that can't be had says why on the line below, which is empty otherwise. */
+.header-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.header-actions { display: flex; gap: 4px; flex: none; }
+.header-actions .launch { display: grid; }
+.header-actions button { min-height: 30px; padding: 3px 8px; font-size: .75rem; white-space: nowrap; }
+.experiment-header .launch-status { margin: 2px 0; font-size: .8rem; color: #f2c6a0; }
+.experiment-header .launch-status:empty { display: none; }
 .experiment-header .tagline { line-height: 1.4; height: 2.8em; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .experiment-nav { display: flex; flex-wrap: wrap; gap: 0 6px; font-size: .85rem; line-height: 1.6; }
 .experiment-nav .nav-sep { color: #536781; }
@@ -98,7 +106,7 @@ a { color: #9ed8ec; }
 @media (max-width: 760px) {
   .experiment-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr);
     grid-template-areas: "header" "sim" "controls"; gap: 6px; padding: 6px; }
-  .experiment-header .eyebrow, .experiment-header .tagline { display: none; }
+  .experiment-header .tagline { display: none; }
   .experiment-header h1 { font-size: 1.15rem; }
   .experiment-nav { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
   .experiment-nav::-webkit-scrollbar { display: none; }
