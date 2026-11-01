@@ -24,6 +24,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: read
 
 # Run one deployment at a time so two runs can't push to gh-pages simultaneously
 concurrency:
@@ -118,6 +119,25 @@ jobs:
           if git diff --cached --quiet; then echo "No changes"; exit 0; fi
           git commit -m "Deploy ${DEPLOY_SHA}"
           git push origin HEAD:gh-pages
+          echo "PUSHED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      # Pushing to gh-pages starts GitHub's own "pages-build-deployment" run.
+      # A second push while it is still running makes that run fail with
+      # "due to in progress deployment", so hold the concurrency lock until it ends.
+      - name: Wait for GitHub Pages deployment
+        if: env.PUSHED_SHA != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 60); do
+            status=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$PUSHED_SHA&event=dynamic" \
+              --jq '.workflow_runs[0].status // "pending"')
+            echo "Pages deployment status: $status"
+            [ "$status" = completed ] && exit 0
+            sleep 10
+          done
+          echo "Timed out waiting for Pages deployment" >&2
 
       - name: Post review deployments comment
         if: always() && github.event_name == 'pull_request' && github.event.action != 'closed'
