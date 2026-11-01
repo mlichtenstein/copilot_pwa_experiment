@@ -131,13 +131,19 @@ jobs:
         run: |
           set -euo pipefail
           for _ in $(seq 1 60); do
-            status=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$PUSHED_SHA&event=dynamic" \
-              --jq '.workflow_runs[0].status // "pending"')
+            result=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$PUSHED_SHA&event=dynamic" \
+              --jq '[.workflow_runs[] | select(.name == "pages build and deployment")] | first | [.status // "pending", .conclusion // "pending"] | @tsv')
+            read -r status conclusion <<< "$result"
             echo "Pages deployment status: $status"
-            [ "$status" = completed ] && exit 0
+            if [ "$status" = completed ]; then
+              [ "$conclusion" = success ] && exit 0
+              echo "GitHub Pages deployment failed: $conclusion" >&2
+              exit 1
+            fi
             sleep 10
           done
           echo "Timed out waiting for Pages deployment" >&2
+          exit 1
 
       - name: Post review deployments comment
         if: always() && github.event_name == 'pull_request' && github.event.action != 'closed'
@@ -147,6 +153,7 @@ jobs:
           IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
           JOB_STATUS: ${{ job.status }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_RECEIVED_AT: ${{ github.event.action == 'synchronize' && github.event.pull_request.updated_at || '' }}
         run: |
           set -euo pipefail
           base="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/previews/pr-${PR}"
@@ -174,6 +181,20 @@ jobs:
 
           marker='<!-- review-deployments -->'
           body="$marker"$'\n'"## Review deployments"$'\n\n'
+          run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [ -n "$PUSH_RECEIVED_AT" ]; then
+            body+="Latest commit pushed (UTC): $PUSH_RECEIVED_AT"$'\n'
+          else
+            body+="Latest commit push time unavailable for this PR event."$'\n'
+          fi
+          body+="Commit: $HEAD_SHA"$'\n'
+          if [ "$IS_FORK" = true ]; then
+            body+="Status: no preview for fork PRs."$'\n\n'
+          elif [ "$JOB_STATUS" = success ]; then
+            body+="Status: ✅ deployment succeeded. [Workflow]($run_url)"$'\n\n'
+          else
+            body+="Status: ❌ deployment failed or was cancelled; preview may be missing or outdated. [View logs]($run_url)"$'\n\n'
+          fi
           found=false
           while IFS='|' read -r name path url; do
             name=$(echo "$name" | xargs)
