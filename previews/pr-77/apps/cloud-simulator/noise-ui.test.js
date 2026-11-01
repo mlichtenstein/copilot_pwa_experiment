@@ -15,7 +15,7 @@ test("Noise weather: autoplay ticks, Step, Randomize, New seed, views, Drift and
   const page = mountExperiment(noise, { doc, raf, presets: false, serviceWorker: null, playing: true });
   const tick = () => Number(/^Tick (\d+)/.exec($("stats").textContent)[1]);
   frame();
-  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed", "timeOfDay"]); assert.equal($("play").textContent, "Pause");
+  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed", "reset-sun", "timeOfDay", "sunPathWidth", "sunPathHeight", "sunPathX", "sunPathY"]); assert.equal($("play").textContent, "Pause");
   assert.deepEqual($("controls").children.slice(2).map(node => node.tagName === "FIELDSET" ? node.children[0].children[0].textContent : node.children.find(child => child.tagName === "SELECT").id),
     ["view", "Sky", "Cloud layer", "Rain"]);
   assert.match($("stats").textContent, /^Tick 0 · Cloud \d+% · Rain in air \d+\.\d\d · Puddles \d+\.\d\d$/);
@@ -51,7 +51,7 @@ test("Noise weather: autoplay ticks, Step, Randomize, New seed, views, Drift and
   // A saved run (old ratings stored sliders, seed, view and drift) restores and restarts.
   page.applyParams({ ...noise.params.reduce((all, param) => ({ ...all, [param.key]: param.default }), {}), seed: 7, view: "water", drift: false, wind: 0.3 });
   frame(0);
-  assert.deepEqual(Object.keys(page.getParams()).sort(), [...noise.params.map(param => param.key), "sunPhase", "resolution", "drift", "driftSpeed"].sort());
+  assert.deepEqual(Object.keys(page.getParams()).sort(), [...noise.params.map(param => param.key), "sunPhase", "sunPathWidth", "sunPathHeight", "sunPathX", "sunPathY", "resolution", "drift", "driftSpeed"].sort());
   assert.equal(page.getParams().seed, 7); assert.equal($("view").value, "water"); assert.equal($("drift").checked, false);
   assert.equal(Number($("wind").value), 0.3); assert.equal(tick(), 0);
 });

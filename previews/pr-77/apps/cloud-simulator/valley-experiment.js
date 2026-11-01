@@ -1,8 +1,9 @@
 /*
  * Purpose: Valley textures as a cloud simulator experiment module: sourced cloud bitmaps
  *   drift with the wind and are revealed by moving masks around hill silhouettes. The
- *   textures load asynchronously (the instance's ready promise). Its lighting is fixed in the
- *   bitmaps and the scene, so it does not follow the shared sun.
+ *   textures load asynchronously (the instance's ready promise). The shared sun lights it
+ *   (core/sun-light.js): its glow sits where the sun is, slopes and clouds take light from
+ *   its side and fade at dusk.
  * Consumers: valley.js (mounts it with core/host.js), core/registry.js,
  *   core/experiment.test.js, valley-ui.test.js.
  * Dependencies: valley-model.js (rendering, texture list), valley-textures.js (bitmap
@@ -10,6 +11,7 @@
  *   in core/experiment.js.
  */
 import { defaults, textureOptions, renderValley } from "./valley-model.js";
+import { sunLight } from "./core/sun-light.js";
 import { decodeCloudTexture, makeWrappingPhoto } from "./valley-textures.js";
 
 const BLEND = "Cloud blend", HORIZON = "Horizon";
@@ -48,10 +50,12 @@ export const valley = {
   app: "cloud-simulator/valley",
   width: 192,
   height: 120,
-  sun: false,
+  sun: true,
+  legacySunShape: false,
   frameInterval: 80,
-  // The common New seed steps to the next stable brush layout; Step moves the wind one second.
-  seed: "brushSeed",
+  // The common New seed (key `seed`, the brush layout) steps to the next stable layout; Step
+  // moves the wind one second.
+  seed: "seed",
   stepSeconds: 1,
   loadError: "Cloud textures could not load. Reload online to try again.",
   params: [
@@ -75,10 +79,13 @@ export const valley = {
     slider("opacity", 0, 2, 0.1, "Opacity multiplier for the revealed texture."),
     slider("noiseScale", 0.5, 8, 0.5, "Spatial frequency of the two Perlin fields; larger values form smaller patches."),
     slider("noiseDrift", 0, 1, 0.05, "Opposing horizontal drift of the reveal fields, in noise cells per formation second."),
-    { key: "brushSeed", kind: "seed", default: 1, hidden: true, next: value => value + 1 }
+    { key: "seed", kind: "seed", default: 1, hidden: true, next: value => value + 1 }
   ],
+  // Ratings and links saved before the brush layout was called `seed` stored it as brushSeed.
+  migrate: raw => raw && typeof raw === "object" && "brushSeed" in raw && !("seed" in raw)
+    ? (({ brushSeed, ...rest }) => ({ ...rest, seed: brushSeed }))(raw) : raw,
   stats: (params, frame, instance) =>
-    `${textureFor(params.textureA).name} → ${textureFor(params.textureB).name} · ${Math.round(params.textureBlend * 100)}% B · layout ${params.brushSeed} · t ${instance.time.toFixed(1)} s · ${instance.lastMs.toFixed(0)} ms/frame`,
+    `${textureFor(params.textureA).name} → ${textureFor(params.textureB).name} · ${Math.round(params.textureBlend * 100)}% B · seed ${params.seed} · t ${instance.time.toFixed(1)} s · ${instance.lastMs.toFixed(0)} ms/frame`,
   // The two texture previews sit under their pickers, as before.
   decorate({ doc, controlFor }) {
     const previews = ["textureA", "textureB"].map((key, i) => {
@@ -107,11 +114,11 @@ export const valley = {
       ready: Promise.all(textureOptions.map(option => loadTexture(option, doc))).then(entries => { instance.textures = Object.fromEntries(entries); }),
       update(next) { current = next; },
       step(dt) { instance.time += dt; return true; },
-      render() {
+      render(frame) {
         if (!instance.textures) return null;
         const start = globalThis.performance?.now() ?? 0;
-        const options = { ...Object.fromEntries(sliderKeys.map(key => [key, current[key]])), horizon: current.horizon, brushSeed: current.brushSeed, placement: current.placement };
-        const pixels = renderValley(instance.textures[textureFor(current.textureA).id], instance.time, options, current.shape, width, height, instance.textures[textureFor(current.textureB).id]);
+        const options = { ...Object.fromEntries(sliderKeys.map(key => [key, current[key]])), horizon: current.horizon, brushSeed: current.seed, placement: current.placement };
+        const pixels = renderValley(instance.textures[textureFor(current.textureA).id], instance.time, options, current.shape, width, height, instance.textures[textureFor(current.textureB).id], sunLight(frame?.sun));
         instance.lastMs = (globalThis.performance?.now() ?? 0) - start;
         return pixels;
       },

@@ -3,9 +3,11 @@
  *   buoyant overturning, cloud, falling rain, evaporation, a closed water cycle and
  *   optional layering: a warm inversion that caps the convection, or a mixed subcloud
  *   layer under a lifting condensation level (flat cumulus bases); plus the views.
- * Consumers: convection.js and convection-model.test.js.
- * Dependencies: none; values are dimensionless experimental units, not a weather model.
+ * Consumers: convection-experiment.js and convection-model.test.js.
+ * Dependencies: core/sun-light.js (the Sunset view's light: the shared sun, or the low sun at
+ *   lower right it used to bake in); values are dimensionless experimental units, not a weather model.
  */
+import { fixedLight } from "./core/sun-light.js";
 
 // Live rules. Changing these affects the current run.
 export const defaults = {
@@ -457,6 +459,8 @@ export const rainOpacity = rain => 0.5 * clip01(rain / RAIN_SCALE);
 // Sky: indigo at the lid, through dusky rose, to gold at the floor. `warmth` (the row
 // buoyancy, -1..1) brightens or dims it by up to 10% so the overturning still reads.
 const SKY = [[14, 16, 46], [78, 40, 92], [214, 104, 78], [252, 182, 96]];
+// The same bands under a high sun (light.day 1): deep blue overhead to pale near the floor.
+const DAY_SKY = [[34, 70, 150], [62, 110, 190], [120, 166, 222], [184, 210, 238]];
 // Pixel art: sky bands per color step, cloud light levels and altitude tints, and a 4×4
 // ordered (Bayer) dither threshold, 0..1, per pixel.
 // DITHER_WIDTH is the share of each band, at its edges, that dithers into the next.
@@ -464,48 +468,55 @@ const SKY_BANDS = 3, LIGHT_LEVELS = 4, TINT_LEVELS = 3, DITHER_WIDTH = 0.35;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
 export const bayer = (x, y) => BAYER[(y % 4) * 4 + (x % 4)];
 const quantize = (value, levels) => Math.round(clip01(value) * levels) / levels;
-export function sunsetSky(altitude, warmth = 0, dither) {
+export function sunsetSky(altitude, warmth = 0, dither, day = 0) {
   let depth = clip01(1 - altitude) * (SKY.length - 1);
   // Pixel art: SKY_BANDS flat bands per color step, ordered-dithered where they meet.
   if (dither !== undefined) depth = Math.min(SKY.length - 1, Math.floor(depth * SKY_BANDS + 0.5 + DITHER_WIDTH * (dither - 0.5)) / SKY_BANDS);
   const k = Math.min(SKY.length - 2, Math.floor(depth));
-  const rgb = mix(SKY[k], SKY[k + 1], depth - k);
+  let rgb = mix(SKY[k], SKY[k + 1], depth - k);
+  if (day > 0) rgb = mix(rgb, mix(DAY_SKY[k], DAY_SKY[k + 1], depth - k), day);
   return rgb.map(channel => channel * (1 + 0.1 * Math.max(-1, Math.min(1, warmth))));
 }
-// A low sun off the lower right lights cloud from below and the side. `light` 0..1 is
-// how lit a cloud pixel is: lit cloud glows peach low down and pink higher up; shaded
-// cloud turns grey-violet.
-const SHADE = [66, 42, 78];
-export function cloudColor(light, altitude) {
-  const lit = mix([255, 200, 128], [255, 128, 146], clip01(altitude));
-  return mix(SHADE, lit, clip01(light));
+// The Sunset view's light (core/sun-light.js): the shared sun, or by default the low sun off
+// the lower right it was drawn with before (BAKED_LIGHT). `light` 0..1 is how lit a cloud
+// pixel is: under a low sun lit cloud glows peach low down and pink higher up and shaded
+// cloud turns grey-violet; under a high sun (light.day) both move toward white and grey.
+export const BAKED_LIGHT = fixedLight(1, 0.5, 0.35);
+const SHADE = [66, 42, 78], DAY_SHADE = [118, 124, 146];
+export function cloudColor(light, altitude, day = 0) {
+  let lit = mix([255, 200, 128], [255, 128, 146], clip01(altitude)), shade = SHADE;
+  if (day > 0) { lit = mix(lit, [252, 250, 246], day); shade = mix(SHADE, DAY_SHADE, day); }
+  return mix(shade, lit, clip01(light));
 }
-// Sunlight lost per unit of cloud cover crossed, and the light path: SUN_STEPS pixels
-// toward the sun, one column right and SUN_RISE rows down per step.
-const SHADOWING = 0.06, SUN_STEPS = 40, SUN_RISE = 0.5, DOME_BLUR = 4, BILLOW_BLUR = 1.5, LOBE_RELIEF = 0.12;
-// How squarely a rounded surface with thickness slope (dx, dy) faces the low sun at
-// the lower right: 1 head-on, AMBIENT on the far side. DOME_HEIGHT sets how domed it is.
-const SUN = [1, 0.5, 0.35].map((c, _, v) => c / Math.hypot(...v)), DOME_HEIGHT = 7, AMBIENT = 0.3;
-export function facing(dx, dy) {
+// Sunlight lost per unit of cloud cover crossed, and the light path: SUN_STEPS steps toward
+// the sun along light.march (the baked sun: one column right and half a row down per step).
+// NIGHT_LIGHT is how lit cloud stays once the sun is down (light.strength 0).
+const SHADOWING = 0.06, SUN_STEPS = 40, DOME_BLUR = 4, BILLOW_BLUR = 1.5, LOBE_RELIEF = 0.12, NIGHT_LIGHT = 0.25, NIGHT_SKY = 0.5;
+// How squarely a rounded surface with thickness slope (dx, dy) faces the sun along
+// `direction` (x right, y down, z toward the viewer): 1 head-on, AMBIENT on the far side.
+// DOME_HEIGHT sets how domed it is.
+const DOME_HEIGHT = 7, AMBIENT = 0.3;
+export function facing(dx, dy, direction = BAKED_LIGHT.direction) {
   const nx = -DOME_HEIGHT * dx, ny = -DOME_HEIGHT * dy;
-  const light = Math.max(0, (nx * SUN[0] + ny * SUN[1] + SUN[2]) / Math.sqrt(nx * nx + ny * ny + 1));
+  const light = Math.max(0, (nx * direction[0] + ny * direction[1] + direction[2]) / Math.sqrt(nx * nx + ny * ny + 1));
   return AMBIENT + (1 - AMBIENT) * light;
 }
 
-// Amount of `field` between pixel i (half of its own) and the sun.
-function sunPath(field, i, width, height) {
+// Amount of `field` between pixel i (half of its own) and the sun, stepping along `march`.
+function sunPath(field, i, width, height, march) {
   const x = i % width, y = Math.floor(i / width);
   let path = field[i] / 2;
+  if (!march) return path;
   for (let k = 1; k <= Math.round(SUN_STEPS * gridScale(width)); k++) {
-    // The right wall repeats its edge column, so the wall does not glow.
-    const sx = Math.min(width - 1, x + k), sy = Math.round(y + k * SUN_RISE);
-    if (sy >= height) break;
+    // The side walls repeat their edge column, so a wall does not glow.
+    const sx = Math.max(0, Math.min(width - 1, Math.round(x + k * march.x))), sy = Math.round(y + k * march.y);
+    if (sy >= height || sy < 0) break;
     path += field[sy * width + sx];
   }
   return path;
 }
 
-export function renderConvection(simulation, view = "sunset", options = {}) {
+export function renderConvection(simulation, view = "sunset", options = {}, light = BAKED_LIGHT) {
   const rules = { ...defaults, ...options };
   const { width, height, temperature, vapor, liquid, rain } = simulation;
   const pixels = new Uint8ClampedArray(width * height * 4);
@@ -524,7 +535,7 @@ export function renderConvection(simulation, view = "sunset", options = {}) {
       const near = clip((relative - HAZE_START) / (1 - HAZE_START));
       depthOf[i] = Math.max(0, liquid[i]) / CLOUD_DEPTH_SCALE + RAW_HAZE_DEPTH * near * near;
     }
-    for (let i = 0; i < size; i++) reachOf[i] = Math.exp(-RAW_SHADOWING / gridScale(width) * sunPath(depthOf, i, width, height));
+    for (let i = 0; i < size; i++) reachOf[i] = Math.exp(-RAW_SHADOWING / gridScale(width) * sunPath(depthOf, i, width, height, light.march));
   } else if (view === "sunset") {
     const size = temperature.length;
     const buoyancy = temperature.map((t, i) => t - rowMeans[Math.floor(i / width)]);
@@ -542,10 +553,15 @@ export function renderConvection(simulation, view = "sunset", options = {}) {
       const x = i % width, y = Math.floor(i / width);
       const dx = thickness[y * width + Math.min(width - 1, x + 1)] - thickness[y * width + Math.max(0, x - 1)];
       const dy = thickness[Math.min(height - 1, y + 1) * width + x] - thickness[Math.max(0, y - 1) * width + x];
-      slopeOf[i] = facing(dx / 2 / g, dy / 2 / g);
-      reachOf[i] = Math.exp(-SHADOWING / g * sunPath(coreOf, i, width, height));
+      slopeOf[i] = facing(dx / 2 / g, dy / 2 / g, light.direction);
+      reachOf[i] = Math.exp(-SHADOWING / g * sunPath(coreOf, i, width, height, light.march));
     }
   }
+  // Through dusk direct light fades to NIGHT_LIGHT of itself (the host darkens the rest).
+  // The sky behind dims to NIGHT_SKY of itself.
+  const sunScale = NIGHT_LIGHT + (1 - NIGHT_LIGHT) * clip(light.strength), day = light.day;
+  const skyScale = NIGHT_SKY + (1 - NIGHT_SKY) * clip(light.strength);
+  const dimmed = rgb => skyScale < 1 ? rgb.map(channel => channel * skyScale) : rgb;
   for (let i = 0; i < temperature.length; i++) {
     const t = clip(temperature[i]);
     const cloud = clip(liquid[i] / 0.04), drops = clip(rain[i] / RAIN_SCALE);
@@ -554,32 +570,32 @@ export function renderConvection(simulation, view = "sunset", options = {}) {
     let rgb;
     if (view === "sunset" && raw) {
       const altitude = altitudeOf(i, width, height);
-      const sky = sunsetSky(altitude, (temperature[i] - rowMeans[Math.floor(i / width)]) / 0.15);
-      const light = cloudColor(reachOf[i], altitude);
-      rgb = mix(sky, light, 1 - Math.exp(-depthOf[i]));
-      rgb = mix(rgb, mix(light, sky, 0.35), rainOpacity(rain[i]));
+      const sky = dimmed(sunsetSky(altitude, (temperature[i] - rowMeans[Math.floor(i / width)]) / 0.15, undefined, day));
+      const lit = cloudColor(reachOf[i] * sunScale, altitude, day);
+      rgb = mix(sky, lit, 1 - Math.exp(-depthOf[i]));
+      rgb = mix(rgb, mix(lit, sky, 0.35), rainOpacity(rain[i]));
     } else if (view === "sunset") {
       const altitude = altitudeOf(i, width, height);
       const warmth = (temperature[i] - rowMeans[Math.floor(i / width)]) / 0.15;
       const relative = vapor[i] / capacityAt(i, temperature, rowMeans, rules, lcl, width, height);
       const art = rules.pixelArt, d = art ? bayer(i % width, Math.floor(i / width)) : 0;
-      const sky = sunsetSky(altitude, art ? 0 : warmth, art ? d : undefined);
+      const sky = dimmed(sunsetSky(altitude, art ? 0 : warmth, art ? d : undefined, day));
       const tint = art ? quantize(altitude, TINT_LEVELS) : altitude;
-      const lit = 1.5 * slopeOf[i] * (0.35 + 0.65 * reachOf[i]);
-      const light = cloudColor(art ? quantize(lit, LIGHT_LEVELS) : lit, tint);
+      const lit = 1.5 * slopeOf[i] * (0.35 + 0.65 * reachOf[i]) * sunScale;
+      const cloudLight = cloudColor(art ? quantize(lit, LIGHT_LEVELS) : lit, tint, day);
       // Pixel art: cloud is all or nothing per pixel, the fringe and rain dithered.
       const core = art ? (coreOf[i] > 0.5 ? 1 : 0) : coreOf[i];
       const cover = art ? (coverOf[i] > 0.2 + 0.6 * d ? 1 : 0) : coverOf[i];
       const showers = art ? (rainOpacity(rain[i]) > 0.1 + 0.4 * d ? 0.5 : 0) : rainOpacity(rain[i]);
       // Sky, lit haze near saturation, a thin veil of still cloud water, then the puffs.
-      rgb = mix(sky, cloudColor(1, altitude), haze(relative));
-      rgb = mix(rgb, cloudColor(0.5, altitude), VEIL * clip(liquid[i] / CLOUD_DEPTH_SCALE));
+      rgb = mix(sky, cloudColor(sunScale, altitude, day), haze(relative));
+      rgb = mix(rgb, cloudColor(0.5 * sunScale, altitude, day), VEIL * clip(liquid[i] / CLOUD_DEPTH_SCALE));
       // Feathered fringe: thin, so sunlit through (lit by `reach` alone), under the core.
-      const fringe = 0.3 + 0.9 * reachOf[i];
-      if (coreOf !== coverOf) rgb = mix(rgb, cloudColor(art ? quantize(fringe, LIGHT_LEVELS) : fringe, tint), cover);
-      rgb = mix(rgb, light, core);
+      const fringe = (0.3 + 0.9 * reachOf[i]) * sunScale;
+      if (coreOf !== coverOf) rgb = mix(rgb, cloudColor(art ? quantize(fringe, LIGHT_LEVELS) : fringe, tint, day), cover);
+      rgb = mix(rgb, cloudLight, core);
       // Rain takes the cloud's light, softened toward the sky behind it.
-      rgb = mix(rgb, mix(light, sky, 0.35), showers);
+      rgb = mix(rgb, mix(cloudLight, sky, 0.35), showers);
     } else if (view === "temperature") rgb = [40 + 205 * t, 95 + 40 * t, 220 - 150 * t];
     else if (view === "buoyancy" || view === "lamp") {
       // Warmer than the row average glows orange; cooler is blue. Clips at ±0.15.
