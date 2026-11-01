@@ -29,7 +29,7 @@
  *                 that param's next(value)); without it the panel has no New seed
  *   stepSeconds   clock seconds one Step advances (a number, or (params) => number): one
  *                 simulation tick; default 1
- *   drift         false to leave out the shared Drift checkbox, its speed slider and Randomize.
+ *   drift         false to leave out the shared Drift checkbox and its speed slider.
  *                 Every experiment with driftableParams gets them otherwise (../../shared/drift.js);
  *                 they are saved as `drift` and `driftSpeed`
  *   actions       buttons only this experiment has, shown in its own section with their help
@@ -51,13 +51,18 @@
  *   render(frame)    return RGBA pixels (Uint8ClampedArray of width × height × 4), or null
  *                    while not ready
  *   dispose()        release anything held
+ *   selfLight()      optional: 0 to 1, how brightly the scene lights itself right now (a
+ *                    lightning flash). The host's night step dims the frame by the darker of
+ *                    daylight and this, so a flash stays bright at night
  *   ready            optional promise; the host keeps playback disabled until it settles
  * frame is { time, sun } where time is the shared clock in seconds and sun is
  * sunAt(time, shape) = { phase, azimuth, elevation } (degrees) on the shared vertical
  * figure-eight, sized and placed by the host-owned sunPath* settings.
  */
 
-// Every kind takes { key, help?, group?, enabled?(params), hidden?, wide? }: wide spans the
+// Every kind takes { key, help?, group?, enabled?(params), hidden?, wide?, randomize? }:
+// randomize: false leaves it out of the common Randomize (a playback speed, a start mode);
+// wide spans the
 // whole controls row, group puts it in a
 // fieldset with that legend, enabled greys it out when it does nothing, hidden keeps it in
 // params (saved, restored) with no visible input (a seed with only its "new" button).
@@ -75,12 +80,12 @@ export const PARAM_KINDS = ["range", "select", "toggle", "seed", "size"];
 export const SEED_MAX = 4294967295;
 // Saved by the host itself: the sun's place on the shared path and the path's four shape
 // settings (core/sun-path.js), the grid size (unless a size param owns it) and Drift.
-export const RESERVED_KEYS = ["sunPhase", "sunPathWidth", "sunPathHeight", "sunPathX", "sunPathY", "resolution", "drift", "driftSpeed"];
+export const RESERVED_KEYS = ["sunPhase", "timeOfDay", "sunPathWidth", "sunPathHeight", "sunPathX", "sunPathY", "resolution", "drift", "driftSpeed"];
 const SIZE = /^(\d+)x(\d+)$/;
 export const parseSize = value => { const match = SIZE.exec(value); return match ? { width: Number(match[1]), height: Number(match[2]) } : null; };
 
 // Element ids of the common panel's controls (core/host.js); experiments cannot reuse them.
-export const COMMON_IDS = ["play", "step", "randomize", "drift", "drift-speed", "new-seed", "reset-sun", "sunPhase", "sunPathWidth", "sunPathHeight", "sunPathX", "sunPathY"];
+export const COMMON_IDS = ["play", "step", "randomize", "drift", "drift-speed", "new-seed", "reset-sun", "sunPhase", "timeOfDay", "sunPathWidth", "sunPathHeight", "sunPathX", "sunPathY"];
 const INSTANCE_METHODS = ["update", "step", "render", "dispose"];
 
 // Throws with every problem in an experiment's description, so a bad module fails loudly.
@@ -102,7 +107,8 @@ export function validateExperiment(experiment) {
       if (!(param.min < param.max) || !(param.step > 0)) problems.push(`range ${name} needs min < max and step > 0`);
       if (!(param.default >= param.min && param.default <= param.max)) problems.push(`range ${name} default is out of range`);
     }
-    if (param?.kind === "select" && !param.options?.some(([value]) => value === param.default)) problems.push(`select ${name} default is not an option`);
+    if (param?.randomize !== undefined && typeof param.randomize !== "boolean") problems.push(`param ${name} randomize must be true or false`);
+  if (param?.kind === "select" && !param.options?.some(([value]) => value === param.default)) problems.push(`select ${name} default is not an option`);
     if (param?.kind === "seed" && !isSeed(param.default)) problems.push(`seed ${name} default must be an integer 0 to ${SEED_MAX}`);
     if (param?.kind === "toggle" && typeof param.default !== "boolean") problems.push(`toggle ${name} default must be true or false`);
     if (param?.kind === "size") {
@@ -161,6 +167,35 @@ export function cleanParam(param, value, fallback = param.default) {
 export function cleanParams(experiment, raw = {}, base = defaultParams(experiment)) {
   const source = raw && typeof raw === "object" ? raw : {};
   return Object.fromEntries(experiment.params.map(param => [param.key, cleanParam(param, source[param.key], base[param.key])]));
+}
+
+// Settings the common Randomize gives random values: every range (greyed-out and hidden ones
+// too), select and toggle, and every seed, except params marked randomize: false and the grid
+// size (a performance choice, not part of the picture).
+export const randomizableParams = experiment => experiment.params.filter(param => param.kind !== "size" && param.randomize !== false);
+
+// A random value for one param from `random` (() => [0, 1)): a range lands on one of its
+// steps, a select on one of its options, a toggle on either side, a seed anywhere 0 … 2³² − 1.
+export function randomValue(param, random) {
+  const pick = count => Math.min(count - 1, Math.floor(random() * count));
+  if (param.kind === "range") {
+    const steps = Math.floor((param.max - param.min) / param.step + 1e-9);
+    return Math.min(param.max, Number((param.min + pick(steps + 1) * param.step).toFixed(10)));
+  }
+  if (param.kind === "select" || param.kind === "size") return param.options[pick(param.options.length)][0];
+  if (param.kind === "toggle") return random() < 0.5;
+  return Math.floor(random() * (SEED_MAX + 1));
+}
+
+// Randomize: every randomizable setting of `params` gets a random value. Menus and toggles go
+// first and are linked (adjust), so modes are settled before the values that depend on them;
+// then every range and seed, greyed-out ones included.
+export function randomParams(experiment, params, random) {
+  const chosen = randomizableParams(experiment);
+  const pickAll = kinds => Object.fromEntries(chosen.filter(param => kinds.includes(param.kind)).map(param => [param.key, randomValue(param, random)]));
+  let next = cleanParams(experiment, { ...params, ...pickAll(["select", "toggle"]) }, params);
+  if (experiment.adjust) next = cleanParams(experiment, experiment.adjust(next, params), next);
+  return cleanParams(experiment, { ...next, ...pickAll(["range", "seed"]) }, next);
 }
 
 // Sliders Drift may move: visible ranges not marked drift: false (playback speeds and the like).

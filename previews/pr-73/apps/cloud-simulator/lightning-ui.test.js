@@ -17,7 +17,7 @@ test("Lightning on the core host: common panel, own start buttons, Step, Play, o
   const page = mountExperiment(lightning, { doc, raf, presets: false, serviceWorker: null });
   frame();
   const session = () => page.instance.session;
-  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed"]);
+  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed", "timeOfDay"]);
   assert.equal($("play").textContent, "Play", "starts paused on a prepared strike");
   assert.equal($("controls").children[0].textContent, "Lightning settings");
   assert.deepEqual(controlIds($("controls")).slice(0, 2), ["next-shape", "before-strike"]);

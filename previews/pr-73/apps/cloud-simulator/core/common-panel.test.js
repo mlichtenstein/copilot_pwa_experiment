@@ -14,31 +14,14 @@ import { readFileSync } from "node:fs";
 import { mountExperiment, PANEL_TEXT } from "./host.js";
 import { experiments } from "./registry.js";
 import { SITE_NAME } from "./header.js";
-import { fakeDocument, fakeCanvas, manualFrames, imageDocument, descendants } from "./fake-dom.js";
-
-// Every page's containers, with canvases that can decode Valley's bitmaps; it remembers every
-// element made so the whole page can be searched.
-function pageDocument() {
-  const doc = fakeDocument(["header", "sky", "presets", "playback", "controls", "stats", "status", "legend", "cloud-status", "patterns", "pattern-buttons"]);
-  const images = imageDocument(), make = doc.createElement;
-  doc.made = [];
-  doc.createElement = tag => {
-    const node = make(tag);
-    doc.made.push(node);
-    if (tag === "canvas") {
-      const decoder = images.createElement("canvas").getContext("2d");
-      node.getContext = () => ({ ...decoder, createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData: () => {} });
-    }
-    return node;
-  };
-  return doc;
-}
+import { fakeDocument, fakeCanvas, manualFrames, pageDocument, descendants, helpOf } from "./fake-dom.js";
 
 // One line per element in the panel: what a person sees and reads (tag, id, class, its own
 // text, tooltip, input type and range). Slider readouts (output) are left out: they show values.
 const describe = node => [node.tagName, node.id ?? "", node.className ?? "", node.tagName === "OUTPUT" ? "" : node.children.length ? "" : node.textContent,
   node.title ?? "", node.type ?? "", node.min ?? "", node.max ?? "", node.step ?? "", node.attributes["aria-label"] ?? ""].join(" | ");
 const isSunItem = node => { for (let n = node; n; n = n.parentNode) if (n.className === "panel-sun") return true; return false; };
+const isTimeItem = node => { for (let n = node; n; n = n.parentNode) if (/(^| )time-row( |$)/.test(n.className ?? "")) return true; return false; };
 const isSeedItem = node => { for (let n = node; n; n = n.parentNode) if (/(^| )new-seed( |$)/.test(n.className ?? "")) return true; return false; };
 
 async function mountAll() {
@@ -59,7 +42,7 @@ async function mountAll() {
 test("the common panel is identical on every experiment page", async () => {
   const pages = await mountAll();
   assert.equal(pages.length, 7, "all seven experiments are on the shared core");
-  const shared = ({ panel }) => panel.filter(node => !isSunItem(node) && !isSeedItem(node)).map(describe);
+  const shared = ({ panel }) => panel.filter(node => !isSunItem(node) && !isSeedItem(node) && !isTimeItem(node)).map(describe);
   const reference = shared(pages[0]);
   // The always-present items, in order.
   assert.deepEqual(reference.filter(line => / \| (play|step|randomize|drift|drift-speed) \| /.test(line)).map(line => line.split(" | ")[1]),
@@ -77,8 +60,12 @@ test("the common panel is identical on every experiment page", async () => {
     const ids = page.panel.map(node => node.id).filter(Boolean);
     assert.equal(ids.includes("new-seed"), Boolean(page.experiment.seed), `${page.entry.title}: New seed iff seed`);
     assert.equal(ids.includes("reset-sun"), page.experiment.sun, `${page.entry.title}: Sun group iff sun`);
-    const order = ["play", "step", "randomize", "new-seed", "drift", "drift-speed", "reset-sun", "sunPhase"].filter(id => ids.includes(id));
+    const order = ["play", "step", "randomize", "new-seed", "drift", "drift-speed", "reset-sun", "timeOfDay"].filter(id => ids.includes(id));
     assert.deepEqual(ids.filter(id => order.includes(id)), order, `${page.entry.title}: panel order`);
+    // The time of day is on every page: in the Sun group with `sun`, on its own row without.
+    assert.ok(ids.includes("timeOfDay"), `${page.entry.title}: time of day`);
+    assert.equal(helpOf(page.doc, page.$("timeOfDay")), PANEL_TEXT.timeOfDayNote);
+    assert.equal(page.$("timeOfDay").parentNode.parentNode.className, page.experiment.sun ? "panel-row sun-row" : "panel-row time-row");
     const sunPath = page.panel.find(node => node.tagName === "DETAILS");
     if (page.experiment.sun) assert.ok(sunPath && !sunPath.open && descendants(sunPath).some(node => node.id === "sunPathWidth"), `${page.entry.title}: sun path shape folded`);
   }

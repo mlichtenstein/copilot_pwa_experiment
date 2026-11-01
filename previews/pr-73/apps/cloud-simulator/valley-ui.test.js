@@ -30,7 +30,7 @@ test("Valley textures: loading lock, previews, wind clock, Step, brush layout, R
   const doc = valleyDocument(), canvas = fakeCanvas(doc, 48, 30), { raf, frame } = manualFrames(), $ = id => doc.getElementById(id);
   const page = mountExperiment(valley, { doc, raf, presets: false, serviceWorker: null });
   const buttons = () => ["play", "step", "randomize", "new-seed"].map($);
-  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed"]);
+  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed", "timeOfDay"]);
   assert.ok(buttons().every(button => button.disabled), "locked while textures load");
   frame();
   assert.equal($("stats").textContent, "", "no stats before the textures arrive");
@@ -56,17 +56,18 @@ test("Valley textures: loading lock, previews, wind clock, Step, brush layout, R
   $("new-seed").fire("click"); frame();
   assert.match($("stats").textContent, /layout 2/);
 
-  // Randomize moves the sliders; the textures, the brush layout and the wind clock stay.
+  // Randomize moves everything: sliders, the textures, the landscape and the brush layout.
   const before = page.getParams();
   $("randomize").fire("click"); frame();
-  assert.match($("stats").textContent, /layout 2 · t /);
-  assert.equal($("textureA").value, before.textureA); assert.equal($("textureB").value, before.textureB);
-  assert.notDeepEqual(page.getParams(), before);
+  const after = page.getParams();
+  assert.notEqual(after.brushSeed, before.brushSeed); assert.match($("stats").textContent, new RegExp(`layout ${after.brushSeed} · t `));
+  assert.equal($("textureA").value, after.textureA); assert.equal($("textureB").value, after.textureB);
+  assert.equal($(`horizon-${after.horizon}`).checked, true);
 
   // Ratings save every control (not the wind clock); a saved run restores them.
   page.applyParams({ ...page.getParams(), horizon: "open", shape: "ribbon", brushSeed: 5 }); frame();
   assert.equal($("horizon-open").checked, true); assert.equal($("shape").value, "ribbon"); assert.match($("stats").textContent, /layout 5/);
-  assert.deepEqual(Object.keys(page.getParams()).sort(), [...valley.params.map(param => param.key), "resolution", "drift", "driftSpeed"].sort());
+  assert.deepEqual(Object.keys(page.getParams()).sort(), [...valley.params.map(param => param.key), "sunPhase", "resolution", "drift", "driftSpeed"].sort());
 });
 
 test("Valley textures: a failed load says so", async () => {

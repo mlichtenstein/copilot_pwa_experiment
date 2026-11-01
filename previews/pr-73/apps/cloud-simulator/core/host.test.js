@@ -7,7 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mountExperiment, DEFAULT_SUN_PHASE } from "./host.js";
-import { DEFAULT_SUN_SHAPE, SUN_PATH, SUN_PATH_KEYS, sunAt, sunAtPhase, timeForPhase } from "./sun-path.js";
+import { DEFAULT_SUN_SHAPE, LEGACY_SUN_SHAPE, SUN_PATH, SUN_PATH_KEYS, sunAt, sunAtPhase, timeForPhase } from "./sun-path.js";
 import { sunset } from "../sunset-experiment.js";
 import { fakeDocument, controlIds, helpOf } from "./fake-dom.js";
 
@@ -22,7 +22,7 @@ test("Sunset on the host: generated controls, shared sun playback, pause, reset 
 
   // The common panel: Play/Step, Randomize, Drift, Drift speed, New seed (Sunset declares its
   // seed) and the Sun group. Below, under its heading: View, the seed and the lighting sliders.
-  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed", "reset-sun", "sunPhase", ...SUN_PATH_KEYS]);
+  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed", "reset-sun", "timeOfDay", ...SUN_PATH_KEYS]);
   assert.deepEqual(["play", "step", "randomize", "new-seed", "reset-sun"].map(id => $(id).textContent), ["Play", "Step", "Randomize", "New seed", "Reset sun"]);
   // Their descriptions are hidden (shown on hold), not titles.
   assert.ok(["play", "step", "randomize", "new-seed", "reset-sun"].every(id => helpOf(doc, $(id)) && !$(id).title));
@@ -31,7 +31,7 @@ test("Sunset on the host: generated controls, shared sun playback, pause, reset 
 
   frame(); const initial = pixels;
   assert.ok(initial.length === 32 * 20 * 4);
-  assert.match($("stats").textContent, /^Seed 42 · density fixed · sun 15° across, 20\.3° up$/);
+  assert.match($("stats").textContent, /^Seed 42 · density fixed · sun 15° across, 21\.3° up$/);
 
   // A slider redraws.
   $("extinction").value = "0.3"; $("extinction").fire("input"); frame();
@@ -46,11 +46,12 @@ test("Sunset on the host: generated controls, shared sun playback, pause, reset 
   const sun = sunAt(page.clock.time, DEFAULT_SUN_SHAPE);
   assert.equal($("stats").textContent, `Seed 42 · density fixed · sun ${sun.azimuth.toFixed(0)}° across, ${sun.elevation.toFixed(1)}° up`);
 
-  // Moving the sun by hand stops it there.
-  $("sunPhase").value = "0.6"; $("sunPhase").fire("input");
+  // Moving the time of day by hand stops the sun there (20:24 is phase 0.6), shown as HH:MM.
+  $("timeOfDay").value = "20.4"; $("timeOfDay").fire("input");
   assert.equal($("play").textContent, "Play");
   frame(500); frame(500);
   assert.ok(Math.abs(page.getParams().sunPhase - 0.6) < 1e-9);
+  assert.equal($("timeOfDay-value").textContent, `20:24 · ${sunAtPhase(0.6).elevation.toFixed(0)}° up`);
 
   // The shared path's shape settings move the sun without starting or stopping it.
   $("sunPathY").value = "-3"; $("sunPathY").fire("input"); $("sunPathHeight").value = "10"; $("sunPathHeight").fire("input"); frame();
@@ -68,15 +69,15 @@ test("Sunset on the host: generated controls, shared sun playback, pause, reset 
   assert.equal(page.getParams().view, "light");
   assert.equal(page.getParams().seed, 42);
   assert.ok(Math.abs(page.getParams().sunPhase - 0.25) < 1e-9);
-  // Saved before the path had settings: the default shape comes back.
+  // Saved before the path had settings: the shape it had then, so the sun is where it was.
   page.applyParams({ sunPhase: 0.25 }); frame();
-  assert.deepEqual(SUN_PATH_KEYS.map(key => page.getParams()[key]), SUN_PATH_KEYS.map(key => DEFAULT_SUN_SHAPE[key]));
-  assert.equal($("sunPathY").value, String(DEFAULT_SUN_SHAPE.sunPathY));
+  assert.deepEqual(SUN_PATH_KEYS.map(key => page.getParams()[key]), SUN_PATH_KEYS.map(key => LEGACY_SUN_SHAPE[key]));
+  assert.equal($("sunPathY").value, String(LEGACY_SUN_SHAPE.sunPathY));
   page.applyParams(saved); frame();
   assert.deepEqual(page.getParams(), saved);
   // An old fixed sun (sunAzimuth/sunElevation, sunSpeed) lands at the nearest point on the path.
   page.applyParams({ sunAzimuth: -15, sunElevation: -1.2, sunSpeed: 0.3 }); frame();
-  const landed = sunAtPhase(page.getParams().sunPhase);
+  const landed = sunAtPhase(page.getParams().sunPhase, LEGACY_SUN_SHAPE);
   assert.ok(Math.hypot(landed.azimuth + 15, landed.elevation + 1.2) < 6, JSON.stringify(landed));
   assert.equal("sunSpeed" in page.getParams(), false);
 
@@ -84,7 +85,7 @@ test("Sunset on the host: generated controls, shared sun playback, pause, reset 
   $("play").fire("click"); frame(100); $("reset-sun").fire("click"); frame();
   assert.equal(page.clock.playing, false);
   assert.equal(page.clock.time, timeForPhase(DEFAULT_SUN_PHASE));
-  page.applyParams({ sunPhase: DEFAULT_SUN_PHASE }); frame();
+  page.applyParams({ sunPhase: DEFAULT_SUN_PHASE, ...DEFAULT_SUN_SHAPE }); frame();
   assert.deepEqual(pixels, initial);
 
   // A new density seed changes the droplets.

@@ -67,7 +67,7 @@ export const convection = {
     slider("autoconversion", 0, 1, 0.05, "Fraction of cloud above 0.005 per pixel that gathers into rain drops per tick."),
     slider("fallSpeed", 0, 1, 0.05, "Fraction of each pixel’s rain moving down one pixel per tick; 1 outruns the fastest updraft."),
     slider("flicker", 0, 1.5, 0.05, "Seeded random wobble of the floor temperature per column; keeps the flow from locking."),
-    { key: "speed", kind: "range", min: 1, max: 60, step: 1, default: 30, drift: false, help: "Simulation ticks per second; playback speed, not a wind speed." },
+    { key: "speed", kind: "range", min: 1, max: 60, step: 1, default: 30, drift: false, randomize: false, help: "Simulation ticks per second; playback speed, not a wind speed." },
     // Changing water restarts the run, so Drift leaves it alone.
     { key: "water", kind: "range", min: 0, max: 0.4, step: 0.01, default: 0.11, group: START, drift: false, help: "Mean water per pixel (vapor + cloud + rain + puddles); conserved for the whole run." },
     // Seeds only make a run reproducible; behavior should look alike on any seed, so the

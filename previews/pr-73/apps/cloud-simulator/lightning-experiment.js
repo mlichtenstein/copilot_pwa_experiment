@@ -7,7 +7,7 @@
  * Consumers: lightning.js, core/registry.js, lightning-ui.test.js.
  * Dependencies: lightning-model.js, experiment-session.js; Web Crypto for fresh seeds.
  */
-import { lightningScene, parameters } from "./lightning-model.js";
+import { flashPower, lightningScene, parameters } from "./lightning-model.js";
 import { createSession } from "./experiment-session.js";
 
 const randomSeed = () => globalThis.crypto.getRandomValues(new Uint32Array(1))[0];
@@ -41,7 +41,7 @@ export const lightning = {
     ...parameters.map(p => ({ key: p.key, kind: "range", min: p.min, max: p.max, step: p.step, default: p.default, help: p.description })),
     { key: "seed", kind: "seed", default: 42, random: true, hidden: true },
     // Which moment a fresh strike is prepared at: set by the two start buttons.
-    { key: "start", kind: "select", hidden: true, label: "Start", default: lightningScene.defaultStart,
+    { key: "start", kind: "select", hidden: true, randomize: false, label: "Start", default: lightningScene.defaultStart,
       options: lightningScene.starts.map(start => [start.id, start.label]) }
   ],
   // Unique to Lightning: prepare one naturally triggered strike on a new seed, paused at a
@@ -73,6 +73,12 @@ export const lightning = {
       },
       step(dt) { session.advance(dt); return true; },
       tick() { session.step(); },
+      // A flash lights the scene itself, so the host's night step leaves it bright: full at a
+      // flash's peak (flashStrength 0.5 or more), fading with the channel.
+      selfLight() {
+        const power = Math.max(0, ...session.state.layers.map(layer => flashPower(layer, session.params)));
+        return Math.min(1, power * 2);
+      },
       render() {
         const began = globalThis.performance?.now() ?? 0;
         const pixels = session.render();

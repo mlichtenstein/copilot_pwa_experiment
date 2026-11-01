@@ -96,14 +96,14 @@ test("generic controls: groups, radios, toggles, enabled rules, linked params an
 
   // Saved params: old or unknown keys are harmless; drift and the size come back.
   page.applyParams({ mode: "b", resolution: "8x6", crisp: "false", gain: 99, sunAzimuth: 3, drift: true, nonsense: 1 });
-  assert.deepEqual(page.getParams(), { mode: "b", level: 0.5, resolution: "8x6", crisp: false, gain: 10, rate: 30, seed: 1, layout: 1, drift: true, driftSpeed: 1 });
+  assert.deepEqual(page.getParams(), { mode: "b", level: 0.5, resolution: "8x6", crisp: false, gain: 10, rate: 30, seed: 1, layout: 1, sunPhase: 0.125, drift: true, driftSpeed: 1 });
   assert.equal($("drift").checked, true);
 });
 
 test("playback: the common panel, own actions, Step by stepSeconds, frame gating, Drift and reset", () => {
   const { experiment, log } = toy();
   const { page, frame, canvas, $ } = mount(experiment, { playing: true });
-  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed"]);
+  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed", "timeOfDay"]);
   assert.equal($("play").textContent, "Pause");
   // The experiment's own section: heading, stats, then its actions with help beside them.
   assert.equal($("controls").children[0].className, "experiment-heading"); assert.equal($("controls").children[1], $("stats"));
