@@ -38,7 +38,7 @@ export function mountWeatherInspector({doc,root,select}){
   board.append(columns);
   const composition=make("ol",{className:"weather-composition",hidden:true}),passTiles=[];
   for(const pass of passes){const button=tile(`pass-${pass.index}`,`${pass.index+1}. ${pass.label}`,pass.view,null,`Accumulated image after ${pass.label}. Uses the same renderer as the final scene.`);passTiles.push(tiles.at(-1));composition.append(make("li",{},button));}
-  tabs.append(fieldTab,passTab,full,previewMode);root.append(tabs,help,explanation,make("div",{className:"inspector-scroll"},board,composition));
+  tabs.append(fieldTab,passTab,full,previewMode);root.append(make("div",{className:"inspector-body"},tabs,help,explanation,make("div",{className:"inspector-scroll"},board,composition)));
   const paths=graphEdges().map(edge=>{const path=svgNode("path",{fill:"none",stroke:edge.cross?"#e4b36a":"#76b7d0","stroke-width":edge.cross?1.7:1.2,"stroke-dasharray":edge.cross?"5 3":"none","marker-end":`url(#${edge.cross?"weather-cross-arrow":"weather-arrow"})`});wire.append(path);return {edge,path};});
   function drawWires(){
     if(!board.getBoundingClientRect)return;
