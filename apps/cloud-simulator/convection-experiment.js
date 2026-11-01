@@ -1,19 +1,19 @@
 /*
  * Purpose: Convection study as a cloud simulator experiment module: a heated, wet floor and a
- *   cooled lid overturn a box of moist air into cloud and rain. Its sunset lighting is baked
- *   into the model's Sunset view (a low sun at the lower right), so it does not follow the
- *   shared sun.
+ *   cooled lid overturn a box of moist air into cloud and rain. Its Sunset view is lit by the
+ *   shared sun (core/sun-light.js): from the sun's side and height, fading at dusk.
  * Consumers: convection.js (mounts it with core/host.js), core/registry.js,
  *   core/experiment.test.js, convection-ui.test.js.
  * Dependencies: convection-model.js (simulation and rendering); the contract in core/experiment.js.
  */
 import { defaults, createConvection, step, totalWater, renderConvection } from "./convection-model.js";
+import { sunLight } from "./core/sun-light.js";
 
 const OPTIONS = "Options · part of the run’s parameters", START = "Starting fields · changing these resets the run";
 const slider = (key, min, max, stepSize, help, extra = {}) => ({ key, kind: "range", min, max, step: stepSize, default: defaults[key], help, ...extra });
 const legends = {
-  sunset: "Sunset: solid clouds = cloudy air that is rising or warm, or pressed flat under warmer air above it (the inversion); with the LCL they sit on flat bases at one height over clear air, lit peach and pink from a low sun at lower right and grey-violet in their own shadow, with frayed wisps at the edges; faint veil = still cloud and near-saturated haze; soft curtains = falling rain.",
-  sunsetRaw: "Sunset, raw cloud water: every bit of simulated cloud drawn by its own amount, lit from a low sun at lower right; it reads as smoke. Soft curtains = falling rain.",
+  sunset: "Sunset: solid clouds = cloudy air that is rising or warm, or pressed flat under warmer air above it (the inversion); with the LCL they sit on flat bases at one height over clear air, lit from the sun's side (peach and pink while it is low, whiter when high) and grey-violet in their own shadow, with frayed wisps at the edges; faint veil = still cloud and near-saturated haze; soft curtains = falling rain.",
+  sunsetRaw: "Sunset, raw cloud water: every bit of simulated cloud drawn by its own amount, lit from the sun's side; it reads as smoke. Soft curtains = falling rain.",
   lamp: "Lava lamp: orange = warmer than the row average (rising), blue = cooler (sinking), pale cyan = falling rain (cloud is hidden here; see Cloud and rain).",
   water: "Cloud and rain: dark air, blue tint = vapor, gray-white = cloud, pale cyan = falling rain. Fixed color scale; no decorative trails.",
   temperature: "Temperature: blue = cold, red = warm. The floor is heated and the lid is cooled.",
@@ -35,7 +35,8 @@ export const convection = {
   app: "cloud-simulator/convection",
   width: 64,
   height: 48,
-  sun: false,
+  sun: true,
+  legacySunShape: false,
   autoplay: true,
   // The common New seed starts a new run; Step is one tick at the current speed.
   seed: "seed",
@@ -100,7 +101,7 @@ export const convection = {
         while (carry >= 1 - 1e-9) { step(instance.simulation, rules); carry -= 1; changed = true; }
         return changed;
       },
-      render: () => renderConvection(instance.simulation, current.view, rulesOf(current)),
+      render: frame => renderConvection(instance.simulation, current.view, rulesOf(current), sunLight(frame.sun)),
       dispose() {}
     };
     instance.restart();

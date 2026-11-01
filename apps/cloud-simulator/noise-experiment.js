@@ -1,20 +1,21 @@
 /*
  * Purpose: Noise weather as a cloud simulator experiment module: humidity, heat and pressure
  *   drift as noise; cloud water condenses inside a cloud layer, lingers, rains and pools.
- *   Its sunset lighting is baked into the model (a low sun off the lower right), so it does
- *   not follow the shared sun.
+ *   Its Sunset view is lit by the shared sun (core/sun-light.js): from the sun's side and
+ *   height, fading at dusk.
  * Consumers: noise.js (mounts it with core/host.js), core/registry.js, core/experiment.test.js,
  *   noise-ui.test.js.
  * Dependencies: noise-model.js (the weather and its rendering); the contract in core/experiment.js.
  */
 import { defaults, createWeather, step, sampleFields, renderWeather, airborneRain, pooledRain,
   createRainLayer, updateRainLayer, startCloud } from "./noise-model.js";
+import { sunLight } from "./core/sun-light.js";
 
 // The model ticks 20 times a clock second while playing.
 export const TICKS_PER_SECOND = 20;
 const slider = (key, min, max, stepSize, help, group) => ({ key, kind: "range", min, max, step: stepSize, default: defaults[key], help, group });
 const legends = {
-  sunset: "Sunset: clouds lit peach toward the low sun at lower right and grey-violet where thick; smooth grey curtain under a cloud base and thin streaks = rain falling from a raining cloud; blue floor = puddles.",
+  sunset: "Sunset: clouds lit toward the sun's side (peach while it is low, whiter when high) and grey-violet where thick; smooth grey curtain under a cloud base and thin streaks = rain falling from a raining cloud; blue floor = puddles.",
   water: "Cloud and rain: white = stored cloud water, gold tint = dense, lasting cloud that is raining, pale blue = rain in the air.",
   relative: "Cloud forcing: relative humidity × the cloud-layer band; brighter = closer to forming, orange = cloud condenses here now.",
   humidity: "Humidity: dark = dry, blue = moist.",
@@ -31,7 +32,8 @@ export const noise = {
   app: "cloud-simulator/noise",
   width: 128,
   height: 96,
-  sun: false,
+  sun: true,
+  legacySunShape: false,
   autoplay: true,
   // The common New seed starts a new run; Step is one tick.
   seed: "seed",
@@ -87,7 +89,7 @@ export const noise = {
         while (carry >= 1 - 1e-9) { instance.tick(); carry -= 1; changed = true; }
         return changed;
       },
-      render: () => renderWeather(instance.simulation, current.view, rulesOf(current), instance.rain),
+      render: frame => renderWeather(instance.simulation, current.view, rulesOf(current), instance.rain, sunLight(frame.sun)),
       dispose() {}
     };
     instance.restart();

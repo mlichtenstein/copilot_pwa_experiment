@@ -452,11 +452,13 @@ export function mountExperiment(experiment, {
     const migrated = experiment.migrate ? experiment.migrate(given) : given;
     const source = migrated && typeof migrated === "object" ? migrated : {};
     if (experiment.sun) {
-      setPlaying(false);
+      // A saved look shows that moment; a page that plays on load keeps playing.
+      if (!experiment.autoplay) setPlaying(false);
       // Saved before the path had settings: the shape it had then (LEGACY_SUN_SHAPE), so the
-      // sun lands where it was. Saved with a fixed sun (sunAzimuth/sunElevation sliders): the
+      // sun lands where it was (unless the page only followed the sun later:
+      // legacySunShape false). Saved with a fixed sun (sunAzimuth/sunElevation sliders): the
       // nearest point on the path. Other old keys, such as sunSpeed, are dropped by cleanParams.
-      const legacy = !SUN_PATH_PARAMS.some(param => param.key in source);
+      const legacy = experiment.legacySunShape !== false && !SUN_PATH_PARAMS.some(param => param.key in source);
       sunShape = Object.fromEntries(SUN_PATH_PARAMS.map(param => [param.key, cleanParam(param, source[param.key], (legacy ? LEGACY_SUN_SHAPE : DEFAULT_SUN_SHAPE)[param.key])]));
       for (const param of SUN_PATH_PARAMS) controls.get(param.key).write(sunShape[param.key]);
       if (finite(source.sunPhase)) clock.set(timeForPhase(source.sunPhase));

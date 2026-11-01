@@ -30,7 +30,7 @@ test("Valley textures: loading lock, previews, wind clock, Step, brush layout, R
   const doc = valleyDocument(), canvas = fakeCanvas(doc, 48, 30), { raf, frame } = manualFrames(), $ = id => doc.getElementById(id);
   const page = mountExperiment(valley, { doc, raf, presets: false, serviceWorker: null });
   const buttons = () => ["play", "step", "randomize", "new-seed"].map($);
-  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed", "timeOfDay"]);
+  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed", "reset-sun", "timeOfDay", "sunPathWidth", "sunPathHeight", "sunPathX", "sunPathY"]);
   assert.ok(buttons().every(button => button.disabled), "locked while textures load");
   frame();
   assert.equal($("stats").textContent, "", "no stats before the textures arrive");
@@ -67,7 +67,7 @@ test("Valley textures: loading lock, previews, wind clock, Step, brush layout, R
   // Ratings save every control (not the wind clock); a saved run restores them.
   page.applyParams({ ...page.getParams(), horizon: "open", shape: "ribbon", seed: 5 }); frame();
   assert.equal($("horizon-open").checked, true); assert.equal($("shape").value, "ribbon"); assert.match($("stats").textContent, /seed 5/);
-  assert.deepEqual(Object.keys(page.getParams()).sort(), [...valley.params.map(param => param.key), "sunPhase", "resolution", "drift", "driftSpeed"].sort());
+  assert.deepEqual(Object.keys(page.getParams()).sort(), [...valley.params.map(param => param.key), "sunPhase", "sunPathWidth", "sunPathHeight", "sunPathX", "sunPathY", "resolution", "drift", "driftSpeed"].sort());
   // Links saved before the layout was called `seed` stored it as brushSeed; they still load.
   const { seed, ...old } = page.getParams();
   page.applyParams({ ...old, brushSeed: 7 }); frame();

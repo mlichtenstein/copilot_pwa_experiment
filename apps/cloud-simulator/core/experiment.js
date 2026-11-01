@@ -24,7 +24,11 @@
  * (only with `sun`). An experiment declares capabilities; it never builds these itself.
  * Its own controls go in a section below, under its title.
  * Optional capabilities (each generic; an experiment uses only what it needs):
- *   autoplay      start playing on load (unless the reader prefers reduced motion)
+ *   autoplay      start playing on load (unless the reader prefers reduced motion); with
+ *                 `sun`, loading a saved look keeps it playing too
+ *   legacySunShape  false for a `sun` page that only followed the shared sun once the path
+ *                 had settings: its saved looks without sunPath* keys load on the default
+ *                 path, not the older shape (LEGACY_SUN_SHAPE) the first sun pages used
  *   seed          the key of the seed param the common New seed button changes (random, or
  *                 that param's next(value)); without it the panel has no New seed
  *   stepSeconds   clock seconds one Step advances (a number, or (params) => number): one
