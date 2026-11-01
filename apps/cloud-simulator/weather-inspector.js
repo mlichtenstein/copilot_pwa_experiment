@@ -6,14 +6,14 @@ export function mountWeatherInspector({doc,root,select}){
   if(!root)return {update(){}};
   const make=(tag,props={},...children)=>{const node=Object.assign(doc.createElement(tag),props);node.append(...children);return node;};
   const svgNode=(tag,attrs)=>{const node=doc.createElementNS(SVG,tag);for(const [key,value] of Object.entries(attrs))node.setAttribute(key,String(value));return node;};
-  let mode="fields",latest;root.setAttribute("data-previews","strips");
-  const tabs=make("div",{className:"inspector-tabs"}),fieldTab=make("button",{type:"button",textContent:"Ingredients",title:"Show the fields and their real data dependencies"}),passTab=make("button",{type:"button",textContent:"Composition",title:"Show the image accumulating through the actual render passes"}),full=make("button",{type:"button",textContent:"Full scene",title:"Return the main viewport to the final combined image"});
-  const help=make("p",{className:"inspector-help",textContent:"Click any tile to inspect it in the main viewport. Select a field: amber arrows enter it; mint arrows leave it. Unselected links fade. Collapse a depth to its header to simplify the graph. Black light tiles mean no contribution right now."});
+  let mode="fields",latest;root.setAttribute("data-previews","full");
+  const tabs=make("div",{className:"inspector-tabs"}),fieldTab=make("button",{type:"button",textContent:"Field graph",title:"Show the fields and their real data dependencies"}),passTab=make("button",{type:"button",textContent:"Composition",title:"Show the image accumulating through the actual render passes"}),full=make("button",{type:"button",textContent:"Full scene",title:"Return the main viewport to the final combined image"});
+  const help=make("p",{className:"inspector-help",textContent:"Tap a field to inspect it. Amber arrows enter; mint arrows leave. Preview style changes card size, keeping the graph interactive."});
   const detail=make("p",{className:"inspector-detail"});detail.setAttribute("role","status");
   const explanation=make("details",{className:"inspector-explanation"},make("summary",{textContent:"Selected field details",title:"Data type, ingredients and ingestion or rendering rule"}),detail);
   const previewMode=make("select",{title:"Choose full thumbnails, a cropped central strip, or labels only"});
-  for(const [value,label] of [["strips","Preview strips"],["full","Full previews"],["labels","Labels only"]])previewMode.append(make("option",{value,textContent:label}));
-  previewMode.value="strips";previewMode.setAttribute("aria-label","Field preview style");
+  for(const [value,label] of [["full","Small thumbnails"],["strips","Preview strips"],["labels","Labels only"]])previewMode.append(make("option",{value,textContent:label}));
+  previewMode.value="full";previewMode.setAttribute("aria-label","Field preview style");
   previewMode.addEventListener("change",()=>{root.setAttribute("data-previews",previewMode.value);if(latest)update(...latest);});
   const board=make("div",{className:"weather-graph-board"}),wire=svgNode("svg",{"aria-hidden":"true",class:"weather-graph-wires"}),defs=svgNode("defs",{});
   for(const [id,color] of [["weather-arrow","#76b7d0"],["weather-cross-arrow","#e4b36a"],["weather-input-arrow","#ffc266"],["weather-output-arrow","#6bffcf"]]){const marker=svgNode("marker",{id,viewBox:"0 0 10 10",refX:9,refY:5,markerWidth:5,markerHeight:5,orient:"auto-start-reverse"});marker.append(svgNode("path",{d:"M 0 0 L 10 5 L 0 10 z",fill:color}));defs.append(marker);}wire.append(defs);board.append(wire);
@@ -63,7 +63,7 @@ export function mountWeatherInspector({doc,root,select}){
     const selectedId=params.view==="sky"?"sun":selected?`${params.inspectLayer}:${params.view}`:null;
     for(const {edge,path} of paths){const incoming=edge.to===selectedId,outgoing=edge.from===selectedId;
       path.setAttribute("stroke",incoming?"#ffc266":outgoing?"#6bffcf":edge.cross?"#e4b36a":"#76b7d0");
-      path.setAttribute("stroke-width",incoming||outgoing?3.5:1.2);path.setAttribute("opacity",selectedId?(incoming||outgoing?1:.15):.7);
+      path.setAttribute("stroke-width",incoming||outgoing?3.5:1.2);path.setAttribute("opacity",selectedId?(incoming||outgoing?1:.35):.7);
       path.setAttribute("marker-end",`url(#${incoming?"weather-input-arrow":outgoing?"weather-output-arrow":edge.cross?"weather-cross-arrow":"weather-arrow"})`);
     }
     const shown=mode==="fields"?tiles.filter(t=>!t.id.startsWith("pass-")&&(!t.layer||sections[["near","middle","far"].indexOf(t.layer)].open)):passTiles;

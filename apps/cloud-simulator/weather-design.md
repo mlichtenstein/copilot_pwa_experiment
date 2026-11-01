@@ -61,3 +61,5 @@ The supplier sample was extracted into one read-only helper, so bitmap/noise thu
 The inspector uses collapsible depth frames (near open initially). On mobile they stack at full width, with two field cards per row. Closed frames retain their dependency endpoints at the summary and skip preview work. Selecting a field highlights incoming links amber and outgoing links mint, fading unrelated edges. Descriptions distinguish scalar, boolean, RGB and geometry data, list inputs, and explain ingestion/update/render rules.
 
 Inspector previews default to cropped central strips; the preview-style menu also offers full thumbnails and labels only. Labels mode skips preview rasterization. Selected-field contracts live in a closed expander; the main viewport caption stays short. Mobile reserves a bounded simulation row and caps the inspector at 28dvh so it cannot consume the canvas.
+
+The default inspector is the Field graph with small 48px full thumbnails. Strip and label modes change only card presentation; arrow connections, selection and main-field inspection remain active in every mode.
