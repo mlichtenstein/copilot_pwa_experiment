@@ -77,9 +77,11 @@ function stepLayer(state,dt,params) {
     if(candidate.gradient>=params.breakdownGradient){state.strike=candidate;beginStrike(state);}
   }
 }
+// How brightly one depth layer's channel shines right now (0 when quiet).
+export const flashPower=(state,params)=>state.phase==="flash"?params.flashStrength*Math.exp(-state.age/Math.max(0.05,params.flashDuration*0.3)):state.phase==="leader"?0.09:0;
 function renderLayer(state,params,pixels) {
   const light=new Float32Array(width*height), cores=new Float32Array(width*height), path=new Set(state.returnPath);
-  const power=state.phase==="flash"?params.flashStrength*Math.exp(-state.age/Math.max(0.05,params.flashDuration*0.3)):state.phase==="leader"?0.09:0;
+  const power=flashPower(state,params);
   for(let i=1;i<state.nodes.length && power>0;i++) {
     const b=state.nodes[i],a=state.nodes[b.parent], ax=a.x*width,ay=a.y*height,bx=b.x*width,by=b.y*height;
     const energy=power*(path.has(i)?1:b.branch?0.3:0.6), radius=3+params.haze*10;

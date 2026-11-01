@@ -43,7 +43,11 @@ Follow the [adventure engine guide](apps/adventure/README.md) and the [Waiting G
 
 ## Explanatory text
 
-Put an explanation next to the thing it explains, not in a distant help section. Give every button and control a short `title` tooltip (and an `aria-label` when it shows only an icon or emoji), keep a slider's description in its own label, and put a longer note in a small expander beside the control it covers, like the rating bar's About. Longer background, formulas and design notes can still live in a details section or a README, but the one sentence someone needs to use a control belongs on or beside it.
+Put an explanation next to the thing it explains, not in a distant help section, but keep it out of the way until someone asks: controls stay compact so the picture can stay large. Give every button and control a one-sentence description that is hidden by default and shown **on hold**: press and hold about 400 ms (touch or mouse), or rest the mouse on it, or focus it from the keyboard, and it appears in a small popover beside the control; release or a tap elsewhere hides it. Use one shared mechanism for this (in the cloud simulator, `apps/cloud-simulator/core/hold-help.js`), not per-control tooltips, and do not add a `title` as well. A hold must never trigger the control (swallow the click that ends it) or get in the way of dragging a slider or typing; link the description with `aria-describedby`, and give icon-only controls an `aria-label`. A longer note can still go in a small expander beside the control it covers, like the rating bar's About; longer background, formulas and design notes can live in a details section or a README.
+
+## Control labels are code names
+
+Label a slider, menu, toggle, button or other UI control with its code name (the parameter key, setting id or button id), or something that plainly reads as it: the cloud simulator shows each param key in `<code>` (`timeOfDay`, `driftSpeed`, `textureA`), and a button's words match its id (Randomize is `#randomize`, New seed `#new-seed`). So pick descriptive code names in the first place; rename the code rather than giving a control a friendlier label. The longer explanation belongs in the control's hold-to-see help (see [Explanatory text](#explanatory-text)), not in its label.
 
 ## PWA behavior
 

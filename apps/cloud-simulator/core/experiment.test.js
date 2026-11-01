@@ -70,7 +70,7 @@ test("the registry finds experiments by id", () => {
 });
 
 const sample = {
-  id: "sample", title: "Sample", app: "cloud-simulator/sample", width: 4, height: 2, sun: false,
+  id: "sample", title: "Sample", app: "cloud-simulator/sample", width: 4, height: 2, sun: false, seed: "seed",
   params: [
     { key: "speed", kind: "range", min: 0, max: 10, step: 1, default: 5, drift: false },
     { key: "gain", kind: "range", min: -1, max: 1, step: 0.1, default: 0 },
