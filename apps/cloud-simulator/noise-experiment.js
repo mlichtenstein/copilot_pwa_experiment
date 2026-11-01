@@ -38,7 +38,7 @@ export const noise = {
   stepSeconds: 1 / TICKS_PER_SECOND,
   groupNotes: { [SKY]: "", [LAYER]: "Clouds form only in this band of height.", [RAIN]: "" },
   params: [
-    { key: "view", kind: "select", wide: true, default: "sunset",
+    { key: "view", randomize: false, kind: "select", wide: true, default: "sunset",
       options: [["sunset", "Sunset"], ["water", "Cloud and rain"], ["relative", "Cloud forcing"], ["humidity", "Humidity"], ["temperature", "Temperature"], ["pressure", "Pressure"]] },
     slider("cloudiness", 0.2, 0.7, 0.01, "More moisture: more and bigger clouds.", SKY),
     slider("featureSize", 8, 96, 1, "Size of cloud clumps, in pixels.", SKY),

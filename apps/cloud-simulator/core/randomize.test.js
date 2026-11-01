@@ -1,7 +1,7 @@
 /* Purpose: Check Randomize on every page with a fixed random source: each press moves the time
- *   of day, the sun path's shape (sun pages), every menu and radio, toggles, seeds and sliders
+ *   of day, the sun path's shape (sun pages), scene menus and radios, toggles, seeds and sliders
  *   (greyed-out ones too); every value it picks is valid for its setting; and the playback
- *   controls (Play/Pause, Drift, its speed, the grid size, playback speeds, Lightning's start)
+ *   controls (Play/Pause, Drift, its speed, the grid size, playback speeds, Lightning's start), inspection views and layer visibility
  *   stay as they were. The same random source gives the same results.
  * Consumers: Node test runner.
  * Dependencies: node:test, node:assert, host.js, experiment.js, registry.js, sun-path.js,
@@ -17,7 +17,7 @@ import { seededRandom } from "../../shared/drift.js";
 
 const PRESSES = 12;
 // Settings Randomize must leave alone, by page (besides drift and driftSpeed everywhere).
-const KEPT = { convection: ["resolution", "speed"], lightning: ["start"] };
+const KEPT = { sunset: ["view"], noise: ["view"], convection: ["resolution", "speed", "view"], weather: ["view", "inspectLayer", "near", "middle", "far", "lightingMode"], lightning: ["start"] };
 
 async function mount(entry, seed) {
   const experiment = await entry.load();
@@ -99,4 +99,15 @@ test("the same random source gives the same Randomize results", async () => {
     }
     assert.deepEqual(runs[0], runs[1], entry.title);
   }
+});
+
+
+test("Randomize preserves a chosen composition pass and field-layer visibility", async () => {
+  const entry=experiments.find(e=>e.id==="weather"),{page,$,frame}=await mount(entry,37);
+  page.applyParams({...page.getParams(),view:"pass-3",inspectLayer:"far",near:false,middle:true,far:false});frame();
+  const before=page.getParams();$("randomize").fire("click");frame();const after=page.getParams();
+  for(const key of KEPT.weather)assert.equal(after[key],before[key],`${key} stays chosen`);
+  assert.notEqual(after.seed,before.seed);assert.notEqual(after.sunPhase,before.sunPhase);
+  page.applyParams({...after,view:"cloudWater",inspectLayer:"middle"});frame();$("randomize").fire("click");frame();
+  assert.equal(page.getParams().view,"cloudWater");assert.equal(page.getParams().inspectLayer,"middle");page.dispose();
 });
