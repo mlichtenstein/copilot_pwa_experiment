@@ -34,9 +34,13 @@ test("inspector tiles select fields/passes, update live, and stop preview work w
   const create=doc.createElement;let painted=0;
   doc.createElement=tag=>{const node=create(tag);if(tag==="canvas")node.getContext=()=>({createImageData:(w,h)=>({data:new Uint8ClampedArray(w*h*4)}),putImageData(){painted++;}});return node;};
   const selections=[],ui=mountWeatherInspector({doc,root,select:value=>selections.push(value)}),p=defaultParams(weather),instance=weather.create({width:32,height:20,params:p});
-  const before=JSON.stringify(instance.state);instance.update({...p,view:"cloudWater",inspectLayer:"far"});assert.equal(JSON.stringify(instance.state),before);instance.update(p);ui.update(p,instance);assert.equal(JSON.stringify(instance.state),before);assert.ok(painted>=43);
+  const before=JSON.stringify(instance.state);instance.update({...p,view:"cloudWater",inspectLayer:"far"});assert.equal(JSON.stringify(instance.state),before);instance.update(p);ui.update(p,instance);assert.equal(JSON.stringify(instance.state),before);assert.equal(painted,15);
   doc.getElementById("inspect-far-cloudWater").fire("click");assert.deepEqual(selections.at(-1),{view:"cloudWater",inspectLayer:"far"});
   ui.update({...p,view:"cloudWater",inspectLayer:"far"},instance);assert.match(doc.getElementById("inspection-caption").textContent,/far.*Cloud water/);
+  assert.ok(nodes.every(n=>n.type&&n.inputs&&n.rule));
+  assert.match(doc.getElementById("inspection-caption").textContent,/Type: Scalar field.*Inputs:.*Rule:/);
+  const near=doc.getElementById("inspect-layer-near"),far=doc.getElementById("inspect-layer-far");
+  const paintedBefore=painted;near.open=false;far.open=true;far.fire("toggle");assert.equal(painted-paintedBefore,15);
   const buttons=descendants(root).filter(n=>n.tagName==="BUTTON");assert.ok(buttons.every(b=>b.title));buttons.find(b=>b.textContent==="Composition").fire("click");
   doc.getElementById("inspect-pass-2").fire("click");assert.deepEqual(selections.at(-1),{view:"pass-2"});
   const count=painted;root.open=false;stepWeather(instance.state,.1,p);ui.update(p,instance);assert.equal(painted,count);instance.dispose();

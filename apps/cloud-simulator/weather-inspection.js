@@ -22,6 +22,25 @@ export const nodes=[
   {id:"terrain",label:"Terrain + props",description:"This depth’s projected ground and fixed tree/rock silhouettes, shown without atmospheric color."},
   {id:"groundLight",label:"Ground light / shadows",description:"Actual local contact-light pool after prop shadowing, on black. Only a ground flash activates it; cloud flashes leave it black."}
 ];
+// Types describe source data, rather than the RGB colors used to visualize it.
+const contracts={
+ bitmap:["Scalar field · 0–1","Fixed grayscale bitmap; altitude; wind offset; layer seed","Wrap horizontal bitmap coordinate; sample alpha at projected altitude. Outside bitmap height → 0."],
+ reveal:["Scalar field · evolving noise","3D Perlin noise n; wind offset; evolution time","reveal = 0.45 + 0.8 × n. Preview divides by 1.25 for display."],
+ humidity:["Scalar field · diagnostic","Same Perlin sample n as reveal","humidity = 0.55 + 0.6 × n. Recomputed each supplier tick; no outgoing coupling yet."],
+ cloudWater:["Scalar field · normalized water","Bitmap B; Perlin n; altitude band G; reveal R; coverage; textureMix","q = max(0, coverage × (textureMix × B + (1 − textureMix) × max(0, (n − 0.38) × 3) × G) × R). G is the altitude envelope."],
+ opacity:["Scalar field · 0–1 opacity","Cloud water q; cloudOpacity","alpha = 1 − exp(−cloudOpacity × q). Derived at render time."],
+ mask:["Boolean field · cloud / clear","Cloud water; cloudSharpness; cloudOpacity; band threshold","Sharpen density, then compare cloudOpacity × sharpened density ≥ threshold. Middle band shown: 0.5; other bands: 1 and 0.25."],
+ cloudColor:["RGB color field · linear light","Cloud opacity; atmospheric direct light/transmission; sky; farther visibility","Multiply cloud lighting by opacity; direct light is weighted by farther-layer visibility. Tone map for display; own silhouette does not shade its cloud body."],
+ visibility:["Scalar field · 0–1 light coverage","Threshold mask; sun position; band radius; edgeFeather","Build sun visibility polygon through the thresholded cloud edges; feather cloud-facing caps. Camera-plane middle band shown; ray sides remain crisp."],
+ rain:["Scalar field · normalized rain","Previous rain above; cloud water q; rainAmount","Every 0.1 s: rain = clamp(0.94 × rainAbove + max(0, q − 0.65) × rainAmount × 0.25, 0, 1). Top boundary has no incoming rain."],
+ shafts:["RGB color field · linear light","Same/farther visibility bands; atmospheric sun color; haze; shaftStrength","Intersect visibility from this depth outward; weight three bands and blend their colored light contributions. Tone map for display."],
+ charge:["Signed scalar field · 12×6","Previous charge; stochastic increments; storminess; chargeBias","Existing lightning dynamics drift/diffuse charge and discharge excessive gradients into channels. Independent of cloud water; red/blue display opposite signs."],
+ lightning:["RGB color field · channel raster","Charge gradients; channel geometry; strike age; terrain contact","Rasterize current channel core and glow using strike timing. No visible strike → black; tone map the light contribution."],
+ terrain:["Geometry + boolean silhouette raster","Layer distance; fixed ridge; seeded trees/rocks","Project the ridge and rasterize props. Preview uses neutral colors; terrain supplies contact geometry and shadow occluders."],
+ groundLight:["RGB color field · local illumination","Ground-contact flash; terrain; trees/rocks","pool = flashPower × max(0, 1 − distance / radius)² × propShadow. Only below terrain and during ground flashes; tone map for display."]
+};
+for(const node of nodes){const [type,inputs,rule]=contracts[node.id];Object.assign(node,{type,inputs,rule});}
+export function describeNode(node){return `${node.description} Type: ${node.type}. Inputs: ${node.inputs}. Rule: ${node.rule}`;}
 export const passes=renderOrder.map((id,index)=>({id,index,label:["Sky","+ Light veils","+ Far depth","+ Middle depth","+ Near depth","+ Terrain props"][index],view:index===5?"scene":`pass-${index}`}));
 export function graphEdges(){
   const edges=[];
