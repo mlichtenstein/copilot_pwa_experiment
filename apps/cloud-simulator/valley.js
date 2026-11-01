@@ -5,5 +5,5 @@
 import { valley } from "./valley-experiment.js";
 import { mountExperiment } from "./core/host.js";
 
-// Starts paused, as before; Play wind runs the shared clock.
+// Starts paused, as before; the common panel's Play runs the shared clock.
 export const page = mountExperiment(valley);

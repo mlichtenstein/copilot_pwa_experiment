@@ -21,7 +21,6 @@ export const horizon = {
   sun: true,
   // A frame takes tens of milliseconds, so redraw five times a second while the sun moves.
   frameInterval: 200,
-  playLabels: ["Play sunset", "Pause sunset"],
   params: [
     slider("cloudAltitude", 0.3, 8, 0.1, "Central altitude of the cloud layers above sea level, km."),
     slider("altitudeSpread", 0, 5, 0.1, "Vertical separation of cloud centers and thickness of their bitmap bands, km."),

@@ -13,18 +13,29 @@
  *   app           rating bar app id, e.g. "cloud-simulator/sunset"
  *   width, height native pixel grid (a "size" param can offer others)
  *   sun           true if it follows the shared sun path (core/sun-path.js); the host then
- *                 adds the sunPhase and sunPath* sliders and the Play sun / Reset sun buttons
+ *                 adds the Sun group (Reset sun, sunPhase and the sunPath* sliders) to the
+ *                 common panel
  *   frameInterval fewest milliseconds between redraws while playing (0 = every frame)
  *   params        the controls, in display order (see PARAM_KINDS)
  *   create({ width, height, params, doc }) → instance
+ * The common panel: the host, not the experiment, builds the controls every page shares, in
+ * one order with one set of labels, tooltips and texts: Play/Pause and Step (the one shared
+ * clock), Randomize, Drift, Drift speed, then New seed (only with `seed`) and the Sun group
+ * (only with `sun`). An experiment declares capabilities; it never builds these itself.
+ * Its own controls go in a section below, under its title.
  * Optional capabilities (each generic; an experiment uses only what it needs):
  *   autoplay      start playing on load (unless the reader prefers reduced motion)
- *   playLabels    [play, pause] button text, e.g. ["Play wind", "Pause wind"]
+ *   seed          the key of the seed param the common New seed button changes (random, or
+ *                 that param's next(value)); without it the panel has no New seed
+ *   stepSeconds   clock seconds one Step advances (a number, or (params) => number): one
+ *                 simulation tick; default 1
  *   drift         false to leave out the shared Drift checkbox, its speed slider and Randomize.
  *                 Every experiment with driftableParams gets them otherwise (../../shared/drift.js);
  *                 they are saved as `drift` and `driftSpeed`
- *   actions       extra buttons, [{ id, label, title, run(page) }] (Step, …); page is
- *                 { instance, params, setPlaying, resetToDefaults({ keep }), redraw }
+ *   actions       buttons only this experiment has, shown in its own section with their help
+ *                 text beside them: [{ id, label, title, help?, run(page) }]; page is
+ *                 { instance, params, setPlaying, setParams(partial), resetToDefaults({ keep }), redraw }
+ *   migrate(raw) → raw   turn an older saved shape (ratings, ?p= links) into flat params
  *   readouts      { elementId: (params, frame, instance) => text } filled on each redraw
  *                 (legends, status lines)
  *   adjust(next, previous) → params   link params, e.g. a resolution switch sets pixelArt
@@ -55,18 +66,21 @@
 // toggle: { default: true | false }                  a checkbox
 // seed:   { default, newLabel, newTitle, random?, next?(value), buttonsIn? }
 //         integer 0 … 2³² − 1 with a "new" button: random (or next(value)); random: true also
-//         starts each page load on a random seed; buttonsIn names the element (by id) the
-//         "new" button goes in instead of the playback row
+//         starts each page load on a random seed. The experiment's main seed (its `seed`
+//         capability) uses the common panel's New seed instead; any other seed gets its own
+//         button (newLabel) in the experiment's section, or in the element buttonsIn names
 // size:   { key: "resolution", options: [["WxH", label], …], default }   grid size radios;
 //         switching rebuilds the instance at that size
 export const PARAM_KINDS = ["range", "select", "toggle", "seed", "size"];
 export const SEED_MAX = 4294967295;
 // Saved by the host itself: the sun's place on the shared path and the path's four shape
 // settings (core/sun-path.js), the grid size (unless a size param owns it) and Drift.
-export const RESERVED_KEYS = ["sunPhase", "sunPathWidth", "sunPathHeight", "sunPathX", "sunPathY", "resolution", "drift"];
+export const RESERVED_KEYS = ["sunPhase", "sunPathWidth", "sunPathHeight", "sunPathX", "sunPathY", "resolution", "drift", "driftSpeed"];
 const SIZE = /^(\d+)x(\d+)$/;
 export const parseSize = value => { const match = SIZE.exec(value); return match ? { width: Number(match[1]), height: Number(match[2]) } : null; };
 
+// Element ids of the common panel's controls (core/host.js); experiments cannot reuse them.
+export const COMMON_IDS = ["play", "step", "randomize", "drift", "drift-speed", "new-seed", "reset-sun", "sunPhase", "sunPathWidth", "sunPathHeight", "sunPathX", "sunPathY"];
 const INSTANCE_METHODS = ["update", "step", "render", "dispose"];
 
 // Throws with every problem in an experiment's description, so a bad module fails loudly.
@@ -101,10 +115,16 @@ export function validateExperiment(experiment) {
   if (experiment?.params?.filter?.(param => param?.kind === "size").length > 1) problems.push("at most one size param");
   for (const field of ["adjust", "decorate", "stats"]) if (experiment?.[field] !== undefined && typeof experiment[field] !== "function") problems.push(`${field} must be a function`);
   for (const field of ["autoplay", "drift"]) if (experiment?.[field] !== undefined && typeof experiment[field] !== "boolean") problems.push(`${field} must be true or false`);
-  if (experiment?.playLabels !== undefined && !(Array.isArray(experiment.playLabels) && experiment.playLabels.length === 2)) problems.push("playLabels must be [play, pause]");
+  // Play is common: one label everywhere, so experiments cannot rename it.
+  if (experiment?.playLabels !== undefined) problems.push("playLabels is not supported: Play/Pause is the same on every page");
+  if (experiment?.seed !== undefined && !experiment?.params?.some?.(param => param?.kind === "seed" && param.key === experiment.seed)) problems.push(`seed must name a seed param`);
+  // Another seed's button is "new-<key>": a seed keyed "seed" would take the common New seed's id.
+  if (experiment?.params?.some?.(param => param?.kind === "seed" && param.key === "seed" && experiment.seed !== "seed")) problems.push(`a seed keyed "seed" must be the experiment's seed (its button is the common New seed)`);
+  if (experiment?.stepSeconds !== undefined && typeof experiment.stepSeconds !== "function" && !(experiment.stepSeconds > 0)) problems.push("stepSeconds must be a positive number or a function");
+  if (experiment?.migrate !== undefined && typeof experiment.migrate !== "function") problems.push("migrate must be a function");
   for (const action of experiment?.actions ?? []) {
     if (typeof action?.id !== "string" || !action.id || typeof action.label !== "string" || typeof action.run !== "function") problems.push("every action needs an id, a label and run");
-    else if (["play", "drift", ...(experiment.sun ? ["reset"] : [])].includes(action.id) || action.id.startsWith("new-")) problems.push(`action id ${action.id} is reserved for the host`);
+    else if (COMMON_IDS.includes(action.id) || action.id.startsWith("new-")) problems.push(`action id ${action.id} is reserved for the common panel`);
   }
   for (const [id, readout] of Object.entries(experiment?.readouts ?? {})) if (typeof readout !== "function") problems.push(`readout ${id} must be a function`);
   if (!Array.isArray(experiment?.params)) problems.push("params must be an array");

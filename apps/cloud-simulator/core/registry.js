@@ -13,7 +13,8 @@ export const experiments = [
   { id: "shafts", title: "Light shafts", href: "shafts.html", load: () => import("../shafts-experiment.js").then(module => module.shafts) },
   { id: "noise", title: "Noise weather", href: "noise.html", load: () => import("../noise-experiment.js").then(module => module.noise) },
   { id: "convection", title: "Convection study", href: "convection.html", load: () => import("../convection-experiment.js").then(module => module.convection) },
-  { id: "valley", title: "Valley textures", href: "valley.html", load: () => import("../valley-experiment.js").then(module => module.valley) }
+  { id: "valley", title: "Valley textures", href: "valley.html", load: () => import("../valley-experiment.js").then(module => module.valley) },
+  { id: "lightning", title: "Lightning", href: "lightning.html", load: () => import("../lightning-experiment.js").then(module => module.lightning) }
 ];
 
 export const findExperiment = id => experiments.find(entry => entry.id === id) ?? null;

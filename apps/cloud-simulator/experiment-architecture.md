@@ -1,5 +1,5 @@
 <!-- Purpose: Define the next-round experiment contract and its first test case.
-     Consumers: experiment authors and reviewers. Dependencies: experiment-session.js, experiment-host.js and lightning-model.js. -->
+     Consumers: experiment authors and reviewers. Dependencies: experiment-session.js, lightning-experiment.js, core/host.js and lightning-model.js. -->
 # A scene module and a browser host
 
 The first library explored effects with independent page controllers. Round two tests a small module contract, beginning with Lightning. This is separate from #68's integration/player work: existing experiments are not migrated in this PR.
@@ -8,8 +8,8 @@ The first library explored effects with independent page controllers. Round two 
 
 1. **State describes the scene now.** Store geometry, phase, clock and random-generator state as plain JSON data. No DOM, canvas or hidden random globals belong in it. Seed plus the same steps/settings yields the same sequence; a serialized state can continue exactly.
 2. **Dynamics change state; rendering reads it.** A scene's fixed-step rule mutates only its own state. Rendering returns pixels without moving the simulation or consuming randomness. Illumination parameters can redraw an unchanged channel.
-3. **Parameter metadata is canonical.** Each parameter declares key/default/min/max/step/description once. The session normalizes inputs, the host generates controls, and presets share the same values. A parameter change affects subsequent steps/redraws; Reset rebuilds the current internal seed and selected starting mode with default parameters. Numeric seeds are not UI controls; fresh setups choose random internal seeds.
-4. **The host owns time and presentation.** One generic host handles play/step/reset, seeds, frame scheduling, visibility changes, parameter controls, rating/preset hooks and canvas fitting. It has no conditional logic for a particular weather effect. Catch-up is capped at 250 ms; background time is discarded.
+3. **Parameter metadata is canonical.** Each parameter declares key/default/min/max/step/description once. The session normalizes inputs, the host generates controls, and presets share the same values. A parameter change affects subsequent steps/redraws. (The old host's Reset, default parameters on the same seed, is replaced by the common Randomize.) Numeric seeds are not UI controls; fresh setups choose random internal seeds.
+4. **The host owns time and presentation.** One generic host (now the shared `core/host.js`) handles play/step, Randomize and Drift, seeds, frame scheduling, visibility changes, parameter controls, rating/preset hooks and canvas fitting. It has no conditional logic for a particular weather effect. Catch-up is capped at 250 ms; background time is discarded.
 5. **Resolution and cost are explicit.** Each scene declares native width/height and dt. Display enlargement does not change simulation stepping. The host reports render milliseconds. Separate CPU/GPU timing and multiple resolutions remain future experiments, not abstractions invented ahead of evidence.
 
 ## Contract
@@ -21,12 +21,12 @@ The first library explored effects with independent page controllers. Round two 
 | `create({seed, params, start}) → state` | Reproducible JSON-serializable initial scene |
 | `step(state, dt, params)` | Advance scene dynamics; no DOM or rendering |
 | `render(state, params) → Uint8ClampedArray` | Read-only RGBA, exactly width × height × 4 bytes |
-| `starts[]`, `defaultStart` (optional) | Named paused starting points; the host generates fresh-setup buttons from their labels/descriptions |
+| `starts[]`, `defaultStart` (optional) | Named paused starting points; lightning-experiment.js turns them into buttons in the experiment's own section, each preparing a fresh setup on a new seed |
 | `actions[]` (optional) | Named scene commands; description, `run(state,params)` and optional explicit playback on click |
 
-`experiment-session.js` is a DOM-free coordinator. `experiment-host.js` is the browser adapter. `lightning.js` only chooses the scene and mounts it. Another effect can use the same host with a different module; session/host tests include a tiny counter-field scene with another resolution, schema and action. This tests decoupling, not broad physics reuse.
+`experiment-session.js` is a DOM-free coordinator. Lightning first had its own browser host (`experiment-host.js`); it now runs on the shared core host (`core/host.js`) like every other experiment, so it gets the common panel (Play, Step, Randomize, Drift, New seed), the rating bar and `?p=` links. `lightning-experiment.js` is the adapter: it turns `parameters[]` into core range params, keeps the seed and starting mode as hidden params, maps `starts[]` to the experiment's own buttons, drives the session from the shared clock (Play advances it in fixed `dt` steps; Step is one step) and converts old `{version: 1, seed, params, start}` ratings and links (`migrate`). `lightning.js` only mounts it. Session tests include a tiny counter-field scene with another resolution, schema and action. This tests decoupling, not broad physics reuse.
 
-The session's `getParams`/`applyParams` powers the existing shared rating bar and `?p=` links. Presets store version, internal seed, parameters and starting mode and restart that mode; they do not capture the exact current animation frame. Full-state continuation is verified at model level but has no save/load UI yet. Rating backend availability is independent of scene playback.
+Ratings and `?p=` links now store the core host's flat params (the ten sliders, `seed`, `start`, Drift); the session's `getParams`/`applyParams` shape (`{version: 1, seed, params, start}`) is still accepted when loading. Presets store the internal seed, parameters and starting mode and restart that mode; they do not capture the exact current animation frame. Full-state continuation is verified at model level but has no save/load UI yet. Rating backend availability is independent of scene playback.
 
 ## Lightning: first pressure test
 

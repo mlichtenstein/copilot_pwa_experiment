@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { mountExperiment, DEFAULT_SUN_PHASE } from "./host.js";
 import { DEFAULT_SUN_SHAPE, SUN_PATH, SUN_PATH_KEYS, sunAt, sunAtPhase, timeForPhase } from "./sun-path.js";
 import { sunset } from "../sunset-experiment.js";
-import { fakeDocument } from "./fake-dom.js";
+import { fakeDocument, controlIds } from "./fake-dom.js";
 
 test("Sunset on the host: generated controls, shared sun playback, pause, reset and params round-trip", () => {
   const doc = fakeDocument(["sky", "playback", "controls", "stats", "status"]);
@@ -20,11 +20,13 @@ test("Sunset on the host: generated controls, shared sun playback, pause, reset 
   const frame = (dt = 16) => { stamp += dt; callback(stamp); };
   const $ = id => doc.getElementById(id);
 
-  // Controls: View first, then the seed, the shared sun, and the lighting sliders, with tooltips on buttons.
-  assert.deepEqual($("controls").children.map(label => label.children.find(child => ["INPUT", "SELECT", "BUTTON"].includes(child.tagName))?.id),
-    ["drift", "drift-speed", "randomize", "view", "seed", "sunPhase", ...SUN_PATH_KEYS, "extinction", "slabDepth", "albedo", "g", "airOpticalDepth", "ambient", "exposure"]);
-  assert.deepEqual($("playback").children.map(button => button.textContent), ["Play sun", "Reset sun", "New density seed"]);
-  assert.ok($("playback").children.every(button => button.title));
+  // The common panel: Play/Step, Randomize, Drift, Drift speed, New seed (Sunset declares its
+  // seed) and the Sun group. Below, under its heading: View, the seed and the lighting sliders.
+  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "drift", "drift-speed", "new-seed", "reset-sun", "sunPhase", ...SUN_PATH_KEYS]);
+  assert.deepEqual(["play", "step", "randomize", "new-seed", "reset-sun"].map(id => $(id).textContent), ["Play", "Step", "Randomize", "New seed", "Reset sun"]);
+  assert.ok(["play", "step", "randomize", "new-seed", "reset-sun"].every(id => $(id).title));
+  assert.equal($("controls").children[0].textContent, "Sunset study settings");
+  assert.deepEqual(controlIds($("controls")), ["view", "seed", "extinction", "slabDepth", "albedo", "g", "airOpticalDepth", "ambient", "exposure"]);
 
   frame(); const initial = pixels;
   assert.ok(initial.length === 32 * 20 * 4);
@@ -36,7 +38,7 @@ test("Sunset on the host: generated controls, shared sun playback, pause, reset 
   assert.equal(page.getParams().extinction, 0.3);
 
   // Play runs the clock; the sun moves along the shared path.
-  $("play").fire("click"); assert.equal($("play").textContent, "Pause sun");
+  $("play").fire("click"); assert.equal($("play").textContent, "Pause");
   const before = page.clock.time;
   for (let i = 0; i < 10; i++) frame(100);
   assert.ok(Math.abs(page.clock.time - before - 1) < 1e-9);
@@ -45,14 +47,14 @@ test("Sunset on the host: generated controls, shared sun playback, pause, reset 
 
   // Moving the sun by hand stops it there.
   $("sunPhase").value = "0.6"; $("sunPhase").fire("input");
-  assert.equal($("play").textContent, "Play sun");
+  assert.equal($("play").textContent, "Play");
   frame(500); frame(500);
   assert.ok(Math.abs(page.getParams().sunPhase - 0.6) < 1e-9);
 
   // The shared path's shape settings move the sun without starting or stopping it.
   $("sunPathY").value = "-3"; $("sunPathY").fire("input"); $("sunPathHeight").value = "10"; $("sunPathHeight").fire("input"); frame();
   const moved = sunAtPhase(0.6, { ...DEFAULT_SUN_SHAPE, sunPathY: -3, sunPathHeight: 10 });
-  assert.equal($("play").textContent, "Play sun");
+  assert.equal($("play").textContent, "Play");
   assert.match($("stats").textContent, new RegExp(`sun ${moved.azimuth.toFixed(0)}° across, ${moved.elevation.toFixed(1).replace(".", "\\.")}° up$`));
   assert.equal(page.getParams().sunPathY, -3);
 
@@ -78,7 +80,7 @@ test("Sunset on the host: generated controls, shared sun playback, pause, reset 
   assert.equal("sunSpeed" in page.getParams(), false);
 
   // Reset sun returns to the starting point, paused; defaults reproduce the first picture.
-  $("play").fire("click"); frame(100); $("reset").fire("click"); frame();
+  $("play").fire("click"); frame(100); $("reset-sun").fire("click"); frame();
   assert.equal(page.clock.playing, false);
   assert.equal(page.clock.time, timeForPhase(DEFAULT_SUN_PHASE));
   page.applyParams({ sunPhase: DEFAULT_SUN_PHASE }); frame();

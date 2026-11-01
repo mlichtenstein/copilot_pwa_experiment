@@ -8,7 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { convection } from "./convection-experiment.js";
 import { mountExperiment } from "./core/host.js";
-import { fakeDocument, fakeCanvas, manualFrames } from "./core/fake-dom.js";
+import { fakeDocument, fakeCanvas, manualFrames, controlIds } from "./core/fake-dom.js";
 
 // Fake radios are not exclusive, so pick one by hand the way a browser would.
 const pick = (doc, name, value) => {
@@ -22,7 +22,7 @@ test("Convection study: layout, playback, options, resolution, restarts and save
   const page = mountExperiment(convection, { doc, raf, presets: false, serviceWorker: null, playing: true });
   const tick = () => Number(/^Tick (\d+)/.exec($("stats").textContent)[1]);
   frame();
-  assert.deepEqual($("playback").children.map(node => node.textContent), ["Pause", "Step", "New seed"]);
+  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "drift", "drift-speed", "new-seed"]); assert.equal($("play").textContent, "Pause");
   const legends = $("controls").children.filter(node => node.tagName === "FIELDSET").map(node => node.children[0].textContent);
   assert.deepEqual(legends, ["Options · part of the run’s parameters", "Starting fields · changing these resets the run"]);
   assert.equal($("controls").children.at(-1).tagName, "FIELDSET", "water sits last, after the rule sliders");

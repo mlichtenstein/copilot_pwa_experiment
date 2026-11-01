@@ -2,13 +2,18 @@
  * Purpose: Turn an experiment module (core/experiment.js contract) into a working page: build
  *   its controls from the params schema, run the one shared loop and clock, move the shared
  *   sun, draw to the canvas, and wire the emoji rating bar and ?p= links through generic
- *   getParams/applyParams. Optional capabilities (autoplay, Drift, actions, readouts, a
- *   grid-size switch, linked params, custom decorations, async loading) are all generic.
+ *   getParams/applyParams. It alone builds the common panel, identical on every page (Play/
+ *   Pause and Step, Randomize, Drift, Drift speed, then New seed with `seed` and the Sun group
+ *   with `sun`), and below it the experiment's own section under its title. Optional
+ *   capabilities (autoplay, Drift, seed, stepSeconds, actions, migrate, readouts, a grid-size
+ *   switch, linked params, custom decorations, async loading) are all generic.
  * Consumers: every experiment page script (../sunset.js, ../convection.js, ../horizon.js,
- *   ../shafts.js, ../noise.js, ../valley.js); host.test.js and the per-experiment UI tests.
+ *   ../shafts.js, ../noise.js, ../valley.js, ../lightning.js); the core tests (common-panel.test.js
+ *   among them) and the per-experiment UI tests.
  * Dependencies: experiment.js, clock.js, sun-path.js, ../../shared/presets-panel.js,
  *   ../../shared/drift.js; the page's DOM contract: <canvas id="sky">, and empty containers
- *   #presets (rating bar), #playback (buttons), #stats, #controls (generated controls) and
+ *   #presets (rating bar), #playback (the common panel), #stats (moved under the experiment's
+ *   heading), #controls (the experiment's own section) and
  *   #status, plus any element an experiment's readouts name; Canvas 2D,
  *   requestAnimationFrame and optionally matchMedia and the service worker API.
  */
@@ -27,6 +32,24 @@ const make = (doc, tag, props = {}, ...children) => {
   node.append(...children);
   return node;
 };
+// The common panel's words: one set for every page (see the panel below).
+export const PANEL_TEXT = {
+  play: "Play",
+  playTitle: "Start or stop this page's one shared clock",
+  stepTitle: "Pause, then move the clock on by one step",
+  playNote: "Play runs this page's one clock: the sun, wind, simulation and Drift all move with it. Step pauses and moves it on one step (one simulation tick, or one second).",
+  randomizeTitle: "Set every slider Drift moves to a random value in its range",
+  randomizeNote: "Every slider Drift moves jumps to a random value in its range. Greyed-out sliders, playback speeds, seeds, menus, toggles and the sun stay.",
+  driftTitle: "Slowly wander the sliders on a random walk across their whole range while playing",
+  driftNote: "While playing, the experiment's sliders wander slowly, anywhere in their range; drag one to steer it. Greyed-out sliders, playback speeds, seeds, menus, toggles and the sun stay put.",
+  speedTitle: "How fast Drift moves the sliders: 0.1× to 10× (log scale), 1× in the middle",
+  speedNote: "Scales each drift step; 1× crosses a slider's range in about 7 minutes, 10× in seconds, 0.1× in hours.",
+  newSeedTitle: "Pick a new seed for this experiment's randomness",
+  newSeedNote: "A new seed for the experiment's randomness (cloud layout, noise, run or strike); your slider settings stay.",
+  resetSunTitle: "Stop the sun and put it back at its starting point on the path (the path's shape stays)",
+  resetSunNote: "Stops the sun and puts it back at its starting point; the path's shape stays."
+};
+
 const randomSeed = () => globalThis.crypto.getRandomValues(new Uint32Array(1))[0];
 const finite = value => typeof value === "number" && Number.isFinite(value);
 
@@ -160,28 +183,45 @@ export function mountExperiment(experiment, {
     for (const param of experiment.params) if (param.enabled && controls.has(param.key)) controls.get(param.key).setDisabled(!param.enabled(params));
   };
 
-  // Playback: Play/Pause runs the shared clock (the sun, and any simulation); Reset sun.
-  const playback = element("playback");
-  const [playLabel, pauseLabel] = experiment.playLabels ?? (experiment.sun ? ["Play sun", "Pause sun"] : ["Play", "Pause"]);
-  const play = make(doc, "button", { id: "play", type: "button", title: experiment.sun
-    ? "Start or stop the shared clock that moves the sun along its vertical figure-eight path"
-    : "Start or stop the simulation clock" });
-  lockable.push(play);
+  // The common panel (#playback): the controls every experiment shares, built here and only
+  // here, in one order with the same labels, tooltips and explanatory texts on every page.
+  // Items every page has come first, so they never move; capability items follow: New seed
+  // (experiment.seed), then the Sun group (experiment.sun). Each button's or slider's text
+  // sits beside it. The experiment's own controls follow in a section under its title.
+  const commonPanel = element("playback");
+  commonPanel.className = "common-panel";
+  commonPanel.setAttribute("role", "group"); commonPanel.setAttribute("aria-label", "Common controls");
+  const note = text => make(doc, "small", { textContent: text });
+  const row = (className, ...children) => make(doc, "div", { className: `panel-row ${className}` }, ...children);
+  const button = (id, textContent, title) => make(doc, "button", { id, type: "button", textContent, title });
+  commonPanel.append(make(doc, "h2", { className: "panel-heading", textContent: "Common controls" }));
+
+  // 1. Play/Pause and Step: the one shared clock that moves everything time-based on the
+  // page (the sun, wind, any simulation and Drift).
+  const play = button("play", PANEL_TEXT.play, PANEL_TEXT.playTitle);
+  const step = button("step", "Step", PANEL_TEXT.stepTitle);
+  lockable.push(play, step);
   function setPlaying(value) {
     clock.play(value);
-    play.textContent = value ? pauseLabel : playLabel;
+    play.textContent = value ? "Pause" : PANEL_TEXT.play;
     play.setAttribute("aria-pressed", String(value));
   }
   play.addEventListener("click", () => setPlaying(!clock.playing));
-  playback.append(play);
-  if (experiment.sun) {
-    const reset = make(doc, "button", { id: "reset", type: "button", textContent: "Reset sun", title: "Stop the sun and put it back at its starting point on the path (the path's shape stays)" });
-    reset.addEventListener("click", () => { setPlaying(false); clock.set(timeForPhase(DEFAULT_SUN_PHASE)); dirty = true; });
-    playback.append(reset);
-  }
+  // Step pauses, then moves the clock on by one step (experiment.stepSeconds: one simulation
+  // tick, or one second). Drift waits for Play.
+  step.addEventListener("click", () => {
+    setPlaying(false);
+    const seconds = typeof experiment.stepSeconds === "function" ? experiment.stepSeconds(params) : experiment.stepSeconds ?? 1;
+    clock.set(clock.time + seconds);
+    instance.step(seconds, frameInfo());
+    dirty = true;
+  });
+  commonPanel.append(row("play-row", play, step, note(PANEL_TEXT.playNote)));
+
   // What an action may do with the page.
   const actionPage = () => ({
     instance, params, setPlaying, redraw: () => { dirty = true; },
+    setParams: partial => setParams({ ...params, ...partial }),
     // Everything back to its defaults (fresh random seeds, the sun back at its start and its
     // path at the default shape), except the keys in `keep`.
     resetToDefaults({ keep = [] } = {}) {
@@ -193,47 +233,36 @@ export function mountExperiment(experiment, {
       setParams({ ...freshDefaults(), ...kept });
     }
   });
-  for (const action of experiment.actions ?? []) {
-    const button = make(doc, "button", { id: action.id, type: "button", textContent: action.label, title: action.title ?? action.label });
-    button.addEventListener("click", () => { action.run(actionPage()); dirty = true; });
-    lockable.push(button);
-    playback.append(button);
-  }
 
-  // Generated controls, in schema order. When the experiment has a sun, the shared sun
-  // position and path shape go just before its first slider, where each study used to keep
-  // its own sun sliders. Params with a group share a fieldset with that legend.
+  // The experiment's own section: its title, its stats line, its unique buttons (each with
+  // its help beside it), then its generated controls in schema order. Params with a group
+  // share a fieldset with that legend.
   const panel = element("controls");
-  const sunControl = experiment.sun ? buildControl(doc, { key: "sunPhase", kind: "range", min: 0, max: 1, step: 0.001,
-    help: "Sun position on the shared vertical figure-eight path (0 to 1), the same in every experiment with a sun. Moving it stops the sun." }, sunPhase(clock.time)) : null;
-  if (sunControl) {
-    sunControl.input.step = "any";
-    sunControl.listen(() => { setPlaying(false); clock.set(timeForPhase(Number(sunControl.read()))); dirty = true; });
+  const ownHead = [make(doc, "h2", { className: "experiment-heading", textContent: `${experiment.title} settings` })];
+  const statsLine = element("stats");
+  if (statsLine) ownHead.push(statsLine);
+  const ownButtons = [];
+  for (const action of experiment.actions ?? []) {
+    const actionButton = button(action.id, action.label, action.title ?? action.label);
+    actionButton.addEventListener("click", () => { action.run(actionPage()); dirty = true; });
+    lockable.push(actionButton);
+    ownButtons.push(row("own-action", actionButton, ...(action.help ? [note(action.help)] : [])));
   }
-  // The path's size and position follow the sun slider; they do not stop the sun.
-  const sunShapeControls = experiment.sun ? SUN_PATH_PARAMS.map(param => {
-    const control = buildControl(doc, param, sunShape[param.key]);
-    control.listen(() => { sunShape = { ...sunShape, [param.key]: cleanParam(param, control.read()) }; dirty = true; });
-    controls.set(param.key, control);
-    return control;
-  }) : [];
-  const placeSun = () => panel.append(sunControl.element, ...sunShapeControls.map(control => control.element));
   const groups = new Map();
   const container = param => {
     if (!param.group) return panel;
     if (!groups.has(param.group)) {
       // A group with a note (groupNotes) gets a bold title: "<b>Cloud layer</b> · note".
-      const note = experiment.groupNotes?.[param.group];
-      const legend = note === undefined ? make(doc, "legend", { textContent: param.group })
-        : make(doc, "legend", {}, make(doc, "b", { textContent: param.group }), ...(note ? [` · ${note}`] : []));
+      const groupNote = experiment.groupNotes?.[param.group];
+      const legend = groupNote === undefined ? make(doc, "legend", { textContent: param.group })
+        : make(doc, "legend", {}, make(doc, "b", { textContent: param.group }), ...(groupNote ? [` · ${groupNote}`] : []));
       const fieldset = make(doc, "fieldset", {}, legend);
       groups.set(param.group, fieldset); panel.append(fieldset);
     }
     return groups.get(param.group);
   };
-  const seedButtons = [];
+  let newSeed = null;
   for (const param of experiment.params) {
-    if (sunControl && param.kind === "range" && !param.hidden && !sunControl.element.parentNode) placeSun();
     const control = param.hidden
       ? { read: () => params[param.key], write() {}, listen() {}, setDisabled() {} }
       : buildControl(doc, param, params[param.key]);
@@ -249,23 +278,27 @@ export function mountExperiment(experiment, {
     };
     control.listen(() => commit(control.read()));
     if (param.kind === "seed") {
-      const button = make(doc, "button", { id: "new-" + param.key, type: "button", textContent: param.newLabel ?? "New seed", title: param.newTitle ?? "Pick a random seed" });
-      button.addEventListener("click", () => commit(param.next ? param.next(params[param.key]) >>> 0 : randomSeed()));
-      lockable.push(button);
-      // The button joins the playback row, or the container the param names (buttonsIn).
-      const target = param.buttonsIn ? element(param.buttonsIn) : null;
-      if (target) target.append(button); else seedButtons.push(button);
+      const common = param.key === experiment.seed;
+      const seedButton = common ? button("new-seed", "New seed", PANEL_TEXT.newSeedTitle)
+        : button("new-" + param.key, param.newLabel ?? "New seed", param.newTitle ?? "Pick a random seed");
+      seedButton.addEventListener("click", () => commit(param.next ? param.next(params[param.key]) >>> 0 : randomSeed()));
+      lockable.push(seedButton);
+      if (common) newSeed = seedButton;
+      else {
+        // Other seeds are the experiment's own: its section, or the element buttonsIn names.
+        const target = param.buttonsIn ? element(param.buttonsIn) : null;
+        if (target) target.append(seedButton); else ownButtons.push(row("own-action", seedButton));
+      }
     }
   }
-  playback.append(...seedButtons);
-  if (sunControl && !sunControl.element.parentNode) placeSun();
+  panel.prepend(...ownHead, ...ownButtons);
 
-  // Drift (every experiment with a driftable slider, unless it sets drift: false): while
-  // playing, those sliders wander on their own slow random walk across their whole range (own
-  // random numbers, so simulation seeds are untouched). Dragging a slider takes it over;
-  // greyed-out sliders hold still. The walk moves by the clock time that passes, so it stops
-  // when paused. The checkbox, its speed slider and Randomize head the controls they move;
-  // drift changes redraw at the experiment's frame rate.
+  // 2–4. Randomize, Drift and Drift speed (every experiment with a driftable slider, unless
+  // it sets drift: false). While playing, those sliders wander on their own slow random walk
+  // across their whole range (own random numbers, so simulation seeds are untouched).
+  // Dragging a slider takes it over; greyed-out sliders hold still. The walk moves by the
+  // clock time that passes, so it stops when paused; drift changes redraw at the
+  // experiment's frame rate.
   const driftParams = experiment.drift === false ? [] : driftableParams(experiment);
   const driftSliders = driftParams.map(param => controls.get(param.key).input);
   let drift = null, driftBox = null, speedInput = null, speedOutput = null;
@@ -276,24 +309,17 @@ export function mountExperiment(experiment, {
     drift.walk.setSpeed(speed);
   };
   if (driftSliders.length) {
+    // Randomize: every slider Drift moves (not the sun, its path, seeds, menus, toggles or
+    // greyed-out sliders) to a uniformly random value in its range, from its own random numbers.
+    const randomize = button("randomize", "Randomize", PANEL_TEXT.randomizeTitle);
     driftBox = make(doc, "input", { id: "drift", type: "checkbox", checked: false });
-    const label = make(doc, "label", { className: "drift" }, driftBox, " Drift ",
-      make(doc, "small", { textContent: "While playing, every slider below wanders slowly on its own, anywhere in its range (across all of it in a few minutes at 1×); drag one to steer it."
-        + (experiment.sun ? " The sun and its path sliders stay put." : "") }));
-    label.title = "Slowly wander the sliders on a random walk across their whole range while playing";
+    const driftLabel = make(doc, "label", { className: "panel-row drift", title: PANEL_TEXT.driftTitle }, driftBox, " Drift ", note(PANEL_TEXT.driftNote));
     // Drift speed: a log slider from 0.1× to 10× the walk's step, 1× in the middle. It never
     // drifts or gets randomized itself; it stays live while Drift is off so it can be set first.
     speedInput = make(doc, "input", { id: "drift-speed", type: "range", min: "-1", max: "1", step: "0.05", value: "0" });
-    const speedLabel = make(doc, "label", { className: "drift drift-speed", title: "How fast Drift moves the sliders: 0.1× to 10× (log scale), 1× in the middle" },
-      "Drift speed ", speedInput, speedOutput = make(doc, "output", { textContent: "1.0×" }),
-      make(doc, "small", { textContent: "Scales each drift step; 1× crosses a slider's range in about 7 minutes, 10× in seconds, 0.1× in hours." }));
-    // Randomize: every slider Drift moves (not the sun, its path, seeds, menus, toggles or
-    // greyed-out sliders) to a uniformly random value in its range, from its own random numbers.
-    const randomize = make(doc, "button", { id: "randomize", type: "button", textContent: "Randomize",
-      title: "Set every slider Drift moves to a random value in its range (the sun, its path, seeds, menus, toggles and greyed-out sliders stay)" });
-    const randomizeLabel = make(doc, "div", { className: "drift randomize" }, randomize,
-      make(doc, "small", { textContent: "Every slider below that Drift moves jumps to a random value in its range; greyed-out ones stay." + (experiment.sun ? " The sun and its path stay put." : "") }));
-    panel.prepend(label, speedLabel, randomizeLabel);
+    const speedLabel = make(doc, "label", { className: "panel-row drift-speed", title: PANEL_TEXT.speedTitle },
+      "Drift speed ", speedInput, speedOutput = make(doc, "output", { textContent: "1.0×" }), note(PANEL_TEXT.speedNote));
+    commonPanel.append(row("randomize", randomize, note(PANEL_TEXT.randomizeNote)), driftLabel, speedLabel);
     lockable.push(randomize);
     let moved = null;
     drift = bindDrift(driftSliders, { seed: randomSeed(), onChange: slider => { (moved ??= {})[slider.id] = slider.value; } });
@@ -320,6 +346,29 @@ export function mountExperiment(experiment, {
       dirty = wasDirty;
       return true;
     };
+  }
+
+  // 5. New seed (experiment.seed): a new seed for the experiment's randomness.
+  if (newSeed) commonPanel.append(row("new-seed", newSeed, note(PANEL_TEXT.newSeedNote)));
+
+  // 6. The Sun group (experiment.sun): Reset sun, the sun's place on the shared path and the
+  // path's shape, the same in every experiment with a sun.
+  const sunControl = experiment.sun ? buildControl(doc, { key: "sunPhase", kind: "range", min: 0, max: 1, step: 0.001,
+    help: "Sun position on the shared vertical figure-eight path (0 to 1), the same in every experiment with a sun. Moving it stops the sun." }, sunPhase(clock.time)) : null;
+  if (sunControl) {
+    sunControl.input.step = "any";
+    sunControl.listen(() => { setPlaying(false); clock.set(timeForPhase(Number(sunControl.read()))); dirty = true; });
+    // The path's size and position follow the sun slider; they do not stop the sun.
+    const sunShapeControls = SUN_PATH_PARAMS.map(param => {
+      const control = buildControl(doc, param, sunShape[param.key]);
+      control.listen(() => { sunShape = { ...sunShape, [param.key]: cleanParam(param, control.read()) }; dirty = true; });
+      controls.set(param.key, control);
+      return control;
+    });
+    const resetSun = button("reset-sun", "Reset sun", PANEL_TEXT.resetSunTitle);
+    resetSun.addEventListener("click", () => { setPlaying(false); clock.set(timeForPhase(DEFAULT_SUN_PHASE)); dirty = true; });
+    commonPanel.append(make(doc, "fieldset", { className: "panel-sun" }, make(doc, "legend", { textContent: "Sun" }),
+      row("reset-sun", resetSun, note(PANEL_TEXT.resetSunNote)), sunControl.element, ...sunShapeControls.map(control => control.element)));
   }
 
   // The optional custom-control hook: pieces of page an experiment adds next to its
@@ -350,7 +399,10 @@ export function mountExperiment(experiment, {
     ...(driftBox ? { drift: driftBox.checked, driftSpeed: drift.walk.speed } : {})
   });
   function applyParams(raw) {
-    const source = raw && typeof raw === "object" ? raw : {};
+    const given = raw && typeof raw === "object" ? raw : {};
+    // An older saved shape (experiment.migrate) becomes flat params first.
+    const migrated = experiment.migrate ? experiment.migrate(given) : given;
+    const source = migrated && typeof migrated === "object" ? migrated : {};
     if (experiment.sun) {
       setPlaying(false);
       // Saved before the path had settings: the default shape. Saved with a fixed sun
