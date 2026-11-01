@@ -6,12 +6,12 @@
  *   (launch.js; a ?p= link wins) and presses Randomize for ?random=1 (🎲 Random). It alone builds the page header (core/header.js: title, tagline
  *   and the nav to every experiment, from the registry) and the common panel, identical on
  *   every page in compact rows (Play/Pause, Step, Randomize and, with `seed`, New seed; Drift
- *   and its speed; the time of day, inside the Sun group with `sun`, its path shape in a
- *   closed disclosure), and below it the experiment's own section under its title. After each
+ *   and its speed; with `weatherStates`, a button per named state to jump to; the time of
+ *   day, inside the Sun group with `sun`, its path shape in a closed disclosure), and below it the experiment's own section under its title. After each
  *   render it darkens the frame for night from the shared sun (core/daylight.js). Every description is hidden and shown on
  *   hold, hover or focus by the one core/hold-help.js mechanism. Optional
- *   capabilities (autoplay, Drift, seed, stepSeconds, actions, migrate, readouts, a grid-size
- *   switch, linked params, custom decorations, async loading) are all generic.
+ *   capabilities (autoplay, Drift, seed, stepSeconds, actions, weatherStates, migrate,
+ *   readouts, a grid-size switch, linked params, custom decorations, async loading) are all generic.
  * Consumers: every experiment page script (../sunset.js, ../convection.js, ../horizon.js,
  *   ../shafts.js, ../noise.js, ../valley.js, ../lightning.js); the core tests (common-panel.test.js
  *   among them) and the per-experiment UI tests.
@@ -24,7 +24,7 @@
  *   #status, plus any element an experiment's readouts name; Canvas 2D,
  *   requestAnimationFrame and optionally matchMedia and the service worker API.
  */
-import { validateExperiment, validateInstance, cleanParams, cleanParam, defaultParams, driftableParams, parseSize, randomParams, randomValue } from "./experiment.js";
+import { validateExperiment, validateInstance, cleanParams, cleanParam, defaultParams, driftableParams, parseSize, randomParams, randomValue, weatherStateParams } from "./experiment.js";
 import { createClock, startLoop } from "./clock.js";
 import { DEFAULT_SUN_SHAPE, LEGACY_SUN_SHAPE, SUN_PATH_PARAMS, clockText, nearestPhase, phaseForTimeOfDay, sunAt, sunPhase, timeForPhase, timeOfDay } from "./sun-path.js";
 import { NIGHT, applyNight, daylight } from "./daylight.js";
@@ -57,6 +57,7 @@ export const PANEL_TEXT = {
   newSeedNote: "A new seed for the experiment's randomness (cloud layout, noise, run or strike); your slider settings stay.",
   resetSunNote: "Stops the sun and puts it back at 09:00, its starting point on the path; the path's shape stays.",
   timeOfDayNote: "Time of day on the shared clock, 00:00 to 24:00: the sun is highest at noon and lowest at midnight, and a day takes 90 s of Play. Once the sun is below the horizon the page darkens to night (dim blue, not black). Moving it pauses the clock.",
+  weatherStatesNote: "Named weather states this experiment ships with. Pressing one jumps every setting to that state (anything it does not set goes to its default) with new seeds and its time of day; Play/Pause, Drift and its speed stay, and Drift may wander away from it. Saving or linking afterwards keeps the resulting settings.",
   sunPathSummary: "Sun path shape"
 };
 
@@ -405,6 +406,32 @@ export function mountExperiment(experiment, {
     };
   }
 
+  // 4b. Weather states (experiment.weatherStates): a compact row, "weatherStates" then one
+  // button per named state labelled with its id. A jump sets every setting to the state's
+  // (weatherStateParams: defaults plus the state's values, fresh seeds; inspection settings,
+  // playback speeds and the grid size stay) and its time of day; Play/Pause, Drift and its
+  // speed stay, so Drift may wander away from the state afterwards.
+  function jumpToWeatherState(id) {
+    const state = experiment.weatherStates?.find(candidate => candidate.id === id);
+    if (!state) return;
+    if (finite(state.timeOfDay)) clock.set(timeForPhase(phaseForTimeOfDay(state.timeOfDay)));
+    setParams(weatherStateParams(experiment, state, params, random));
+    drift?.sync();
+  }
+  if (experiment.weatherStates?.length) {
+    const label = make(doc, "span", { className: "weather-states-label" }, make(doc, "code", { textContent: "weatherStates" }));
+    const stateButtons = experiment.weatherStates.map(state => {
+      const stateButton = button(state.id, state.id);
+      stateButton.addEventListener("click", () => jumpToWeatherState(state.id));
+      lockable.push(stateButton);
+      return described(stateButton, state.help, "weather-state");
+    });
+    const statesRow = row("weather-states", label, ...stateButtons);
+    statesRow.setAttribute("role", "group"); statesRow.setAttribute("aria-label", "weatherStates");
+    help.attach(label, PANEL_TEXT.weatherStatesNote, statesRow);
+    commonPanel.append(statesRow);
+  }
+
   // 5. New seed (experiment.seed): a new seed for the experiment's randomness, on the
   // buttons row (after Randomize, or after Step with no Drift).
   if (newSeed) buttonRow.append(described(newSeed, PANEL_TEXT.newSeedNote, "new-seed"));
@@ -522,7 +549,7 @@ export function mountExperiment(experiment, {
   });
 
   return {
-    clock, getParams, applyParams, setPlaying, render, help, randomize: randomizeAll, saveCarry,
+    clock, getParams, applyParams, setPlaying, render, help, randomize: randomizeAll, jumpToWeatherState, saveCarry,
     get instance() { return instance; },
     get params() { return params; },
     dispose() { stop(); instance.dispose(); }

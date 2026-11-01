@@ -26,6 +26,8 @@ canvas { display: block; width: 100%; aspect-ratio: 4 / 3; image-rendering: pixe
 .panel-row .drift input { width: 20px; height: 20px; margin: 0; accent-color: #9ed8ec; }
 .panel-row .drift-speed { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; font-size: .85rem; }
 .panel-row .drift-speed input { flex: 1 1 60px; min-width: 0; }
+.panel-row.weather-states { gap: 4px 8px; font-size: .85rem; }
+.panel-row .weather-state button { padding: 4px 10px; font-size: .75rem; font-family: ui-monospace, monospace; }
 .common-panel .panel-sun { margin: 0; padding: 4px 8px 8px; gap: 6px; grid-template-columns: minmax(0, 1fr); }
 .panel-row.sun-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; }
 .sun-path summary { padding: 4px 0; font-size: .85rem; }

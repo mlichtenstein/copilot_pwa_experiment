@@ -37,6 +37,11 @@ export const weather={id:"weather",title:"Weather layers",app:"cloud-simulator/w
     slider("chargeBias",-1,1,.05,"Mean signed charge buildup; either polarity can favor ground strikes.","Light and weather")
   ],
   actions:[{id:"reset-weather",label:"Reset weather",title:"Pause and restore default settings with fresh weather",run:page=>{page.setPlaying(false);page.resetToDefaults();}}],
+  // Named weather states (core/experiment.js weatherStates): the common panel's jump buttons.
+  // thunderstorm: high, dense, opaque cloud over all three layers, heavy rain, fast charge
+  // buildup at dusk, so the first strike comes within seconds and they keep coming.
+  weatherStates:[{id:"thunderstorm",timeOfDay:18.25,help:"Jump to a thunderstorm: dense dark cloud on every layer, heavy rain and fast charge buildup at dusk, so lightning starts within seconds and keeps coming.",
+    params:{storminess:.5,chargeBias:.4,coverage:2,cloudAltitude:6.5,altitudeSpread:1.3,cloudOpacity:4,cloudSharpness:2,exposure:1.4,haze:.7,shaftStrength:.15,rainAmount:1,aerosol:.6,textureMix:.3,formationSpeed:.4,wind:.06}}],
   create({width,height,params}){
     let current=params,state=createWeather(params.seed,params),maps=null,currentSun=sunAtPhase(.125);
     const samples={dynamics:[],lighting:[],drawing:[],inspection:[]},record=(key,value)=>{samples[key].push(value);if(samples[key].length>60)samples[key].shift();};
