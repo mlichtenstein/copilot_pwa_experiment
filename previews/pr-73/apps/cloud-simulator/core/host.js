@@ -48,7 +48,7 @@ export const PANEL_TEXT = {
   playNote: "Starts or stops this page's one clock: the sun, wind, simulation and Drift all move with it.",
   stepNote: "Pauses, then moves the clock on by one step (one simulation tick, or one second).",
   randomizeNote: "Every setting of this experiment jumps to a random value: sliders (greyed-out ones too), menus, toggles and seeds, plus the time of day and the sun path's shape. Play/Pause, Drift, its speed, the grid size and playback speeds stay.",
-  driftNote: "While playing, the experiment's sliders wander slowly on a random walk, anywhere in their range; drag one to steer it. Greyed-out sliders, playback speeds, seeds, menus, toggles and the sun stay put.",
+  driftNote: "On by default (links and ratings keep their own setting; older ones load with it off). While playing, the experiment's sliders wander slowly on a random walk, anywhere in their range; drag one to steer it. Greyed-out sliders, playback speeds, seeds, menus, toggles and the sun stay put.",
   speedNote: "How fast Drift moves, 0.1× to 10× on a log scale: 1× crosses a slider's range in about 7 minutes, 10× in seconds, 0.1× in hours.",
   newSeedNote: "A new seed for the experiment's randomness (cloud layout, noise, run or strike); your slider settings stay.",
   resetSunNote: "Stops the sun and puts it back at 09:00, its starting point on the path; the path's shape stays.",
@@ -79,7 +79,7 @@ function buildInput(doc, param, value, help) {
     const select = make(doc, "select", { id: param.key },
       ...param.options.map(([option, text]) => make(doc, "option", { value: option, textContent: text })));
     select.value = value;
-    const label = make(doc, "label", {}, make(doc, "span", { textContent: param.label ?? param.key }), select);
+    const label = make(doc, "label", {}, ...keyLabel(), " ", select);
     describe(label, select);
     return single(select, label, "change");
   }
@@ -361,14 +361,15 @@ export function mountExperiment(experiment, {
     drift?.sync();
   });
   if (driftSliders.length) {
-    driftBox = make(doc, "input", { id: "drift", type: "checkbox", checked: false });
+    // On by default on a fresh load (it still only moves while playing); a saved look sets it below.
+    driftBox = make(doc, "input", { id: "drift", type: "checkbox", checked: true });
     const driftLabel = make(doc, "label", { className: "drift" }, driftBox, " Drift");
     help.attach(driftLabel, PANEL_TEXT.driftNote, driftBox);
     // Drift speed: a log slider from 0.1× to 10× the walk's step, 1× in the middle. It never
     // drifts or gets randomized itself; it stays live while Drift is off so it can be set first.
     speedInput = make(doc, "input", { id: "drift-speed", type: "range", min: "-1", max: "1", step: "0.05", value: "0" });
     speedInput.setAttribute("aria-label", "Drift speed");
-    const speedLabel = make(doc, "label", { className: "drift-speed" }, "Speed ", speedInput, speedOutput = make(doc, "output", { textContent: "1.0×" }));
+    const speedLabel = make(doc, "label", { className: "drift-speed" }, make(doc, "code", { textContent: "driftSpeed" }), " ", speedInput, speedOutput = make(doc, "output", { textContent: "1.0×" }));
     help.attach(speedLabel, PANEL_TEXT.speedNote, speedInput);
     commonPanel.append(row("drift-row", driftLabel, speedLabel));
     let moved = null;
@@ -461,7 +462,9 @@ export function mountExperiment(experiment, {
       if (finite(source.sunPhase)) clock.set(timeForPhase(source.sunPhase));
       else if (finite(source.sunAzimuth) && finite(source.sunElevation)) clock.set(timeForPhase(nearestPhase(source.sunAzimuth, source.sunElevation, sunShape)));
     } else if (finite(source.sunPhase)) clock.set(timeForPhase(source.sunPhase));
-    if (driftBox && typeof source.drift === "boolean") driftBox.checked = source.drift;
+    // A saved drift value wins; looks saved before Drift existed (no drift key) load with it off,
+    // as they were made, even though a fresh page starts with it on.
+    if (driftBox) driftBox.checked = source.drift === true;
     // Links from before the speed slider load at 1×.
     if (driftBox) setDriftSpeed(source.driftSpeed);
     // Missing keys fall back to defaults (seeds included, so a saved run is reproduced).

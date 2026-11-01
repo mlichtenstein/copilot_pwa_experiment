@@ -143,3 +143,23 @@ test("descriptions are hidden by default, in the common panel and in every exper
   }
   for (const page of pages) page.page.dispose();
 });
+
+// CODING_STANDARDS.md "Control labels are code names": every slider, menu, radio group,
+// toggle and seed box shows its param key, and the common sliders (timeOfDay, driftSpeed,
+// the sun path) theirs.
+test("every control's label is its code name, on every page", async () => {
+  const pages = await mountAll();
+  const codeIn = node => descendants(node).filter(child => child.tagName === "CODE").map(child => child.textContent);
+  for (const { entry, experiment, $, page } of pages) {
+    for (const param of experiment.params) {
+      if (param.hidden) continue;
+      const labelled = param.kind === "size" || (param.kind === "select" && param.display === "radio")
+        ? $(param.key + "-label") : $(param.key)?.parentNode;
+      assert.ok(labelled, `${entry.title}: ${param.key} is on the page`);
+      assert.deepEqual(codeIn(labelled), [param.key], `${entry.title}: ${param.key}'s label is its code name`);
+    }
+    assert.deepEqual(codeIn($("timeOfDay").parentNode), ["timeOfDay"], `${entry.title}: timeOfDay`);
+    if ($("drift-speed")) assert.deepEqual(codeIn($("drift-speed").parentNode), ["driftSpeed"], `${entry.title}: driftSpeed`);
+  }
+  for (const page of pages) page.page.dispose();
+});

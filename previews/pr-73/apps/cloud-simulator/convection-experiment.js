@@ -41,7 +41,7 @@ export const convection = {
   seed: "seed",
   stepSeconds: params => 1 / params.speed,
   params: [
-    { key: "view", kind: "select", label: "View", default: "sunset",
+    { key: "view", kind: "select", default: "sunset",
       options: [["sunset", "Sunset"], ["lamp", "Lava lamp"], ["water", "Cloud and rain"], ["temperature", "Temperature"], ["buoyancy", "Buoyancy"], ["humidity", "Relative humidity"]] },
     { key: "layering", kind: "select", display: "radio", group: OPTIONS, default: "lcl", help: "What shapes the cloud layer.",
       options: [["none", "None: plain overturning"],
