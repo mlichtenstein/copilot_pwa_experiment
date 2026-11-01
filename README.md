@@ -11,6 +11,7 @@ One UI guideline worth knowing up front: **explanatory text sits next to the thi
 
 - [Cloud simulator · Noise weather](apps/cloud-simulator/)
 - [Weather lab · Lightning](apps/cloud-simulator/lightning.html)
+- [Weather lab · Combined weather layers](apps/cloud-simulator/weather.html)
 
 - [Counter](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/counter/)
 - [Dice roll / coin flip](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/dice/)
