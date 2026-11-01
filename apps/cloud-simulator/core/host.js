@@ -6,7 +6,8 @@
  *   (launch.js; a ?p= link wins) and presses Randomize for ?random=1 (🎲 Random). It alone builds the page header (core/header.js: title, tagline
  *   and the nav to every experiment, from the registry) and the common panel, identical on
  *   every page in compact rows (Play/Pause, Step, Randomize and, with `seed`, New seed; Drift
- *   and its speed; with `weatherStates`, a button per named state to jump to; the time of
+ *   and its speed; with `weatherStates`, the Jump to weather state row (jumpToWeatherState), a
+ *   button per named state; the time of
  *   day, inside the Sun group with `sun`, its path shape in a closed disclosure), and below it the experiment's own section under its title. After each
  *   render it darkens the frame for night from the shared sun (core/daylight.js). Every description is hidden and shown on
  *   hold, hover or focus by the one core/hold-help.js mechanism. Optional
@@ -57,7 +58,7 @@ export const PANEL_TEXT = {
   newSeedNote: "A new seed for the experiment's randomness (cloud layout, noise, run or strike); your slider settings stay.",
   resetSunNote: "Stops the sun and puts it back at 09:00, its starting point on the path; the path's shape stays.",
   timeOfDayNote: "Time of day on the shared clock, 00:00 to 24:00: the sun is highest at noon and lowest at midnight, and a day takes 90 s of Play. Once the sun is below the horizon the page darkens to night (dim blue, not black). Moving it pauses the clock.",
-  weatherStatesNote: "Named weather states this experiment ships with. Pressing one jumps every setting to that state (anything it does not set goes to its default) with new seeds and its time of day; Play/Pause, Drift and its speed stay, and Drift may wander away from it. Saving or linking afterwards keeps the resulting settings.",
+  jumpToWeatherStateNote: "Named weather states this experiment ships with. Pressing one jumps every setting to that state (anything it does not set goes to its default) with new seeds and its time of day; Play/Pause, Drift and its speed stay, and Drift may wander away from it. Saving or linking afterwards keeps the resulting settings.",
   sunPathSummary: "Sun path shape"
 };
 
@@ -406,7 +407,8 @@ export function mountExperiment(experiment, {
     };
   }
 
-  // 4b. Weather states (experiment.weatherStates): a compact row, "weatherStates" then one
+  // 4b. Jump to weather state (experiment.weatherStates): a compact row, "Jump to weather
+  // state" (code name jumpToWeatherState, like the function below) then one
   // button per named state labelled with its id. A jump sets every setting to the state's
   // (weatherStateParams: defaults plus the state's values, fresh seeds; inspection settings,
   // playback speeds and the grid size stay) and its time of day; Play/Pause, Drift and its
@@ -419,16 +421,17 @@ export function mountExperiment(experiment, {
     drift?.sync();
   }
   if (experiment.weatherStates?.length) {
-    const label = make(doc, "span", { className: "weather-states-label" }, make(doc, "code", { textContent: "weatherStates" }));
+    const label = make(doc, "span", { className: "jump-to-weather-state-label", textContent: "Jump to weather state" });
     const stateButtons = experiment.weatherStates.map(state => {
       const stateButton = button(state.id, state.id);
       stateButton.addEventListener("click", () => jumpToWeatherState(state.id));
       lockable.push(stateButton);
       return described(stateButton, state.help, "weather-state");
     });
-    const statesRow = row("weather-states", label, ...stateButtons);
-    statesRow.setAttribute("role", "group"); statesRow.setAttribute("aria-label", "weatherStates");
-    help.attach(label, PANEL_TEXT.weatherStatesNote, statesRow);
+    const statesRow = row("jump-to-weather-state", label, ...stateButtons);
+    statesRow.id = "jump-to-weather-state";
+    statesRow.setAttribute("role", "group"); statesRow.setAttribute("aria-label", "Jump to weather state");
+    help.attach(label, PANEL_TEXT.jumpToWeatherStateNote, statesRow);
     commonPanel.append(statesRow);
   }
 

@@ -37,11 +37,20 @@ export const weather={id:"weather",title:"Weather layers",app:"cloud-simulator/w
     slider("chargeBias",-1,1,.05,"Mean signed charge buildup; either polarity can favor ground strikes.","Light and weather")
   ],
   actions:[{id:"reset-weather",label:"Reset weather",title:"Pause and restore default settings with fresh weather",run:page=>{page.setPlaying(false);page.resetToDefaults();}}],
-  // Named weather states (core/experiment.js weatherStates): the common panel's jump buttons.
+  // Named weather states (core/experiment.js weatherStates): the common panel's Jump to weather
+  // state buttons. Each sets only what makes it read at a glance; the rest go to defaults.
   // thunderstorm: high, dense, opaque cloud over all three layers, heavy rain, fast charge
-  // buildup at dusk, so the first strike comes within seconds and they keep coming.
-  weatherStates:[{id:"thunderstorm",timeOfDay:18.25,help:"Jump to a thunderstorm: dense dark cloud on every layer, heavy rain and fast charge buildup at dusk, so lightning starts within seconds and keeps coming.",
-    params:{storminess:.5,chargeBias:.4,coverage:2,cloudAltitude:6.5,altitudeSpread:1.3,cloudOpacity:4,cloudSharpness:2,exposure:1.4,haze:.7,shaftStrength:.15,rainAmount:1,aerosol:.6,textureMix:.3,formationSpeed:.4,wind:.06}}],
+  // buildup from late afternoon into dusk, so the first strike comes within seconds and they
+  // keep coming. clearDay, overcast and gentleClouds have storminess 0, so no lightning.
+  weatherStates:[
+    {id:"thunderstorm",timeOfDay:17,help:"Jump to a thunderstorm: dense dark cloud on every layer, heavy rain and fast charge buildup from late afternoon into dusk, so lightning starts within seconds and keeps coming.",
+      params:{storminess:.5,chargeBias:.4,coverage:2,cloudAltitude:6.5,altitudeSpread:1.3,cloudOpacity:4,cloudSharpness:2,exposure:1.4,haze:.7,shaftStrength:.15,rainAmount:1,aerosol:.6,textureMix:.3,formationSpeed:.4,wind:.06}},
+    {id:"clearDay",timeOfDay:12.5,help:"Jump to a clear day around midday: almost no cloud, clean air, no rain and no lightning.",
+      params:{coverage:.1,storminess:0,rainAmount:0,aerosol:.1,haze:.3}},
+    {id:"overcast",timeOfDay:13,help:"Jump to an overcast day: thick, soft grey cloud on every layer, flat hazy light, a little drizzle and no lightning.",
+      params:{coverage:2,cloudAltitude:7.5,altitudeSpread:1.5,textureMix:.2,cloudOpacity:4,cloudSharpness:1,exposure:1,airDensity:2,aerosol:.5,haze:1,shaftStrength:0,formationSpeed:.1,storminess:0,rainAmount:.15}},
+    {id:"gentleClouds",timeOfDay:15,help:"Jump to gentle fair-weather clouds in the afternoon: scattered soft cumulus in a clear sky, no rain and no lightning.",
+      params:{coverage:1.6,cloudAltitude:5,altitudeSpread:1,textureMix:1,cloudOpacity:3.5,cloudSharpness:12,exposure:1.6,aerosol:.1,haze:.3,wind:.02,storminess:0,rainAmount:0}}],
   create({width,height,params}){
     let current=params,state=createWeather(params.seed,params),maps=null,currentSun=sunAtPhase(.125);
     const samples={dynamics:[],lighting:[],drawing:[],inspection:[]},record=(key,value)=>{samples[key].push(value);if(samples[key].length>60)samples[key].shift();};
