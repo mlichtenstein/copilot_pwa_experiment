@@ -24,6 +24,15 @@ export function moonCloudLight(maps,u,v,density,p){
   const night=1-.85*clamp((maps.sun.elevation+4)/16),rise=clamp(maps.moon.elevation/2);
   return .44*falloff*night*rise*Math.exp(-Math.max(0,p.cloudOpacity*density)*.5);
 }
+// Faint landscape fill, reduced by cloud opacity along the moon's direction.
+export function moonTerrainLight(state,p,maps){
+  if(!maps.moon||maps.moon.elevation<=0)return 0;
+  const [x,y,z]=maps.moonDirection,rx=x/z,ry=y/z-CAMERA_LIFT;
+  let opticalDepth=0;
+  for(const layer of projectionLayers(state,p))opticalDepth+=Math.max(0,p.cloudOpacity*sampleCloud(layer,rx*layer.distance,ry*layer.distance));
+  const night=1-clamp((maps.sun.elevation+4)/16);
+  return .012*night*Math.sqrt(Math.sin(maps.moon.elevation*Math.PI/180))*Math.exp(-opticalDepth*.5);
+}
 export const renderOrder=["sky","all-light-veils","far-cloud-rain-lightning-terrain","middle-cloud-rain-lightning-terrain","near-cloud-rain-lightning-terrain","terrain-props"];
 export function projectionLayers(state,p){return state.layers.map(l=>({...l,density:enabled(l,p)?l.fields.cloudWater:l.fields.cloudWater.map(()=>0)}));}
 function rayAt(u,v){const ray=[(2*u-1)*SCALE*1.6,(1-2*v)*SCALE+CAMERA_LIFT,1],len=Math.hypot(...ray);return ray.map(x=>x/len);}
@@ -84,7 +93,7 @@ export function renderWeather(state,p,maps,width=160,height=100,throughPass=5){
     const layer=state.layers.find(l=>l.name===p.inspectLayer)??state.layers[0],isCharge=p.view==="charge",field=isCharge?layer.lightning.charge.values:layer.fields[p.view],w=isCharge?12:layer.width,h=isCharge?6:layer.height;
     for(let y=0;y<height;y++)for(let x=0;x<width;x++){const q=field[Math.floor(y/height*h)*w+Math.floor(x/width*w)],v=clamp(Math.abs(q)/(isCharge?3:1));pixels.set(isCharge?(q>=0?[v*255,20,30,255]:[20,40,v*255,255]):[v*180,v*210,v*255,255],(y*width+x)*4);}return pixels;
   }
-  const bolts=state.layers.map(l=>boltLight(l,p,width,height)),layers=projectionLayers(state,p),vMaps=maps.visibility;
+  const bolts=state.layers.map(l=>boltLight(l,p,width,height)),layers=projectionLayers(state,p),vMaps=maps.visibility,terrainMoonlight=moonTerrainLight(state,p,maps);
   for(let y=0;y<height;y++)for(let x=0;x<width;x++){
     const u=(x+.5)/width,v=(y+.5)/height,rx=(2*u-1)*SCALE*1.6,ry=(1-2*v)*SCALE,index=y*width+x;
     const mi=lightingIndex(maps,u,v),sky=maps.sky[mi];let rgb=sky.slice();
@@ -101,7 +110,7 @@ export function renderWeather(state,p,maps,width=160,height=100,throughPass=5){
         const az=Math.atan2(ray[0],ray[2])*180/Math.PI,el=Math.asin(ray[1])*180/Math.PI;
         const mx=(az-maps.moon.azimuth)*Math.cos(maps.moon.elevation*Math.PI/180)/1.5,my=(el-maps.moon.elevation)/1.5;
         const crater=(cx,cy,r)=>Math.exp(-(((mx-cx)**2+(my-cy)**2)/(r*r)));
-        disc=.8-.2*crater(-.3,.25,.3)-.16*crater(.35,-.25,.25);
+        disc=2.4-.6*crater(-.3,.25,.3)-.48*crater(.35,-.25,.25);
       }
       rgb=rgb.map((c,k)=>c+(disc+halo)*[.72,.82,1][k]*night*rise);
     }
@@ -122,7 +131,7 @@ export function renderWeather(state,p,maps,width=160,height=100,throughPass=5){
       if(v>=terrainY(layer,u)){
         const hit=bolt.contact,distance=hit?Math.hypot((u-hit.x)*1.6,v-hit.y):Infinity;
         const pool=bolt.power*Math.max(0,1-distance/groundLightRadius)**2*(bolt.power>0?terrainShadowAt(layer.objects,hit,u,v):1);
-        rgb=rgb.map((c,k)=>([.004,.007,.013][k]+color.direct[k]*.016)*color.transmission[k]+sky[k]*(1-color.transmission[k])*.3+pool*[.8,.85,1][k]);
+        rgb=rgb.map((c,k)=>([.004,.007,.013][k]+color.direct[k]*.016+terrainMoonlight*[.55,.72,1][k])*color.transmission[k]+sky[k]*(1-color.transmission[k])*.3+pool*[.8,.85,1][k]);
       }
     }
     pixels.set([...rgb.map(c=>255*Math.pow(1-Math.exp(-Math.max(0,c)*p.exposure),1/2.2)),255],index*4);
