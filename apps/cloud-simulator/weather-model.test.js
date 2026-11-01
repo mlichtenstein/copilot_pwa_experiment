@@ -115,7 +115,7 @@ test("moon survives either optical grid, is part of sky, and is occluded by clou
     const low={...maps,moon:{elevation:1,azimuth:0},moonDirection:[0,Math.sin(Math.PI/180),Math.cos(Math.PI/180)]};
     const lowSky=renderWeather(state,params,low,160,100,0),ground=renderWeather(state,params,low),groundDark=renderWeather(state,params,{...low,moon:null});
     const i=Math.floor((.5-(Math.tan(Math.PI/180)-Math.tan(8*Math.PI/180))/(2*Math.tan(29*Math.PI/180)))*100)*160+80;
-    assert.ok(lowSky[i*4]>0);assert.equal(ground[i*4],groundDark[i*4],"terrain covers low moon");
+    assert.ok(lowSky[i*4]>0);assert.ok(ground[i*4]<lowSky[i*4],"terrain hides the disc while retaining faint lunar fill");
     const below={...maps,moon:{elevation:-1,azimuth:0}};
     assert.deepEqual(renderWeather(state,params,below,160,100,0),dark);
   }
@@ -150,4 +150,16 @@ test("moon backlights nearby thin clouds, fades over six radii and is extinguish
     const clear=structuredClone(state);for(const layer of clear.layers)layer.fields.cloudWater.fill(0);
     assert.deepEqual(renderInspection(clear,{...params,view:"cloudColor"},maps),renderInspection(clear,{...params,view:"cloudColor"},{...maps,moon:null}),"no glow without cloud water");
   }
+});
+
+test("moon faintly lights terrain at night, with cloud attenuation and no daytime fill",async()=>{
+  const {moonTerrainLight}=await import("./weather-model.js"),{sunAtPhase}=await import("./core/sun-path.js");
+  const p={...defaults,coverage:0,storminess:0,rainAmount:0},s=createWeather(42,p),maps=buildWeatherLighting(s,p,sunAtPhase(.82));
+  const strength=moonTerrainLight(s,p,maps);assert.ok(strength>0&&strength<.012);
+  const lit=renderWeather(s,p,maps),dark=renderWeather(s,p,{...maps,moon:null}),i=(99*160+80)*4;
+  assert.ok(lit[i+2]>dark[i+2],"landscape gains cool moonlight");
+  assert.equal(moonTerrainLight(s,p,{...maps,moon:{...maps.moon,elevation:-1}}),0);
+  assert.equal(moonTerrainLight(s,p,{...maps,sun:{...maps.sun,elevation:20}}),0);
+  const cloudy=structuredClone(s);for(const l of cloudy.layers)l.fields.cloudWater.fill(10);
+  assert.ok(moonTerrainLight(cloudy,p,maps)<strength*.01,"overcast dims landscape fill");
 });
