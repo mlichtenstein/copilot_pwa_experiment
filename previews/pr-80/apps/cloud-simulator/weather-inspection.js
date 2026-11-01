@@ -2,7 +2,7 @@
  * Consumers: weather-inspector.js, weather-experiment.js and inspector tests.
  * Dependencies: weather field/model helpers and shared visibility/terrain functions; no DOM. */
 import {SCALE,clamp,cloudIngredients,terrainY} from "./weather-fields.js";
-import {renderWeather,boltLight,projectionLayers,renderOrder,lightingIndex} from "./weather-model.js";
+import {renderWeather,boltLight,projectionLayers,renderOrder,lightingIndex,moonCloudLight} from "./weather-model.js";
 import {thresholdMask,combinedCoverage} from "./visibility-model.js";
 import {sampleCloud} from "./shafts-model.js";
 import {terrainShadowAt,groundLightRadius,drawTerrainObjects} from "./lightning-terrain.js";
@@ -30,7 +30,7 @@ const contracts={
  cloudWater:["Scalar field · normalized water","Bitmap B; Perlin n; altitude band G; reveal R; coverage; textureMix","q = max(0, coverage × (textureMix × B + (1 − textureMix) × max(0, (n − 0.38) × 3) × G) × R). G is the altitude envelope."],
  opacity:["Scalar field · 0–1 opacity","Cloud water q; cloudOpacity","alpha = 1 − exp(−cloudOpacity × q). Derived at render time."],
  mask:["Boolean field · cloud / clear","Cloud water; cloudSharpness; cloudOpacity; band threshold","Sharpen density, then compare cloudOpacity × sharpened density ≥ threshold. Middle band shown: 0.5; other bands: 1 and 0.25."],
- cloudColor:["RGB color field · linear light","Cloud opacity; atmospheric direct light/transmission; sky; farther visibility","Multiply cloud lighting by opacity; direct light is weighted by farther-layer visibility. Tone map for display; own silhouette does not shade its cloud body."],
+ cloudColor:["RGB color field · linear light","Cloud opacity; atmospheric direct light/transmission; sky; moon position; farther visibility","Add cool lunar backlight within 9°, attenuated by cloud optical depth. Multiply cloud lighting by opacity; direct light is weighted by farther-layer visibility. Tone map for display; own silhouette does not shade its cloud body."],
  visibility:["Scalar field · 0–1 light coverage","Threshold mask; sun position; band radius; edgeFeather","Build sun visibility polygon through the thresholded cloud edges; feather cloud-facing caps. Camera-plane middle band shown; ray sides remain crisp."],
  rain:["Scalar field · normalized rain","Previous rain above; cloud water q; rainAmount","Every 0.1 s: rain = clamp(0.94 × rainAbove + max(0, q − 0.65) × rainAmount × 0.25, 0, 1). Top boundary has no incoming rain."],
  shafts:["RGB color field · linear light","Same/farther visibility bands; atmospheric sun color; haze; shaftStrength","Intersect visibility from this depth outward; weight three bands and blend their colored light contributions. Tone map for display."],
@@ -76,7 +76,7 @@ export function renderInspection(state,p,maps,width=160,height=100){
       else if(p.view==="cloudColor"){
         const rx=(2*u-1)*SCALE*1.6,ry=(1-2*v)*SCALE,density=sampleCloud(projected[index],rx*layer.distance,ry*layer.distance),alpha=1-Math.exp(-p.cloudOpacity*density);
         const color=maps.colors[index][mi];let lit=0;for(const band of maps.visibility.bands)lit+=band.weight*band.brightness*combinedCoverage(band.layers,index+1,mi);
-        const sky=maps.sky[mi];rgb=rgb.map((c,k)=>alpha*(([.018,.025,.045][k]+color.direct[k]*lit*.65)*color.transmission[k]+sky[k]*(1-color.transmission[k])));
+        const sky=maps.sky[mi],moonlight=moonCloudLight(maps,u,v,density,p);rgb=rgb.map((c,k)=>alpha*(([.018,.025,.045][k]+color.direct[k]*lit*.65+moonlight*[.72,.82,1][k])*color.transmission[k]+sky[k]*(1-color.transmission[k])));
       }
     }
     const isLinear=["cloudColor","shafts","lightning","groundLight"].includes(p.view);
@@ -85,3 +85,4 @@ export function renderInspection(state,p,maps,width=160,height=100){
   if(p.view==="terrain")drawTerrainObjects(pixels,width,height,layer.objects);
   return pixels;
 }
+
