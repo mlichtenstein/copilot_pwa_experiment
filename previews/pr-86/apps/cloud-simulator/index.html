@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<!-- Purpose: Cloud simulator front page (the manifest's start_url and the app folder's link):
+     a welcome (why the site exists and why ratings help), what the experiments are, how every page works (the common panel, hold for help, the
+     emoji ratings and 🔗 links), 🎲 Random and a random ❤️, and every experiment with a
+     picture, its one line and a link. Consumers: browser.
+     Dependencies: style.css, home.js (builds the header, the buttons and the list from
+     core/registry.js), thumbs/*.png, manifest.json, icon.svg. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111c30">
+  <title>Cloud Simulator</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="home">
+<main class="home-layout">
+  <header id="header" class="experiment-header"></header>
+  <section class="home-intro" aria-label="Welcome">
+    <p>Welcome to my sunset simulator experiments. I'm trying to learn what makes sunsets beautiful, and to build a system that generates sunsets with interesting weather. The goal is something that feels like watching real, beautiful weather, but keeps surprising you.</p>
+    <p>You can help: as you play around, use the emoji bar (❤️ 🎨 🤮 ⬜) at the top of each page to tell me when a scene is lovely, gross or boring. That feedback shows me which settings are worth exploring further. Have fun!</p>
+  </section>
+  <section class="home-start" aria-label="Start somewhere">
+    <div id="launch" class="home-launch"></div>
+    <p class="hold-hint">ⓘ Hold any button or control to see what it does.</p>
+  </section>
+  <section aria-labelledby="experiments-heading">
+    <h2 id="experiments-heading" class="home-heading">Experiments</h2>
+    <ul id="experiments" class="home-list"></ul>
+  </section>
+  <section class="home-about" aria-labelledby="about-heading">
+    <h2 id="about-heading" class="home-heading">How the pages work</h2>
+    <p><b>The experiments.</b> Each page is one small idea about clouds and light, simulated live in pixels. The picture is the point: it takes all the room it can, with the settings beside it (below it on a phone).</p>
+    <p><b>The common panel.</b> Every page has the same controls first. <b>Play</b> and <b>Step</b> run its one clock. <b>Randomize</b> gives every setting a random value. <b>Drift</b> (on by default) lets the sliders wander while playing, as fast as <code>driftSpeed</code> says. <b>New seed</b> picks different starting conditions but keeps the same slider settings. <code>timeOfDay</code> moves the shared sun; after sunset the page goes dark. The experiment's own settings come next, labelled with their code names.</p>
+    <p><b>Hold for help.</b> Descriptions stay hidden so the picture can be big. Press and hold a control (or hover it, or tab to it) to see what it does.</p>
+    <p><b>Ratings and links.</b> Above each picture, tap ❤️ 🎨 🤮 or ⬜ when a look makes you feel something: it saves the settings, your rating and a small picture for everyone to see under Recent. 🔗 copies a link that reopens exactly what you see. ❤️ Random opens one of everyone's ❤️ looks.</p>
+    <p><b>One sky.</b> The time of day, the sun's path and Drift come with you from page to page (a 🔗 link keeps its own).</p>
+  </section>
+  <p id="status" role="status"></p><noscript>The cloud simulator needs JavaScript.</noscript>
+</main>
+<script type="module" src="home.js"></script>
+</body>
+</html>
