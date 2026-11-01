@@ -1,13 +1,11 @@
 # Purpose: Bake fixed analytic cloud geometry into PNG data maps.
 # Consumers: normal-lighting model and contributors. Dependencies: Python, Pillow.
 from PIL import Image
-from math import sqrt
+from math import sqrt, sin, pi
 from pathlib import Path
 ROOT = Path(__file__).parent
 SIZE = (96, 60)
-SHAPES = {'sphere': [(48,30,0,23,23,23)],
-          'cluster': [(28,34,0,20,18,18),(47,24,4,20,20,20),(66,34,0,22,18,18)],
-          'wisps': [(25,36,0,23,4,3),(48,29,1,27,5,4),(72,23,0,20,3,2)]}
+SHAPES = {'cluster': [(27,35,-5,21,18,24),(47,24,4,19,20,27),(68,35,-8,21,17,22)]}
 for name, lobes in SHAPES.items():
     normal = Image.new('RGB', SIZE, (128,128,255))
     geometry = Image.new('RGBA', SIZE, (0,0,0,0))
@@ -29,17 +27,46 @@ for name, lobes in SHAPES.items():
             geometry.putpixel((x,y),(round((front+32)*255/64),round((front-back)*255/64),0,255))
     normal.save(ROOT/f'{name}-normal.png')
     geometry.save(ROOT/f'{name}-geometry.png')
-# Interpret an existing CC0 opacity image as a relief, not measured cloud geometry.
+# Curved, feathered ribbons and a pointed drop: bake their height gradients once.
 from PIL import ImageFilter
-mask=Image.open(ROOT.parent/'textures/FX_CloudAlpha01.jpg').convert('L').resize(SIZE)
-relief=mask.filter(ImageFilter.GaussianBlur(2))
-normal=Image.new('RGB',SIZE,(128,128,255));geometry=Image.new('RGBA',SIZE)
-for y in range(SIZE[1]):
-    for x in range(SIZE[0]):
-        z=relief.getpixel((x,y))*18/255
-        dx=(relief.getpixel((min(95,x+1),y))-relief.getpixel((max(0,x-1),y)))*9/255
-        dy=(relief.getpixel((x,min(59,y+1)))-relief.getpixel((x,max(0,y-1))))*9/255
-        n=(-dx,dy,1);length=sqrt(sum(v*v for v in n))
-        normal.putpixel((x,y),tuple(round((v/length+1)*127.5) for v in n))
-        geometry.putpixel((x,y),(round((z+32)*255/64),round(z*255/64),0,mask.getpixel((x,y))))
-normal.save(ROOT/'image-normal.png');geometry.save(ROOT/'image-geometry.png')
+for name in ['wisps','teardrop','image']:
+    heights=[[0.0]*96 for _ in range(60)]
+    alpha=[[0.0]*96 for _ in range(60)]
+    if name=='image':
+        mask=Image.open(ROOT.parent/'textures/FX_CloudAlpha01.jpg').convert('L').resize(SIZE)
+        relief=mask.filter(ImageFilter.GaussianBlur(.55))
+    for y in range(60):
+        for x in range(96):
+            if name=='image':
+                m=mask.getpixel((x,y))/255
+                # Amplify the relief and preserve smaller lobes lost in the old blur.
+                heights[y][x]=30*(relief.getpixel((x,y))/255)**.65
+                alpha[y][x]=min(1,sqrt(m)*1.4)
+            elif name=='teardrop':
+                t=(y-5)/49
+                if 0<t<1:
+                    radius=24*sin(pi*t)**.7*(.3+.7*t)
+                    q=1-((x-48)/radius)**2
+                    if q>0:
+                        heights[y][x]=23*sin(pi*t)*sqrt(q)
+                        alpha[y][x]=min(1,q*8)
+            else:
+                for offset,phase in [(18,0),(31,1.1),(43,2.2)]:
+                    t=(x-7)/82
+                    if not 0<t<1: continue
+                    center=offset+5*sin(t*2*pi+phase)
+                    halfwidth=.6+1.2*sin(pi*t)**2
+                    q=1-((y+.5-center)/halfwidth)**2
+                    if q>0:
+                        heights[y][x]=max(heights[y][x],2.5*sqrt(q)*sin(pi*t))
+                        alpha[y][x]=max(alpha[y][x],min(1,q*2)*sin(pi*t)**.5)
+    normal=Image.new('RGB',SIZE,(128,128,255));geometry=Image.new('RGBA',SIZE)
+    for y in range(60):
+        for x in range(96):
+            dx=(heights[y][min(95,x+1)]-heights[y][max(0,x-1)])/2
+            dy=(heights[min(59,y+1)][x]-heights[max(0,y-1)][x])/2
+            n=(-dx,dy,1);length=sqrt(sum(v*v for v in n))
+            normal.putpixel((x,y),tuple(round((v/length+1)*127.5) for v in n))
+            z=heights[y][x]
+            geometry.putpixel((x,y),(round((z+32)*255/64),round(z*255/64),0,round(alpha[y][x]*255)))
+    normal.save(ROOT/f'{name}-normal.png');geometry.save(ROOT/f'{name}-geometry.png')
