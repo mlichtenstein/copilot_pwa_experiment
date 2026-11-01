@@ -9,15 +9,15 @@ const fieldKeys=["cloudAltitude","altitudeSpread","coverage","textureMix"];
 const lightingKeys=["lightingMode",...fieldKeys,"sunElevation","sunAzimuth","sunSpeed","airDensity","aerosol","cloudOpacity","cloudSharpness","haze","shaftStrength","edgeFeather","near","middle","far"];
 const now=()=>globalThis.performance?.now()??Date.now();
 const slider=(key,min,max,step,help,group)=>({key,kind:"range",min,max,step,default:defaults[key],help,group});
-const toggle=(key,help)=>({key,kind:"toggle",default:defaults[key],help,group:"Layers"});
+const toggle=(key,help)=>({key,randomize:false,kind:"toggle",default:defaults[key],help,group:"Layers"});
 function summary(values){const sorted=[...values].sort((a,b)=>a-b);return sorted.length?`${sorted[Math.floor((sorted.length-1)*.5)].toFixed(0)}/${sorted[Math.floor((sorted.length-1)*.95)].toFixed(0)}`:"—";}
 export const weather={id:"weather",title:"Weather layers",app:"cloud-simulator/weather",width:160,height:100,sun:true,frameInterval:250,seed:"seed",stepSeconds:.1,
   params:[
     {key:"lightingMode",kind:"select",display:"radio",default:"interpolated",randomize:false,options:[["interpolated","Interpolated"],["full","Full resolution"]],help:"Compare interpolated 32×20 sky / 12×8 surface lighting against atmospheric calculations at every output pixel. Visibility and sun stay at output resolution in both. Full resolution is expensive; pause for a still-frame comparison. Lighting timings reset when switched.",group:"Rendering"},
     {key:"seed",kind:"seed",default:42,random:true,hidden:true},
     toggle("near","Show the near cloud/rain/lightning/terrain layer, 8 km away."),toggle("middle","Show the middle layer, 24 km away."),toggle("far","Show the far layer, 65 km away."),
-    {key:"view",kind:"select",label:"View",default:"scene",options:[["scene","Combined scene"],...nodes.map(node=>[node.id,node.label]),["sky","Sky / atmospheric light"],...passes.filter(pass=>pass.view!=="scene").map(pass=>[pass.view,`Composition ${pass.index+1}: ${pass.label}`])],help:"Inspect a field, derived rendering input, or accumulated render pass. The graph shows their connections.",group:"Inspect"},
-    {key:"inspectLayer",kind:"select",label:"Field layer",default:"near",options:[["near","Near · 24×15"],["middle","Middle · 32×20"],["far","Far · 48×30"]],help:"Which distance layer supplies the field view; charge is 12×6 in each.",group:"Inspect"},
+    {key:"view",randomize:false,kind:"select",label:"View",default:"scene",options:[["scene","Combined scene"],...nodes.map(node=>[node.id,node.label]),["sky","Sky / atmospheric light"],...passes.filter(pass=>pass.view!=="scene").map(pass=>[pass.view,`Composition ${pass.index+1}: ${pass.label}`])],help:"Inspect a field, derived rendering input, or accumulated render pass. The graph shows their connections.",group:"Inspect"},
+    {key:"inspectLayer",randomize:false,kind:"select",label:"Field layer",default:"near",options:[["near","Near · 24×15"],["middle","Middle · 32×20"],["far","Far · 48×30"]],help:"Which distance layer supplies the field view; charge is 12×6 in each.",group:"Inspect"},
     slider("airDensity",.2,2,.1,"Atmospheric scattering/extinction multiplier from the Horizon model.","Sun and atmosphere"),
     slider("aerosol",0,1,.05,"Low-altitude atmospheric haze/extinction strength.","Sun and atmosphere"),
     slider("exposure",.5,4,.1,"Camera exposure before tone mapping.","Sun and atmosphere"),

@@ -61,7 +61,7 @@
  */
 
 // Every kind takes { key, help?, group?, enabled?(params), hidden?, wide?, randomize? }:
-// randomize: false leaves it out of the common Randomize (a playback speed, a start mode);
+// randomize: false leaves it out of the common Randomize (a playback speed, a start mode, or an inspection/display setting);
 // wide spans the
 // whole controls row, group puts it in a
 // fieldset with that legend, enabled greys it out when it does nothing, hidden keeps it in
