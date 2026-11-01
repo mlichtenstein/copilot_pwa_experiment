@@ -59,3 +59,8 @@
   .weather-graph-source .weather-node { min-width: 90px; max-width: 110px; }
   .weather-composition { min-width: 0; grid-template-columns: repeat(3,minmax(0,1fr)); }
 }
+
+/* Keep the field graph recognizable in the default compact thumbnail view. */
+.weather-inspector[data-previews=full] .weather-node canvas { height: 48px; aspect-ratio: auto; object-fit: contain; }
+.weather-node-grid { row-gap: 22px; }
+.weather-graph-wires { opacity: 1; }

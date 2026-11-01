@@ -44,7 +44,9 @@ test("inspector tiles select fields/passes, update live, and stop preview work w
   const buttons=descendants(root).filter(n=>n.tagName==="BUTTON");assert.ok(buttons.every(b=>b.title));buttons.find(b=>b.textContent==="Composition").fire("click");
   doc.getElementById("inspect-pass-2").fire("click");assert.deepEqual(selections.at(-1),{view:"pass-2"});
   const picker=descendants(root).find(n=>n.tagName==="SELECT");
+  assert.equal(root.attributes["data-previews"],"full");
   const beforeLabels=painted;picker.value="labels";picker.fire("change");assert.equal(root.attributes["data-previews"],"labels");assert.equal(painted,beforeLabels);
+  doc.getElementById("inspect-near-rain").fire("click");assert.deepEqual(selections.at(-1),{view:"rain",inspectLayer:"near"});
   picker.value="full";picker.fire("change");assert.ok(painted>beforeLabels);
   const count=painted;root.open=false;stepWeather(instance.state,.1,p);ui.update(p,instance);assert.equal(painted,count);instance.dispose();
 });
