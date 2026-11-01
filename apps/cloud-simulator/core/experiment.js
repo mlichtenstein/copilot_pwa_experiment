@@ -53,18 +53,29 @@
  *   step(dt, frame)  advance any simulation by dt clock seconds; return false if nothing
  *                    visible changed (a fixed-rate simulation between its ticks)
  *   render(frame)    return RGBA pixels (Uint8ClampedArray of width × height × 4), or null
- *                    while not ready
+ *                    while not ready. It reads state and the frame only: it never changes the
+ *                    simulation or draws random numbers (step does that, from the seed), so
+ *                    the same seed and steps always give the same picture
  *   dispose()        release anything held
  *   selfLight()      optional: 0 to 1, how brightly the scene lights itself right now (a
- *                    lightning flash). The host's night step dims the frame by the darker of
- *                    daylight and this, so a flash stays bright at night
+ *                    lightning flash, or any other scene light drawn from state). The host's
+ *                    night step dims the frame by the darker of daylight and this, so a flash
+ *                    stays bright at night. Every experiment with a scene light reports it.
  *   ready            optional promise; the host keeps playback disabled until it settles
- * frame is { time, sun } where time is the shared clock in seconds and sun is
- * sunAt(time, shape) = { phase, azimuth, elevation } (degrees) on the shared vertical
- * figure-eight, sized and placed by the host-owned sunPath* settings.
+ * frame is { time, sun, moon }: the sky lights, all on the shared clock. time is the clock in
+ * seconds; sun is sunAt(time, shape) = { phase, azimuth, elevation } (degrees) on the shared
+ * vertical figure-eight, sized and placed by the host-owned sunPath* settings; moon is
+ * moonAt(time) = { phase, azimuth, elevation } on its fixed path (core/moon-path.js). An
+ * experiment lights from these and never works out its own sun or moon.
+ * The shared vocabulary these follow (fields, rules, render passes, lights, how a frame is
+ * made) is docs/cloud-simulator-combined.md.
  */
 
-// Every kind takes { key, help?, group?, enabled?(params), hidden?, wide?, randomize? }:
+// Every kind takes { key, help?, group?, enabled?(params), hidden?, wide?, randomize?, affects? }:
+// affects says what a change to it invalidates (AFFECTS): "fields" (rebuild derived fields,
+// then lighting), "lighting" (rebuild lighting) or "draw" (only redraw); leave it out when the
+// experiment does not cache by it. paramsAffecting lists the keys for a level, so caches
+// follow the declarations instead of hand-kept lists;
 // randomize: false leaves it out of the common Randomize (a playback speed, a start mode, or an inspection/display setting);
 // wide spans the
 // whole controls row, group puts it in a
@@ -81,6 +92,7 @@
 // size:   { key: "resolution", options: [["WxH", label], …], default }   grid size radios;
 //         switching rebuilds the instance at that size
 export const PARAM_KINDS = ["range", "select", "toggle", "seed", "size"];
+export const AFFECTS = ["fields", "lighting", "draw"];
 export const SEED_MAX = 4294967295;
 // Saved by the host itself: the sun's place on the shared path and the path's four shape
 // settings (core/sun-path.js), the grid size (unless a size param owns it) and Drift.
@@ -112,6 +124,7 @@ export function validateExperiment(experiment) {
       if (!(param.default >= param.min && param.default <= param.max)) problems.push(`range ${name} default is out of range`);
     }
     if (param?.randomize !== undefined && typeof param.randomize !== "boolean") problems.push(`param ${name} randomize must be true or false`);
+    if (param?.affects !== undefined && !AFFECTS.includes(param.affects)) problems.push(`param ${name} affects must be one of ${AFFECTS.join(", ")}`);
   if (param?.kind === "select" && !param.options?.some(([value]) => value === param.default)) problems.push(`select ${name} default is not an option`);
     if (param?.kind === "seed" && !isSeed(param.default)) problems.push(`seed ${name} default must be an integer 0 to ${SEED_MAX}`);
     if (param?.kind === "toggle" && typeof param.default !== "boolean") problems.push(`toggle ${name} default must be true or false`);
@@ -148,6 +161,9 @@ export function validateInstance(instance) {
   if (missing.length) throw new Error(`Experiment instance is missing ${missing.join(", ")}`);
   return instance;
 }
+
+// Keys of the params that declare one of `levels` (AFFECTS), in schema order.
+export const paramsAffecting = (experiment, ...levels) => experiment.params.filter(param => levels.includes(param.affects)).map(param => param.key);
 
 export const isSeed = value => Number.isInteger(value) && value >= 0 && value <= SEED_MAX;
 
