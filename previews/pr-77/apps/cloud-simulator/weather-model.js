@@ -15,14 +15,14 @@ export function weatherMoon(phase){
   const angle=2*Math.PI*(phase-.57);
   return {phase,azimuth:-22*Math.cos(angle),elevation:24*Math.sin(angle)};
 }
-// Artistic forward scattering through cloud water, limited to three disc radii.
+// Artistic forward scattering through cloud water, limited to six disc radii.
 // Thick cloud cores extinguish it; thinner edges reveal the cool backlight.
 export function moonCloudLight(maps,u,v,density,p){
   if(!maps.moon||maps.moon.elevation<=0)return 0;
   const angle=Math.acos(Math.max(-1,Math.min(1,dot(rayAt(u,v),maps.moonDirection))));
-  const t=clamp(1-angle/(4.5*Math.PI/180)),falloff=t*t*(3-2*t);
+  const t=clamp(1-angle/(9*Math.PI/180)),falloff=t*t*(3-2*t);
   const night=1-.85*clamp((maps.sun.elevation+4)/16),rise=clamp(maps.moon.elevation/2);
-  return .22*falloff*night*rise*Math.exp(-Math.max(0,p.cloudOpacity*density)*.5);
+  return .44*falloff*night*rise*Math.exp(-Math.max(0,p.cloudOpacity*density)*.5);
 }
 export const renderOrder=["sky","all-light-veils","far-cloud-rain-lightning-terrain","middle-cloud-rain-lightning-terrain","near-cloud-rain-lightning-terrain","terrain-props"];
 export function projectionLayers(state,p){return state.layers.map(l=>({...l,density:enabled(l,p)?l.fields.cloudWater:l.fields.cloudWater.map(()=>0)}));}
