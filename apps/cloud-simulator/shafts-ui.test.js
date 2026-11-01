@@ -23,7 +23,7 @@ test("Light shafts: strategies, patterns, Randomize picks every setting, the sha
   frame();
   const first = canvas.pixels();
   assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "drift", "drift-speed", "reset-sun", "timeOfDay", ...SUN_PATH_KEYS]);
-  assert.deepEqual($("pattern-buttons").children.map(button => button.textContent), ["Change near", "Change middle", "Change far"]);
+  assert.deepEqual($("pattern-buttons").children.map(button => button.textContent), ["New nearPattern", "New middlePattern", "New farPattern"]);
   assert.equal($("patterns").textContent, "near: 42 · middle: 1039 · far: 2036");
   assert.match($("stats").textContent, /^3 cloud layers · layered visibility · \d+ ms\/frame$/);
   assert.equal($("strategy-layered").checked, true);

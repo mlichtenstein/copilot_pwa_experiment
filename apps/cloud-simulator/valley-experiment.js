@@ -50,8 +50,9 @@ export const valley = {
   height: 120,
   sun: false,
   frameInterval: 80,
-  // The common New seed steps to the next stable brush layout; Step moves the wind one second.
-  seed: "brushSeed",
+  // The common New seed (key `seed`, the brush layout) steps to the next stable layout; Step
+  // moves the wind one second.
+  seed: "seed",
   stepSeconds: 1,
   loadError: "Cloud textures could not load. Reload online to try again.",
   params: [
@@ -75,10 +76,13 @@ export const valley = {
     slider("opacity", 0, 2, 0.1, "Opacity multiplier for the revealed texture."),
     slider("noiseScale", 0.5, 8, 0.5, "Spatial frequency of the two Perlin fields; larger values form smaller patches."),
     slider("noiseDrift", 0, 1, 0.05, "Opposing horizontal drift of the reveal fields, in noise cells per formation second."),
-    { key: "brushSeed", kind: "seed", default: 1, hidden: true, next: value => value + 1 }
+    { key: "seed", kind: "seed", default: 1, hidden: true, next: value => value + 1 }
   ],
+  // Ratings and links saved before the brush layout was called `seed` stored it as brushSeed.
+  migrate: raw => raw && typeof raw === "object" && "brushSeed" in raw && !("seed" in raw)
+    ? (({ brushSeed, ...rest }) => ({ ...rest, seed: brushSeed }))(raw) : raw,
   stats: (params, frame, instance) =>
-    `${textureFor(params.textureA).name} → ${textureFor(params.textureB).name} · ${Math.round(params.textureBlend * 100)}% B · layout ${params.brushSeed} · t ${instance.time.toFixed(1)} s · ${instance.lastMs.toFixed(0)} ms/frame`,
+    `${textureFor(params.textureA).name} → ${textureFor(params.textureB).name} · ${Math.round(params.textureBlend * 100)}% B · seed ${params.seed} · t ${instance.time.toFixed(1)} s · ${instance.lastMs.toFixed(0)} ms/frame`,
   // The two texture previews sit under their pickers, as before.
   decorate({ doc, controlFor }) {
     const previews = ["textureA", "textureB"].map((key, i) => {
@@ -110,7 +114,7 @@ export const valley = {
       render() {
         if (!instance.textures) return null;
         const start = globalThis.performance?.now() ?? 0;
-        const options = { ...Object.fromEntries(sliderKeys.map(key => [key, current[key]])), horizon: current.horizon, brushSeed: current.brushSeed, placement: current.placement };
+        const options = { ...Object.fromEntries(sliderKeys.map(key => [key, current[key]])), horizon: current.horizon, brushSeed: current.seed, placement: current.placement };
         const pixels = renderValley(instance.textures[textureFor(current.textureA).id], instance.time, options, current.shape, width, height, instance.textures[textureFor(current.textureB).id]);
         instance.lastMs = (globalThis.performance?.now() ?? 0) - start;
         return pixels;

@@ -23,12 +23,12 @@ export const SUN_LIMITS = { elevation: [-85, 85], azimuth: [-40, 40] };
 const clamp = (value, [low, high]) => Math.min(high, Math.max(low, value));
 export const sceneSun = sun => ({ sunElevation: clamp(sun.elevation, SUN_LIMITS.elevation), sunAzimuth: clamp(sun.azimuth, SUN_LIMITS.azimuth) });
 const modeName = params => params.strategy === "layered" ? "layered visibility" : params.strategy === "visibility" ? "visibility polygons" : "geometric shadows";
-// The three cloud pictures' seeds, as createScene(42) chooses them; Change near/middle/far
-// steps one of them.
+// The three cloud pictures' seeds, as createScene(42) chooses them; the New nearPattern,
+// New middlePattern and New farPattern buttons (named for their keys, like New seed) step one.
 const sceneSeeds = createScene().layers.map(layer => layer.seed);
 const patternKeys = ["nearPattern", "middlePattern", "farPattern"];
 const pattern = (key, i, name) => ({ key, kind: "seed", default: sceneSeeds[i], hidden: true, next: seed => seed + 1, buttonsIn: "pattern-buttons",
-  newLabel: `Change ${name}`, newTitle: `Change the ${name} cloud picture` });
+  newLabel: `New ${key}`, newTitle: `Change the ${name} cloud picture` });
 
 export const shafts = {
   id: "shafts",
