@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
-<!-- Purpose: Pixel rain app icon. Consumers: browser and manifest.json. Dependencies: none. -->
-<rect width="192" height="192" rx="32" fill="#111c30"/>
-<path fill="#b2dbea" d="M40 56h24V40h64v16h24v40H40z"/>
-<path fill="#6da6d5" d="M56 112h8v32h-8zm36 8h8v40h-8zm36-8h8v32h-8z"/>
-</svg>
