@@ -13,17 +13,29 @@
  *   app           rating bar app id, e.g. "cloud-simulator/sunset"
  *   width, height native pixel grid (a "size" param can offer others)
  *   sun           true if it follows the shared sun path (core/sun-path.js); the host then
- *                 adds the sunPhase and sunPath* sliders and the Play sun / Reset sun buttons
+ *                 adds the Sun group (Reset sun, sunPhase and the sunPath* sliders) to the
+ *                 common panel
  *   frameInterval fewest milliseconds between redraws while playing (0 = every frame)
  *   params        the controls, in display order (see PARAM_KINDS)
  *   create({ width, height, params, doc }) → instance
+ * The common panel: the host, not the experiment, builds the controls every page shares, in
+ * one order with one set of labels, tooltips and texts: Play/Pause and Step (the one shared
+ * clock), Randomize, Drift, Drift speed, then New seed (only with `seed`) and the Sun group
+ * (only with `sun`). An experiment declares capabilities; it never builds these itself.
+ * Its own controls go in a section below, under its title.
  * Optional capabilities (each generic; an experiment uses only what it needs):
  *   autoplay      start playing on load (unless the reader prefers reduced motion)
- *   playLabels    [play, pause] button text, e.g. ["Play wind", "Pause wind"]
- *   drift         true to offer the shared Drift checkbox (../../shared/drift.js) over
- *                 driftableParams; the checkbox is saved as `drift`
- *   actions       extra buttons, [{ id, label, title, run(page) }] (Step, Reset, …); page is
- *                 { instance, params, setPlaying, resetToDefaults({ keep }), redraw }
+ *   seed          the key of the seed param the common New seed button changes (random, or
+ *                 that param's next(value)); without it the panel has no New seed
+ *   stepSeconds   clock seconds one Step advances (a number, or (params) => number): one
+ *                 simulation tick; default 1
+ *   drift         false to leave out the shared Drift checkbox and its speed slider.
+ *                 Every experiment with driftableParams gets them otherwise (../../shared/drift.js);
+ *                 they are saved as `drift` and `driftSpeed`
+ *   actions       buttons only this experiment has, shown in its own section with their help
+ *                 text beside them: [{ id, label, title, help?, run(page) }]; page is
+ *                 { instance, params, setPlaying, setParams(partial), resetToDefaults({ keep }), redraw }
+ *   migrate(raw) → raw   turn an older saved shape (ratings, ?p= links) into flat params
  *   readouts      { elementId: (params, frame, instance) => text } filled on each redraw
  *                 (legends, status lines)
  *   adjust(next, previous) → params   link params, e.g. a resolution switch sets pixelArt
@@ -39,13 +51,18 @@
  *   render(frame)    return RGBA pixels (Uint8ClampedArray of width × height × 4), or null
  *                    while not ready
  *   dispose()        release anything held
+ *   selfLight()      optional: 0 to 1, how brightly the scene lights itself right now (a
+ *                    lightning flash). The host's night step dims the frame by the darker of
+ *                    daylight and this, so a flash stays bright at night
  *   ready            optional promise; the host keeps playback disabled until it settles
  * frame is { time, sun } where time is the shared clock in seconds and sun is
  * sunAt(time, shape) = { phase, azimuth, elevation } (degrees) on the shared vertical
  * figure-eight, sized and placed by the host-owned sunPath* settings.
  */
 
-// Every kind takes { key, help?, group?, enabled?(params), hidden?, wide? }: wide spans the
+// Every kind takes { key, help?, group?, enabled?(params), hidden?, wide?, randomize? }:
+// randomize: false leaves it out of the common Randomize (a playback speed, a start mode, or an inspection/display setting);
+// wide spans the
 // whole controls row, group puts it in a
 // fieldset with that legend, enabled greys it out when it does nothing, hidden keeps it in
 // params (saved, restored) with no visible input (a seed with only its "new" button).
@@ -54,18 +71,21 @@
 // toggle: { default: true | false }                  a checkbox
 // seed:   { default, newLabel, newTitle, random?, next?(value), buttonsIn? }
 //         integer 0 … 2³² − 1 with a "new" button: random (or next(value)); random: true also
-//         starts each page load on a random seed; buttonsIn names the element (by id) the
-//         "new" button goes in instead of the playback row
+//         starts each page load on a random seed. The experiment's main seed (its `seed`
+//         capability) uses the common panel's New seed instead; any other seed gets its own
+//         button (newLabel) in the experiment's section, or in the element buttonsIn names
 // size:   { key: "resolution", options: [["WxH", label], …], default }   grid size radios;
 //         switching rebuilds the instance at that size
 export const PARAM_KINDS = ["range", "select", "toggle", "seed", "size"];
 export const SEED_MAX = 4294967295;
 // Saved by the host itself: the sun's place on the shared path and the path's four shape
 // settings (core/sun-path.js), the grid size (unless a size param owns it) and Drift.
-export const RESERVED_KEYS = ["sunPhase", "sunPathWidth", "sunPathHeight", "sunPathX", "sunPathY", "resolution", "drift"];
+export const RESERVED_KEYS = ["sunPhase", "timeOfDay", "sunPathWidth", "sunPathHeight", "sunPathX", "sunPathY", "resolution", "drift", "driftSpeed"];
 const SIZE = /^(\d+)x(\d+)$/;
 export const parseSize = value => { const match = SIZE.exec(value); return match ? { width: Number(match[1]), height: Number(match[2]) } : null; };
 
+// Element ids of the common panel's controls (core/host.js); experiments cannot reuse them.
+export const COMMON_IDS = ["play", "step", "randomize", "drift", "drift-speed", "new-seed", "reset-sun", "sunPhase", "timeOfDay", "sunPathWidth", "sunPathHeight", "sunPathX", "sunPathY"];
 const INSTANCE_METHODS = ["update", "step", "render", "dispose"];
 
 // Throws with every problem in an experiment's description, so a bad module fails loudly.
@@ -87,7 +107,8 @@ export function validateExperiment(experiment) {
       if (!(param.min < param.max) || !(param.step > 0)) problems.push(`range ${name} needs min < max and step > 0`);
       if (!(param.default >= param.min && param.default <= param.max)) problems.push(`range ${name} default is out of range`);
     }
-    if (param?.kind === "select" && !param.options?.some(([value]) => value === param.default)) problems.push(`select ${name} default is not an option`);
+    if (param?.randomize !== undefined && typeof param.randomize !== "boolean") problems.push(`param ${name} randomize must be true or false`);
+  if (param?.kind === "select" && !param.options?.some(([value]) => value === param.default)) problems.push(`select ${name} default is not an option`);
     if (param?.kind === "seed" && !isSeed(param.default)) problems.push(`seed ${name} default must be an integer 0 to ${SEED_MAX}`);
     if (param?.kind === "toggle" && typeof param.default !== "boolean") problems.push(`toggle ${name} default must be true or false`);
     if (param?.kind === "size") {
@@ -100,10 +121,16 @@ export function validateExperiment(experiment) {
   if (experiment?.params?.filter?.(param => param?.kind === "size").length > 1) problems.push("at most one size param");
   for (const field of ["adjust", "decorate", "stats"]) if (experiment?.[field] !== undefined && typeof experiment[field] !== "function") problems.push(`${field} must be a function`);
   for (const field of ["autoplay", "drift"]) if (experiment?.[field] !== undefined && typeof experiment[field] !== "boolean") problems.push(`${field} must be true or false`);
-  if (experiment?.playLabels !== undefined && !(Array.isArray(experiment.playLabels) && experiment.playLabels.length === 2)) problems.push("playLabels must be [play, pause]");
+  // Play is common: one label everywhere, so experiments cannot rename it.
+  if (experiment?.playLabels !== undefined) problems.push("playLabels is not supported: Play/Pause is the same on every page");
+  if (experiment?.seed !== undefined && !experiment?.params?.some?.(param => param?.kind === "seed" && param.key === experiment.seed)) problems.push(`seed must name a seed param`);
+  // Another seed's button is "new-<key>": a seed keyed "seed" would take the common New seed's id.
+  if (experiment?.params?.some?.(param => param?.kind === "seed" && param.key === "seed" && experiment.seed !== "seed")) problems.push(`a seed keyed "seed" must be the experiment's seed (its button is the common New seed)`);
+  if (experiment?.stepSeconds !== undefined && typeof experiment.stepSeconds !== "function" && !(experiment.stepSeconds > 0)) problems.push("stepSeconds must be a positive number or a function");
+  if (experiment?.migrate !== undefined && typeof experiment.migrate !== "function") problems.push("migrate must be a function");
   for (const action of experiment?.actions ?? []) {
     if (typeof action?.id !== "string" || !action.id || typeof action.label !== "string" || typeof action.run !== "function") problems.push("every action needs an id, a label and run");
-    else if (["play", "drift", ...(experiment.sun ? ["reset"] : [])].includes(action.id) || action.id.startsWith("new-")) problems.push(`action id ${action.id} is reserved for the host`);
+    else if (COMMON_IDS.includes(action.id) || action.id.startsWith("new-")) problems.push(`action id ${action.id} is reserved for the common panel`);
   }
   for (const [id, readout] of Object.entries(experiment?.readouts ?? {})) if (typeof readout !== "function") problems.push(`readout ${id} must be a function`);
   if (!Array.isArray(experiment?.params)) problems.push("params must be an array");
@@ -140,6 +167,35 @@ export function cleanParam(param, value, fallback = param.default) {
 export function cleanParams(experiment, raw = {}, base = defaultParams(experiment)) {
   const source = raw && typeof raw === "object" ? raw : {};
   return Object.fromEntries(experiment.params.map(param => [param.key, cleanParam(param, source[param.key], base[param.key])]));
+}
+
+// Settings the common Randomize gives random values: every range (greyed-out and hidden ones
+// too), select and toggle, and every seed, except params marked randomize: false and the grid
+// size (a performance choice, not part of the picture).
+export const randomizableParams = experiment => experiment.params.filter(param => param.kind !== "size" && param.randomize !== false);
+
+// A random value for one param from `random` (() => [0, 1)): a range lands on one of its
+// steps, a select on one of its options, a toggle on either side, a seed anywhere 0 … 2³² − 1.
+export function randomValue(param, random) {
+  const pick = count => Math.min(count - 1, Math.floor(random() * count));
+  if (param.kind === "range") {
+    const steps = Math.floor((param.max - param.min) / param.step + 1e-9);
+    return Math.min(param.max, Number((param.min + pick(steps + 1) * param.step).toFixed(10)));
+  }
+  if (param.kind === "select" || param.kind === "size") return param.options[pick(param.options.length)][0];
+  if (param.kind === "toggle") return random() < 0.5;
+  return Math.floor(random() * (SEED_MAX + 1));
+}
+
+// Randomize: every randomizable setting of `params` gets a random value. Menus and toggles go
+// first and are linked (adjust), so modes are settled before the values that depend on them;
+// then every range and seed, greyed-out ones included.
+export function randomParams(experiment, params, random) {
+  const chosen = randomizableParams(experiment);
+  const pickAll = kinds => Object.fromEntries(chosen.filter(param => kinds.includes(param.kind)).map(param => [param.key, randomValue(param, random)]));
+  let next = cleanParams(experiment, { ...params, ...pickAll(["select", "toggle"]) }, params);
+  if (experiment.adjust) next = cleanParams(experiment, experiment.adjust(next, params), next);
+  return cleanParams(experiment, { ...next, ...pickAll(["range", "seed"]) }, next);
 }
 
 // Sliders Drift may move: visible ranges not marked drift: false (playback speeds and the like).

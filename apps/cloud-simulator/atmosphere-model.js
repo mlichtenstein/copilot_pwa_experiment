@@ -1,5 +1,5 @@
 /* Purpose: Coarse spherical-atmosphere optical paths and single-scattered sky color.
- * Consumers: horizon-model.js and atmosphere-model.test.js. Dependencies: none; distances in km. */
+ * Consumers: horizon-model.js, weather-model.js and atmosphere-model.test.js. Dependencies: none; distances in km. */
 export const EARTH_RADIUS = 6371, ATMOSPHERE_RADIUS = 6471, CAMERA_HEIGHT = 0.15;
 const RAYLEIGH = [0.0058, 0.0135, 0.0331];
 export const dot = (a, b) => a.reduce((sum, value, i) => sum + value * b[i], 0);
@@ -40,7 +40,8 @@ export function viewTransmission(point, settings) {
   const delta = point.map((v, i) => v - camera[i]), distance = Math.hypot(...delta);
   return opticalDepth(camera, delta.map(v => v / distance), distance, settings).map(tau => Math.exp(-tau));
 }
-export function skyRadiance(ray, sun, settings) {
+// Coarse-sky callers may omit the disc and rasterize it at their final output resolution.
+export function skyRadiance(ray, sun, settings, includeSun = true) {
   const camera = [0, EARTH_RADIUS + CAMERA_HEIGHT, 0];
   if (earthBlocks(camera, ray)) return [0.002, 0.003, 0.005];
   const distance = shellExit(camera, ray), color = [0.001, 0.002, 0.006], tau = [0, 0, 0];
@@ -58,7 +59,7 @@ export function skyRadiance(ray, sun, settings) {
       tau[c] += extinction * ds;
     }
   }
-  if (cosine > Math.cos(0.55 * Math.PI / 180)) {
+  if (includeSun && cosine > Math.cos(0.55 * Math.PI / 180)) {
     const direct = directSunlight(camera, sun, settings);
     for (let c = 0; c < 3; c++) color[c] += direct[c] * 5;
   }
