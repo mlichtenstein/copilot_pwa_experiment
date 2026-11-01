@@ -21,7 +21,7 @@ The camera uses a 58° vertical frustum and a 1.6 aspect ratio, shifted upward b
 
 ## Scene layers versus render passes
 
-1. Atmospheric sky from Horizon's spherical-atmosphere helpers.
+1. Atmospheric sky from Horizon's spherical-atmosphere helpers, with output-resolution sun and moon.
 2. All three-band visibility light veils, colored with altitude-dependent direct sunlight.
 3. Far cloud body, rain, channel light, opaque terrain.
 4. Middle cloud body, rain, channel light, opaque terrain.
@@ -75,3 +75,10 @@ Weather now consumes the common host frame.sun for sky, visibility and cloud ill
 The inspector and accumulated composition previews read the same reconstructed lighting maps as the final scene. Raw field previews retain their native grid presentation.
 
 Randomize changes scene parameters and the internal seed, while preserving the current field/composition view, inspection depth, layer-visibility toggles and lighting comparison mode. Graph tab, compact-preview style and expanded sections are UI state and also remain as chosen. The older studies likewise preserve their diagnostic View selection.
+
+
+## Moon detour
+
+The combined scene adds a stylized full moon on the same 90-second day clock. Its independent ellipse is `azimuth = −22 cos(2π(phase − 0.57))`, `elevation = 24 sin(2π(phase − 0.57))`, in degrees. It rises about 19:41, peaks about 01:41 and sets about 07:41. With the default sun path this leaves roughly 50 minutes of moonless evening and an early-morning overlap. Randomized sun shapes can change those intervals; the moon’s fixed path keeps it within the camera rather than inheriting extreme sun settings. The offset is timing, not a lunar illumination phase or astronomical ephemeris.
+
+A deliberately enlarged three-degree disc, faint halo and analytic crater shading are sampled on the final pixel grid in both lighting modes. Moonlight fades near the horizon and is subdued in daylight. It belongs to the sky composition pass, behind all cloud opacity and terrain, and appears in sky/composition previews. It does not illuminate weather/terrain or generate a second set of visibility shafts. No extra optical grids, settings or randomization exclusions are introduced. Scrubbing, pausing, saved sun phase and Play use the shared clock; moon geometry does not modify weather state.

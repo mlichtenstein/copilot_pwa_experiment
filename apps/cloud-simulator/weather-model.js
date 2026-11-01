@@ -1,12 +1,20 @@
 /* Purpose: Interpret shared weather fields as atmospheric colors, layered visibility, and explicit render passes.
  * Consumers: weather-experiment.js, weather-inspection.js and weather tests.
- * Dependencies: weather-fields.js, atmosphere/visibility/shafts models, and lightning terrain helpers. */
+ * Dependencies: weather-fields.js, atmosphere/visibility/shafts models, lightning terrain helpers, and the shared sun clock. */
 import {SCALE,CAMERA_LIFT,clamp,enabled,cloudAltitude,terrainY,weatherSun} from "./weather-fields.js";
 import {skyRadiance,sunDirection,pointAtAltitude,directSunlight,viewTransmission,EARTH_RADIUS,CAMERA_HEIGHT,earthBlocks,dot} from "./atmosphere-model.js";
 import {buildLayeredVisibility,combinedCoverage} from "./visibility-model.js";
 import {sampleCloud} from "./shafts-model.js";
 import {groundAt} from "./lightning-model.js";
 import {terrainShadowAt,drawTerrainObjects,groundLightRadius} from "./lightning-terrain.js";
+import {sunPhase} from "./core/sun-path.js";
+
+// A separate ellipse: rises at 19:41 and sets at 07:41 on the shared clock.
+// Fixed geometry keeps the moon in frame even when Randomize changes the sun path.
+export function weatherMoon(phase){
+  const angle=2*Math.PI*(phase-.57);
+  return {phase,azimuth:-22*Math.cos(angle),elevation:24*Math.sin(angle)};
+}
 export const renderOrder=["sky","all-light-veils","far-cloud-rain-lightning-terrain","middle-cloud-rain-lightning-terrain","near-cloud-rain-lightning-terrain","terrain-props"];
 export function projectionLayers(state,p){return state.layers.map(l=>({...l,density:enabled(l,p)?l.fields.cloudWater:l.fields.cloudWater.map(()=>0)}));}
 function rayAt(u,v){const ray=[(2*u-1)*SCALE*1.6,(1-2*v)*SCALE+CAMERA_LIFT,1],len=Math.hypot(...ray);return ray.map(x=>x/len);}
@@ -42,7 +50,8 @@ export function buildWeatherLighting(state,p,sunOverride,width=160,height=100){
   });
   const veilColors=state.layers.map(layer=>directSunlight(pointAtAltitude(layer.distance,cloudAltitude(layer,p)),direction,p));
   const camera=[0,EARTH_RADIUS+CAMERA_HEIGHT,0],sunlight=directSunlight(camera,direction,p);
-  return {width,height,sun,direction,camera,sunlight,visibility,sky,colors,veilColors,work:{skySamples:skyWidth*skyHeight,surfaceSamples:3*colorWidth*colorHeight,cells:state.layers.reduce((n,l)=>n+l.width*l.height,0),segments:visibility.bands.reduce((n,b)=>n+b.layers.reduce((k,l)=>k+l.segments.length,0),0)}};
+  const moon=weatherMoon(sun.phase??sunPhase(state.time)),moonDirection=sunDirection(moon.elevation,moon.azimuth);
+  return {width,height,sun,moon,moonDirection,direction,camera,sunlight,visibility,sky,colors,veilColors,work:{skySamples:skyWidth*skyHeight,surfaceSamples:3*colorWidth*colorHeight,cells:state.layers.reduce((n,l)=>n+l.width*l.height,0),segments:visibility.bands.reduce((n,b)=>n+b.layers.reduce((k,l)=>k+l.segments.length,0),0)}};
 }
 function mapBolt(layer,node,p){
   const top=.5-((cloudAltitude(layer,p)-.15)/layer.distance-CAMERA_LIFT)/(2*SCALE)-.09;
@@ -72,6 +81,21 @@ export function renderWeather(state,p,maps,width=160,height=100,throughPass=5){
     const mi=lightingIndex(maps,u,v),sky=maps.sky[mi];let rgb=sky.slice();
     // Sample the small disc on the final pixel grid, rather than the coarse sky grid.
     const ray=rayAt(u,v);if(dot(ray,maps.direction)>Math.cos(.55*Math.PI/180)&&!earthBlocks(maps.camera,ray))rgb=rgb.map((c,k)=>c+maps.sunlight[k]*5);
+    // Moon is part of the sky pass, then naturally covered by clouds and opaque terrain.
+    // Evaluate at output resolution in both lighting modes, including a narrow soft halo.
+    if(maps.moon&&maps.moon.elevation>0&&!earthBlocks(maps.camera,ray)){
+      const angle=Math.acos(Math.max(-1,Math.min(1,dot(ray,maps.moonDirection)))),radius=1.5*Math.PI/180;
+      const night=1-.85*clamp((maps.sun.elevation+4)/16),rise=clamp(maps.moon.elevation/2);
+      const halo=.025*Math.exp(-((angle/(radius*2.5))**2));
+      let disc=0;
+      if(angle<radius){
+        const az=Math.atan2(ray[0],ray[2])*180/Math.PI,el=Math.asin(ray[1])*180/Math.PI;
+        const mx=(az-maps.moon.azimuth)*Math.cos(maps.moon.elevation*Math.PI/180)/1.5,my=(el-maps.moon.elevation)/1.5;
+        const crater=(cx,cy,r)=>Math.exp(-(((mx-cx)**2+(my-cy)**2)/(r*r)));
+        disc=.8-.2*crater(-.3,.25,.3)-.16*crater(.35,-.25,.25);
+      }
+      rgb=rgb.map((c,k)=>c+(disc+halo)*[.72,.82,1][k]*night*rise);
+    }
     // Veils precede bodies: the same field supplies both the silhouettes and cloud opacity.
     for(let j=2;j>=0&&throughPass>=1;j--)if(enabled(state.layers[j],p))for(const band of vMaps.bands){
       const alpha=p.shaftStrength*p.haze*.22*band.weight*combinedCoverage(band.layers,j,mi)*clamp((maps.sun.elevation+6)/6);
@@ -101,3 +125,4 @@ export function renderWeather(state,p,maps,width=160,height=100,throughPass=5){
   }
   return pixels;
 }
+

@@ -2,7 +2,7 @@
  * Consumers: Node test runner. Dependencies: weather modules, core host/fake DOM, node:test/assert/crypto. */
 import test from "node:test";import assert from "node:assert/strict";import {randomInt} from "node:crypto";
 import {defaults,createWeather,stepWeather,refreshFields,weatherSun} from "./weather-fields.js";
-import {buildWeatherLighting,renderWeather,projectionLayers,renderOrder,interpolateRGB} from "./weather-model.js";
+import {buildWeatherLighting,renderWeather,projectionLayers,renderOrder,interpolateRGB,weatherMoon} from "./weather-model.js";
 import {weather} from "./weather-experiment.js";
 import {defaultParams,validateExperiment} from "./core/experiment.js";
 import {mountExperiment} from "./core/host.js";
@@ -57,7 +57,7 @@ test("shared time of day relights the weather without advancing cloud fields",()
 });
 test("sun disc survives the coarse sky grid, moves across the view and sets below Earth",()=>{
   const state=createWeather(seeds[0]);
-  const disc=sun=>{const maps=buildWeatherLighting(state,defaults,sun);maps.sky=maps.sky.map(()=>[0,0,0]);
+  const disc=sun=>{const maps=buildWeatherLighting(state,defaults,sun);maps.sky=maps.sky.map(()=>[0,0,0]);maps.moon=null;
     const pixels=renderWeather(state,defaults,maps,160,100,0),xs=[];
     for(let i=0;i<160*100;i++)if(pixels[i*4]+pixels[i*4+1]+pixels[i*4+2]>0)xs.push(i%160);
     return xs;
@@ -85,4 +85,49 @@ test("lighting modes preserve fields and share sharp output-resolution visibilit
   const instance=weather.create({width:48,height:30,params:defaults});instance.render({sun});assert.equal(instance.metrics.lighting.length,1);
   const before=JSON.stringify(instance.state);instance.update({...defaults,lightingMode:"full"});assert.equal(instance.metrics.lighting.length,0);
   instance.render({sun});assert.equal(instance.metrics.lighting.length,1);assert.equal(JSON.stringify(instance.state),before);assert.match(instance.describe(),/^full .*1440 sky \/ 4320 surface/);instance.dispose();
+});
+
+test("moon ellipse covers most night, with a dark evening and sunrise overlap",async()=>{
+  const {sunAtPhase,phaseForTimeOfDay}=await import("./core/sun-path.js");
+  const at=hour=>{const phase=phaseForTimeOfDay(hour);return {moon:weatherMoon(phase),sun:sunAtPhase(phase)};};
+  assert.ok(at(19).sun.elevation<0&&at(19).moon.elevation<0);
+  for(const hour of [20,22,0,2,4,6])assert.ok(at(hour).moon.elevation>0);
+  assert.ok(at(7).sun.elevation>0&&at(7).moon.elevation>0);
+  assert.ok(at(12).moon.elevation<0);
+  assert.ok(Math.abs(weatherMoon(.57).azimuth+22)<1e-10);
+  assert.ok(Math.abs(weatherMoon(.82).elevation-24)<1e-10);
+  assert.ok(Math.abs(weatherMoon(.57).azimuth-weatherMoon(1.57).azimuth)<1e-10);
+});
+test("moon survives either optical grid, is part of sky, and is occluded by cloud and terrain",async()=>{
+  const {sunAtPhase}=await import("./core/sun-path.js");
+  const p={...defaults,coverage:0,storminess:0,rainAmount:0},state=createWeather(42,p),before=JSON.stringify(state);
+  for(const lightingMode of ["interpolated","full"]){
+    const params={...p,lightingMode},maps=buildWeatherLighting(state,params,sunAtPhase(.82));
+    // Isolate lunar contribution from atmospheric sky and sun, without changing its geometry.
+    maps.sky=maps.sky.map(()=>[0,0,0]);maps.sunlight=[0,0,0];
+    const sky=renderWeather(state,params,maps,160,100,0),dark=renderWeather(state,params,{...maps,moon:null},160,100,0);
+    const bright=[];for(let i=0;i<160*100;i++)if(sky[i*4]>100)bright.push(i);
+    assert.ok(bright.length>0,"disc must survive between coarse optical samples");assert.notDeepEqual(sky,dark);
+    const scene=renderWeather(state,params,maps),noMoon=renderWeather(state,params,{...maps,moon:null});
+    for(const i of bright)assert.ok(scene[i*4]>noMoon[i*4],"clear sky reveals moon");
+    const cloud=structuredClone(state);for(const layer of cloud.layers)layer.fields.cloudWater.fill(100);
+    assert.deepEqual(renderWeather(cloud,params,maps),renderWeather(cloud,params,{...maps,moon:null}),"opaque clouds cover moon");
+    const low={...maps,moon:{elevation:1,azimuth:0},moonDirection:[0,Math.sin(Math.PI/180),Math.cos(Math.PI/180)]};
+    const lowSky=renderWeather(state,params,low,160,100,0),ground=renderWeather(state,params,low),groundDark=renderWeather(state,params,{...low,moon:null});
+    const i=Math.floor((.5-(Math.tan(Math.PI/180)-Math.tan(8*Math.PI/180))/(2*Math.tan(29*Math.PI/180)))*100)*160+80;
+    assert.ok(lowSky[i*4]>0);assert.equal(ground[i*4],groundDark[i*4],"terrain covers low moon");
+    const below={...maps,moon:{elevation:-1,azimuth:0}};
+    assert.deepEqual(renderWeather(state,params,below,160,100,0),dark);
+  }
+  assert.equal(JSON.stringify(state),before);
+});
+test("paused host time scrubbing moves moon and restores its saved phase",()=>{
+  const doc=fakeDocument(),frames=manualFrames();fakeCanvas(doc,160,100);
+  const page=mountExperiment(weather,{doc,raf:frames.raf,presets:false,serviceWorker:null,playing:false});frames.frame();
+  page.applyParams({...page.getParams(),coverage:0,storminess:0,sunPhase:.82});frames.frame();
+  const before=JSON.stringify(page.instance.state),saved=page.getParams(),night=page.instance.preview("sky","near",160,100);
+  page.applyParams({...saved,sunPhase:.65});frames.frame();
+  assert.notDeepEqual(page.instance.preview("sky","near",160,100),night);
+  page.applyParams(saved);frames.frame();assert.deepEqual(page.instance.preview("sky","near",160,100),night);
+  assert.equal(JSON.stringify(page.instance.state),before);page.dispose();
 });
