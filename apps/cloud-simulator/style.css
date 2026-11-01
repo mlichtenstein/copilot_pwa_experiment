@@ -12,34 +12,53 @@ canvas { display: block; width: 100%; aspect-ratio: 4 / 3; image-rendering: pixe
 .axis { display: flex; justify-content: space-between; padding: 8px 12px; font-size: .75rem; color: #abbdd6; }
 .playback { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 /* The common panel (core/host.js): the same controls, order and texts on every experiment
- * page, each text beside what it explains; then the experiment's own section, under its heading. */
-.common-panel { display: grid; gap: 10px; margin-bottom: 14px; padding: 10px 12px 12px; border: 1px solid #34455e; border-radius: 10px; background: #111c30; }
+ * page, in compact rows; then the experiment's own section, under its heading. */
+.common-panel { display: grid; gap: 8px; margin-bottom: 12px; padding: 8px 10px 10px; border: 1px solid #34455e; border-radius: 10px; background: #111c30; }
 .panel-heading, .experiment-heading { margin: 0; font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: #8ebbcf; }
-.panel-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
-.panel-row small { flex: 1 1 200px; opacity: .85; font-size: .8rem; line-height: 1.4; }
-label.panel-row { display: flex; }
-.panel-row.drift-speed input[type=range] { flex: 1 1 120px; width: auto; }
-.panel-row.drift input[type=checkbox] { width: 20px; height: 20px; margin: 0; accent-color: #9ed8ec; }
-.common-panel .panel-sun { margin: 4px 0 0; padding: 12px; gap: 14px 20px; }
-.common-panel .panel-sun > .panel-row { grid-column: 1 / -1; }
-.controls > .experiment-heading, .controls > .stats, .controls > .own-action { grid-column: 1 / -1; margin: 0; }
+.panel-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.hold-hint { font-weight: 400; text-transform: none; letter-spacing: 0; opacity: .6; cursor: help; }
+.panel-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.panel-row.buttons { flex-wrap: nowrap; gap: 4px; }
+.panel-row.buttons > span, .panel-row .reset-sun { display: grid; flex: 1 1 auto; }
+.panel-row.buttons button, .panel-row .reset-sun button { width: 100%; padding: 6px 6px; font-size: .75rem; white-space: nowrap; }
+.panel-row.drift-row { flex-wrap: nowrap; }
+.panel-row .drift { display: flex; align-items: center; gap: 6px; flex: none; }
+.panel-row .drift input { width: 20px; height: 20px; margin: 0; accent-color: #9ed8ec; }
+.panel-row .drift-speed { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; font-size: .85rem; }
+.panel-row .drift-speed input { flex: 1 1 60px; min-width: 0; }
+.common-panel .panel-sun { margin: 0; padding: 4px 8px 8px; gap: 6px; grid-template-columns: minmax(0, 1fr); }
+.panel-row.sun-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; }
+.sun-path summary { padding: 4px 0; font-size: .85rem; }
+.sun-path[open] { display: grid; gap: 8px; }
+.controls > .experiment-heading, .controls > .stats, .controls > .own-actions { grid-column: 1 / -1; margin: 0; }
+/* Hold-to-see help (core/hold-help.js): every description is hidden; holding its control (or
+ * hovering it with a mouse, or focusing it from the keyboard) shows it in one popover. */
+.help { display: none; }
+.help-host { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.help-host code, legend.help-host b, label.help-host > span:first-child { text-decoration: underline dotted #536781; text-underline-offset: 3px; }
+.help-pop { position: fixed; z-index: 10; max-width: calc(100vw - 16px); padding: 8px 10px; border: 1px solid #536781; border-radius: 8px;
+  background: #1b2a40; color: #e0eaf6; font-size: .8rem; line-height: 1.4; box-shadow: 0 4px 16px #0008; pointer-events: none; }
+.help-pop[hidden] { display: none; }
 button, select, input[type=number] { font: inherit; color: inherit; background: #1b2a40; border: 1px solid #536781; border-radius: 6px; min-height: 44px; padding: 8px 12px; }
 button { cursor: pointer; }
 button:hover { background: #2b405b; }
 button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid #aadbea; outline-offset: 3px; }
 #play { background: #294b5a; }
 .stats { font: .8rem ui-monospace, monospace; }
-.controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; }
+.controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
 label { display: grid; gap: 7px; font-size: .9rem; min-width: 0; }
 code { overflow-wrap: anywhere; }
-label small { color: #b9c9dd; line-height: 1.4; }
+/* A slider: its key and value on one line (the value wraps under a long key), the track below. */
+label.slider { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+label.slider > output { margin-left: auto; }
+label.slider > input { flex: 1 0 100%; }
 output { color: #9ed8ec; font-variant-numeric: tabular-nums; }
 input[type=range] { width: 100%; min-height: 32px; accent-color: #9ed8ec; margin: 0; }
 .choice { display: flex; align-items: center; gap: 10px; min-height: 44px; }
 .choice input { width: 20px; height: 20px; margin: 0; flex: none; accent-color: #9ed8ec; }
 .choices { display: grid; gap: 4px; font-size: .9rem; min-width: 0; }
 input:disabled + span, label:has(input:disabled) { opacity: .55; }
-fieldset { grid-column: 1 / -1; border: 1px solid #34455e; border-radius: 8px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; padding: 16px; min-width: 0; }
+fieldset { grid-column: 1 / -1; border: 1px solid #34455e; border-radius: 8px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; padding: 12px; min-width: 0; }
 legend, #legend, details { font-size: .85rem; color: #b9c9dd; }
 select, input[type=number] { width: 100%; min-width: 0; }
 summary { cursor: pointer; padding: 10px 0; }
@@ -54,10 +73,15 @@ a { color: #9ed8ec; }
 .experiment-layout { height: 100vh; height: 100dvh; max-width: none; padding: 10px;
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
   grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "sim header" "sim controls"; gap: 10px 16px; }
-.experiment-header { grid-area: header; }
-.experiment-header h1 { font-size: 1.4rem; }
+/* The shared header (core/header.js): the same lines on every page, so the same height. */
+.experiment-header { grid-area: header; min-width: 0; }
+.experiment-header h1 { font-size: 1.4rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .experiment-header p { margin: 4px 0; font-size: .9rem; }
 .experiment-header .eyebrow { margin: 0; font-size: .7rem; }
+.experiment-header .tagline { line-height: 1.4; height: 2.8em; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.experiment-nav { display: flex; flex-wrap: wrap; gap: 0 6px; font-size: .85rem; line-height: 1.6; }
+.experiment-nav .nav-sep { color: #536781; }
+.experiment-nav [aria-current="page"] { color: #e0eaf6; text-decoration: underline; text-decoration-color: #9ed8ec; text-underline-offset: 3px; }
 .simulation-pane { grid-area: sim; min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
 /* The emoji rating bar (../shared/presets.css) sits above the canvas. */
 .simulation-pane.with-presets { grid-template-rows: auto minmax(0, 1fr) auto; gap: 6px; border: 0; border-radius: 0; background: none; overflow: visible; }
@@ -74,14 +98,14 @@ a { color: #9ed8ec; }
 @media (max-width: 760px) {
   .experiment-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr);
     grid-template-areas: "header" "sim" "controls"; gap: 6px; padding: 6px; }
-  .experiment-header .eyebrow { display: none; }
-  .experiment-header h1 { font-size: 1.15rem; display: inline; margin-right: 8px; }
-  .experiment-header p { font-size: .8rem; margin: 2px 0; }
-  .experiment-header p:nth-of-type(2) { display: none; }
+  .experiment-header .eyebrow, .experiment-header .tagline { display: none; }
+  .experiment-header h1 { font-size: 1.15rem; }
+  .experiment-nav { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  .experiment-nav::-webkit-scrollbar { display: none; }
   .canvas-fit { container-type: normal; }
   .canvas-fit canvas { width: min(100%, 60dvh * var(--fit-ar)); height: auto; aspect-ratio: var(--fit-ar); }
   .controls-pane { border-top: 1px solid #34455e; padding-top: 8px; }
 }
 @media (max-height: 480px) and (min-width: 560px) {
-  .experiment-header p { display: inline; margin-right: 10px; }
+  .experiment-header .tagline { display: none; }
 }

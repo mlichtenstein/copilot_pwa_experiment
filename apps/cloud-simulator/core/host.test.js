@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { mountExperiment, DEFAULT_SUN_PHASE } from "./host.js";
 import { DEFAULT_SUN_SHAPE, SUN_PATH, SUN_PATH_KEYS, sunAt, sunAtPhase, timeForPhase } from "./sun-path.js";
 import { sunset } from "../sunset-experiment.js";
-import { fakeDocument, controlIds } from "./fake-dom.js";
+import { fakeDocument, controlIds, helpOf } from "./fake-dom.js";
 
 test("Sunset on the host: generated controls, shared sun playback, pause, reset and params round-trip", () => {
   const doc = fakeDocument(["sky", "playback", "controls", "stats", "status"]);
@@ -22,9 +22,10 @@ test("Sunset on the host: generated controls, shared sun playback, pause, reset 
 
   // The common panel: Play/Step, Randomize, Drift, Drift speed, New seed (Sunset declares its
   // seed) and the Sun group. Below, under its heading: View, the seed and the lighting sliders.
-  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "drift", "drift-speed", "new-seed", "reset-sun", "sunPhase", ...SUN_PATH_KEYS]);
+  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed", "reset-sun", "sunPhase", ...SUN_PATH_KEYS]);
   assert.deepEqual(["play", "step", "randomize", "new-seed", "reset-sun"].map(id => $(id).textContent), ["Play", "Step", "Randomize", "New seed", "Reset sun"]);
-  assert.ok(["play", "step", "randomize", "new-seed", "reset-sun"].every(id => $(id).title));
+  // Their descriptions are hidden (shown on hold), not titles.
+  assert.ok(["play", "step", "randomize", "new-seed", "reset-sun"].every(id => helpOf(doc, $(id)) && !$(id).title));
   assert.equal($("controls").children[0].textContent, "Sunset study settings");
   assert.deepEqual(controlIds($("controls")), ["view", "seed", "extinction", "slabDepth", "albedo", "g", "airOpticalDepth", "ambient", "exposure"]);
 

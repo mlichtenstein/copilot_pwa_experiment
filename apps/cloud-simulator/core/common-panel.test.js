@@ -1,21 +1,25 @@
-/* Purpose: Walk every registered experiment page and check the common panel is the same on
- *   each: the same buttons, sliders, labels, tooltips and explanatory texts in the same order;
- *   New seed present exactly when the experiment declares `seed`, the Sun group exactly when
- *   it declares `sun`; and no page has a Play, Pause, Step, Randomize or New seed of its own
- *   (in its generated controls or its HTML).
+/* Purpose: Walk every registered experiment page and check the common parts are the same on
+ *   each. The header: the same lines and the same nav (every experiment, same labels, hrefs
+ *   and order, Lightning included), only the current-page marker moving, and no hand-written
+ *   header or nav left in the HTML. The common panel: the same buttons, sliders, labels and
+ *   (hidden) explanatory texts in the same order; New seed present exactly when the
+ *   experiment declares `seed`, the Sun group exactly when it declares `sun`; no page has a
+ *   Play, Pause, Step, Randomize or New seed of its own (in its generated controls or its
+ *   HTML). Descriptions everywhere are hidden until held (hold-help.test.js covers the hold).
  * Consumers: Node test runner. Dependencies: node:test, node:assert, node:fs, host.js,
- *   registry.js and fake-dom.js. */
+ *   header.js, registry.js and fake-dom.js. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { mountExperiment, PANEL_TEXT } from "./host.js";
 import { experiments } from "./registry.js";
+import { SITE_NAME } from "./header.js";
 import { fakeDocument, fakeCanvas, manualFrames, imageDocument, descendants } from "./fake-dom.js";
 
 // Every page's containers, with canvases that can decode Valley's bitmaps; it remembers every
 // element made so the whole page can be searched.
 function pageDocument() {
-  const doc = fakeDocument(["sky", "presets", "playback", "controls", "stats", "status", "legend", "cloud-status", "patterns", "pattern-buttons"]);
+  const doc = fakeDocument(["header", "sky", "presets", "playback", "controls", "stats", "status", "legend", "cloud-status", "patterns", "pattern-buttons"]);
   const images = imageDocument(), make = doc.createElement;
   doc.made = [];
   doc.createElement = tag => {
@@ -35,7 +39,7 @@ function pageDocument() {
 const describe = node => [node.tagName, node.id ?? "", node.className ?? "", node.tagName === "OUTPUT" ? "" : node.children.length ? "" : node.textContent,
   node.title ?? "", node.type ?? "", node.min ?? "", node.max ?? "", node.step ?? "", node.attributes["aria-label"] ?? ""].join(" | ");
 const isSunItem = node => { for (let n = node; n; n = n.parentNode) if (n.className === "panel-sun") return true; return false; };
-const isSeedItem = node => { for (let n = node; n; n = n.parentNode) if (n.className === "panel-row new-seed") return true; return false; };
+const isSeedItem = node => { for (let n = node; n; n = n.parentNode) if (/(^| )new-seed( |$)/.test(n.className ?? "")) return true; return false; };
 
 async function mountAll() {
   const pages = [];
@@ -60,6 +64,10 @@ test("the common panel is identical on every experiment page", async () => {
   // The always-present items, in order.
   assert.deepEqual(reference.filter(line => / \| (play|step|randomize|drift|drift-speed) \| /.test(line)).map(line => line.split(" | ")[1]),
     ["play", "step", "randomize", "drift", "drift-speed"]);
+  // Compact rows: the buttons on one row, Drift and its speed on the next, the sun's path
+  // shape folded away.
+  const rows = pages[0].$("playback").children.map(child => child.className);
+  assert.deepEqual(rows.slice(0, 3), ["panel-heading", "panel-row buttons", "panel-row drift-row"]);
   for (const page of pages) {
     assert.deepEqual(shared(page), reference, `${page.entry.title}: same buttons, labels, tooltips, texts and order`);
     assert.equal(page.$("playback").className, "common-panel");
@@ -69,8 +77,10 @@ test("the common panel is identical on every experiment page", async () => {
     const ids = page.panel.map(node => node.id).filter(Boolean);
     assert.equal(ids.includes("new-seed"), Boolean(page.experiment.seed), `${page.entry.title}: New seed iff seed`);
     assert.equal(ids.includes("reset-sun"), page.experiment.sun, `${page.entry.title}: Sun group iff sun`);
-    const order = ["play", "step", "randomize", "drift", "drift-speed", "new-seed", "reset-sun", "sunPhase"].filter(id => ids.includes(id));
+    const order = ["play", "step", "randomize", "new-seed", "drift", "drift-speed", "reset-sun", "sunPhase"].filter(id => ids.includes(id));
     assert.deepEqual(ids.filter(id => order.includes(id)), order, `${page.entry.title}: panel order`);
+    const sunPath = page.panel.find(node => node.tagName === "DETAILS");
+    if (page.experiment.sun) assert.ok(sunPath && !sunPath.open && descendants(sunPath).some(node => node.id === "sunPathWidth"), `${page.entry.title}: sun path shape folded`);
   }
   // The capability items are the same wherever they appear too.
   for (const pick of [isSeedItem, isSunItem]) {
@@ -94,6 +104,55 @@ test("no experiment page has its own Play, Pause, Step, Randomize or New seed", 
     assert.match(html, /<div[^>]*id="playback"[^>]*><\/div>/, `${entry.href} has an empty #playback`);
     assert.doesNotMatch(html, /<button[^>]*id="(play|step|randomize|reset|reset-sun|new-seed)"/, `${entry.href} builds no common buttons`);
     assert.doesNotMatch(html, />\s*(Play|Pause) [a-z]+\s*</, `${entry.href} has no labelled Play`);
+  }
+  for (const page of pages) page.page.dispose();
+});
+
+// The header's lines, and its nav as "label -> href" (or "[label]" for the current page).
+const navOf = header => descendants(header.children.find(child => child.tagName === "NAV"))
+  .filter(node => node.tagName === "A" || node.attributes["aria-current"]).map(node => node.attributes["aria-current"] ? `[${node.textContent}]` : `${node.textContent} -> ${node.href}`);
+
+test("every page has the same header and nav, built from the registry", async () => {
+  const pages = await mountAll();
+  const all = experiments.map(entry => `${entry.nav} -> ${entry.href}`);
+  assert.deepEqual(experiments.map(entry => entry.nav), ["Sunset", "Convection", "Horizon", "Shafts", "Noise", "Valley", "Lightning"]);
+  for (const { entry, $ } of pages) {
+    const header = $("header");
+    assert.equal(header.className, "experiment-header");
+    assert.deepEqual(header.children.map(child => `${child.tagName}.${child.className ?? ""}`), ["P.eyebrow", "H1.", "P.tagline", "NAV.experiment-nav"], `${entry.title}: same lines`);
+    assert.equal(header.children[0].textContent, SITE_NAME);
+    assert.equal(header.children[1].textContent, entry.title);
+    assert.equal(header.children[2].textContent, entry.tagline);
+    // Every experiment, same order, labels and hrefs; only the current one is marked, not a link.
+    assert.deepEqual(navOf(header), all.map(line => line.startsWith(`${entry.nav} ->`) ? `[${entry.nav}]` : line), `${entry.title}: nav`);
+    // The HTML leaves the header to the host: an empty <header id="header">, no nav of its own.
+    const html = readFileSync(new URL(`../${entry.href}`, import.meta.url), "utf8");
+    assert.match(html, /<header id="header" class="experiment-header"><\/header>/, `${entry.href}: empty header`);
+    assert.doesNotMatch(html, /<nav\b/, `${entry.href}: no hand-written nav`);
+    for (const other of experiments) assert.doesNotMatch(html, new RegExp(`href="${other.href}"`), `${entry.href}: no hand-written link to ${other.href}`);
+  }
+  for (const page of pages) page.page.dispose();
+});
+
+test("descriptions are hidden by default, in the common panel and in every experiment's own controls", async () => {
+  const pages = await mountAll();
+  const css = readFileSync(new URL("../style.css", import.meta.url), "utf8");
+  assert.match(css, /\.help \{ display: none; \}/, "style.css hides .help");
+  assert.match(css, /\.help-pop\[hidden\] \{ display: none; \}/);
+  for (const { entry, doc, $, page } of pages) {
+    const nodes = [...descendants($("playback")), ...descendants($("controls"))];
+    const notes = nodes.filter(node => node.tagName === "SMALL");
+    assert.ok(notes.length >= 6, `${entry.title}: has descriptions`);
+    // Every description is a hidden .help, referenced by the control it describes.
+    const described = new Set(nodes.map(node => node.attributes["aria-describedby"]).filter(Boolean));
+    for (const note of notes) {
+      assert.equal(note.className, "help", `${entry.title}: "${note.textContent}" is hidden`);
+      assert.ok(described.has(note.id), `${entry.title}: "${note.textContent}" describes a control`);
+    }
+    // One popover, hidden until a hold; no tooltips doubling the held text.
+    assert.equal(page.help.popover.hidden, true);
+    assert.deepEqual(doc.body.children.filter(node => node.className === "help-pop"), [page.help.popover]);
+    for (const node of nodes) if (node.attributes["aria-describedby"]) assert.ok(!node.title, `${entry.title}: #${node.id} has no title as well`);
   }
   for (const page of pages) page.page.dispose();
 });

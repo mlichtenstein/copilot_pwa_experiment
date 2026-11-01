@@ -13,7 +13,7 @@ import { mountExperiment } from "./host.js";
 import { driftableParams, validateExperiment } from "./experiment.js";
 import { experiments } from "./registry.js";
 import { SUN_PATH_PARAMS } from "./sun-path.js";
-import { fakeDocument, fakeCanvas, manualFrames, imageDocument } from "./fake-dom.js";
+import { fakeDocument, fakeCanvas, manualFrames, imageDocument, helpOf } from "./fake-dom.js";
 
 // Every page's containers, with canvases that can decode Valley's bitmaps.
 function pageDocument() {
@@ -51,16 +51,18 @@ for (const entry of experiments) {
     await page.instance.ready; await new Promise(resolve => setTimeout(resolve, 0));
     page.setPlaying(false); frame();
 
-    // The checkbox is in the common panel, off, with its explanation beside it; so are the
-    // Drift speed slider and Randomize. (common-panel.test.js checks the texts match on every page.)
-    const label = $("drift").parentNode;
-    assert.equal(label.className, "panel-row drift"); assert.equal(label.parentNode, $("playback")); assert.equal($("drift").checked, false);
-    assert.match(label.children.at(-1).textContent, /sliders wander slowly/);
-    const speedLabel = $("drift-speed").parentNode, randomizeRow = $("randomize").parentNode;
-    assert.equal(speedLabel.className, "panel-row drift-speed"); assert.equal(randomizeRow.parentNode, $("playback"));
-    assert.match(speedLabel.children.at(-1).textContent, /Scales each drift step/); assert.match(speedLabel.title, /0\.1× to 10×/);
-    assert.equal(randomizeRow.children[0], $("randomize")); assert.match(randomizeRow.children.at(-1).textContent, /random value in its range/);
-    assert.match($("randomize").title, /random value in its range/);
+    // The checkbox is in the common panel's Drift row, off, beside the Drift speed slider; Randomize
+    // is in the buttons row. Their explanations are hidden, shown on hold (hold-help.test.js).
+    // (common-panel.test.js checks the texts match on every page.)
+    const label = $("drift").parentNode, row = label.parentNode;
+    assert.equal(label.className, "drift help-host"); assert.equal(row.className, "panel-row drift-row"); assert.equal(row.parentNode, $("playback"));
+    assert.equal($("drift").checked, false);
+    assert.match(helpOf(doc, $("drift")), /sliders wander slowly/);
+    const speedLabel = $("drift-speed").parentNode, randomizeRow = $("randomize").parentNode.parentNode;
+    assert.equal(speedLabel.className, "drift-speed help-host"); assert.equal(speedLabel.parentNode, row);
+    assert.equal(randomizeRow.className, "panel-row buttons"); assert.equal(randomizeRow.parentNode, $("playback"));
+    assert.match(helpOf(doc, $("drift-speed")), /Scales each drift step|0\.1× to 10×/);
+    assert.match(helpOf(doc, $("randomize")), /random value in its range/); assert.ok(!$("randomize").title);
     assert.equal(page.getParams().driftSpeed, 1); assert.equal(Number($("drift-speed").value), 0);
 
     const before = page.getParams();
