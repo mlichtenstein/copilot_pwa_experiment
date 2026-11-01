@@ -117,3 +117,26 @@ a { color: #9ed8ec; }
 @media (max-height: 480px) and (min-width: 560px) {
   .experiment-header .tagline { display: none; }
 }
+
+/* The front page (index.html, home.js): the header, 🎲 / ❤️, the experiments as picture cards,
+ * then how the pages work. */
+.home-layout { max-width: 960px; padding: 12px 14px 32px; }
+.home .header-actions { display: none; }
+.home .experiment-header h1 { white-space: normal; }
+.home-start { margin: 12px 0 4px; }
+.home-launch { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.home-launch .launch { display: grid; flex: 1 1 160px; }
+.home-launch button.big { font-size: 1rem; padding: 10px 14px; }
+.home-launch .launch-status { flex-basis: 100%; margin: 0; font-size: .9rem; color: #f2c6a0; }
+.home-launch .launch-status:empty { display: none; }
+.home-start .hold-hint { margin: 6px 0 0; font-size: .8rem; }
+.home-heading { margin: 18px 0 8px; font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: #8ebbcf; }
+.home-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.home-card a { display: grid; align-content: start; gap: 4px; height: 100%; padding: 6px 6px 10px; border: 1px solid #34455e; border-radius: 10px; background: #111c30; color: inherit; text-decoration: none; }
+.home-card a:hover, .home-card a:focus-visible { border-color: #9ed8ec; }
+.home-card-picture { display: block; aspect-ratio: 8 / 5; overflow: hidden; border-radius: 6px; background: #0b1220; }
+.home-card img { display: block; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+.home-card-title { font-weight: 600; color: #e0eaf6; }
+.home-card-line { font-size: .85rem; line-height: 1.4; color: #b9c9dd; }
+.home-about p { margin: 6px 0; font-size: .92rem; }
+@media (max-width: 480px) { .home-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .home-card-line { font-size: .78rem; } }
