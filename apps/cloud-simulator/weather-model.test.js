@@ -42,6 +42,27 @@ test("existing host builds controls without numeric seed entry, steps, resets, a
   const inputs=descendants(doc.getElementById("controls")).filter(n=>n.tagName==="INPUT");assert.ok(inputs.every(n=>n.type!=="number"));assert.ok(canvas.pixels());
   doc.getElementById("step").fire("click");frames.frame();assert.equal(page.instance.state.time,.1);
   doc.getElementById("coverage").value="0";doc.getElementById("coverage").fire("input");frames.frame();assert.ok(page.instance.state.layers.every(l=>l.fields.cloudWater.every(v=>v===0)));
-  const saved={...page.getParams(),sunElevation:-3,far:false};page.applyParams(saved);frames.frame();assert.equal(page.params.sunElevation,-3);assert.equal(page.params.far,false);
+  const saved={...page.getParams(),sunPhase:.45,far:false};page.applyParams(saved);frames.frame();assert.ok(Math.abs(page.getParams().sunPhase-.45)<1e-8);assert.equal(page.params.far,false);
   doc.getElementById("reset-weather").fire("click");frames.frame();assert.equal(page.instance.state.time,0);assert.equal(page.params.coverage,defaults.coverage);page.dispose();
+});
+
+test("shared time of day relights the weather without advancing cloud fields",()=>{
+  const doc=fakeDocument(),frames=manualFrames();fakeCanvas(doc,160,100);
+  const page=mountExperiment(weather,{doc,raf:frames.raf,presets:false,serviceWorker:null,playing:false});frames.frame();
+  assert.equal(weather.sun,true);assert.ok(!weather.params.some(p=>["sunElevation","sunAzimuth","sunSpeed"].includes(p.key)));
+  const state=JSON.stringify(page.instance.state),morning=page.instance.preview("sky","near",160,100);
+  doc.getElementById("timeOfDay").value="17";doc.getElementById("timeOfDay").fire("input");frames.frame();
+  assert.notDeepEqual(page.instance.preview("sky","near",160,100),morning);
+  assert.equal(JSON.stringify(page.instance.state),state);assert.match(page.instance.describe(),/sun .*°/);page.dispose();
+});
+test("sun disc survives the coarse sky grid, moves across the view and sets below Earth",()=>{
+  const state=createWeather(seeds[0]);
+  const disc=sun=>{const maps=buildWeatherLighting(state,defaults,sun);maps.sky=maps.sky.map(()=>[0,0,0]);
+    const pixels=renderWeather(state,defaults,maps,160,100,0),xs=[];
+    for(let i=0;i<160*100;i++)if(pixels[i*4]+pixels[i*4+1]+pixels[i*4+2]>0)xs.push(i%160);
+    return xs;
+  };
+  const left=disc({elevation:10,azimuth:-12}),right=disc({elevation:10,azimuth:12});
+  assert.ok(left.length>0&&right.length>0,"small sun must not disappear between coarse sky samples");
+  assert.ok(Math.max(...left)<Math.min(...right));assert.equal(disc({elevation:-5,azimuth:0}).length,0);
 });

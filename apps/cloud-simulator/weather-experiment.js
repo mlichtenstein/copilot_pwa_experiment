@@ -1,24 +1,22 @@
 /* Purpose: Adapt the combined weather prototype to the existing generated-controls host with stage timings.
  * Consumers: weather.js, core registry, and weather tests.
- * Dependencies: weather-fields.js, weather-model.js, weather-inspection.js and core/experiment.js contract. */
-import {defaults,createWeather,refreshFields,stepWeather,weatherSun} from "./weather-fields.js";
+ * Dependencies: weather-fields.js, weather-model.js, weather-inspection.js, core/sun-path.js and core/experiment.js contract. */
+import {defaults,createWeather,refreshFields,stepWeather} from "./weather-fields.js";
 import {buildWeatherLighting} from "./weather-model.js";
 import {nodes,passes,renderInspection,needsLighting} from "./weather-inspection.js";
+import {sunAtPhase} from "./core/sun-path.js";
 const fieldKeys=["cloudAltitude","altitudeSpread","coverage","textureMix"];
 const lightingKeys=[...fieldKeys,"sunElevation","sunAzimuth","sunSpeed","airDensity","aerosol","cloudOpacity","cloudSharpness","haze","shaftStrength","edgeFeather","near","middle","far"];
 const now=()=>globalThis.performance?.now()??Date.now();
 const slider=(key,min,max,step,help,group)=>({key,kind:"range",min,max,step,default:defaults[key],help,group});
 const toggle=(key,help)=>({key,kind:"toggle",default:defaults[key],help,group:"Layers"});
 function summary(values){const sorted=[...values].sort((a,b)=>a-b);return sorted.length?`${sorted[Math.floor((sorted.length-1)*.5)].toFixed(0)}/${sorted[Math.floor((sorted.length-1)*.95)].toFixed(0)}`:"—";}
-export const weather={id:"weather",title:"Weather layers",app:"cloud-simulator/weather",width:160,height:100,sun:false,frameInterval:250,seed:"seed",stepSeconds:.1,
+export const weather={id:"weather",title:"Weather layers",app:"cloud-simulator/weather",width:160,height:100,sun:true,frameInterval:250,seed:"seed",stepSeconds:.1,
   params:[
     {key:"seed",kind:"seed",default:42,random:true,hidden:true},
     toggle("near","Show the near cloud/rain/lightning/terrain layer, 8 km away."),toggle("middle","Show the middle layer, 24 km away."),toggle("far","Show the far layer, 65 km away."),
     {key:"view",kind:"select",label:"View",default:"scene",options:[["scene","Combined scene"],...nodes.map(node=>[node.id,node.label]),["sky","Sky / atmospheric light"],...passes.filter(pass=>pass.view!=="scene").map(pass=>[pass.view,`Composition ${pass.index+1}: ${pass.label}`])],help:"Inspect a field, derived rendering input, or accumulated render pass. The graph shows their connections.",group:"Inspect"},
     {key:"inspectLayer",kind:"select",label:"Field layer",default:"near",options:[["near","Near · 24×15"],["middle","Middle · 32×20"],["far","Far · 48×30"]],help:"Which distance layer supplies the field view; charge is 12×6 in each.",group:"Inspect"},
-    slider("sunElevation",-8,25,.25,"Starting sun elevation above the horizon, degrees.","Sun and atmosphere"),
-    slider("sunAzimuth",-45,45,1,"Starting horizontal sun direction, degrees.","Sun and atmosphere"),
-    slider("sunSpeed",0,3,.1,"Rate of the slow sun arc; zero freezes sun position while weather evolves.","Sun and atmosphere"),
     slider("airDensity",.2,2,.1,"Atmospheric scattering/extinction multiplier from the Horizon model.","Sun and atmosphere"),
     slider("aerosol",0,1,.05,"Low-altitude atmospheric haze/extinction strength.","Sun and atmosphere"),
     slider("exposure",.5,4,.1,"Camera exposure before tone mapping.","Sun and atmosphere"),
@@ -39,17 +37,17 @@ export const weather={id:"weather",title:"Weather layers",app:"cloud-simulator/w
   ],
   actions:[{id:"reset-weather",label:"Reset weather",title:"Pause and restore default settings with fresh weather",run:page=>{page.setPlaying(false);page.resetToDefaults();}}],
   create({width,height,params}){
-    let current=params,state=createWeather(params.seed,params),maps=null;
+    let current=params,state=createWeather(params.seed,params),maps=null,currentSun=sunAtPhase(.125);
     const samples={dynamics:[],lighting:[],drawing:[],inspection:[]},record=(key,value)=>{samples[key].push(value);if(samples[key].length>60)samples[key].shift();};
-    const lighting=()=>{if(!maps){const start=now();maps=buildWeatherLighting(state,current);record("lighting",now()-start);}return maps;};
+    const lighting=()=>{if(!maps){const start=now();maps=buildWeatherLighting(state,current,currentSun);record("lighting",now()-start);}return maps;};
     return {
       get state(){return state;},get metrics(){return samples;},frames:0,started:now(),
       update(next){if(next.seed!==current.seed){state=createWeather(next.seed,next);maps=null;}else {if(fieldKeys.some(key=>next[key]!==current[key]))refreshFields(state,next);if(lightingKeys.some(key=>next[key]!==current[key]))maps=null;}current=next;},
       step(dt){const start=now(),changed=stepWeather(state,dt,current);record("dynamics",now()-start);if(changed)maps=null;return changed;},
       preview(view,inspectLayer,w=32,h=20){return renderInspection(state,{...current,view,inspectLayer},needsLighting(view)?lighting():maps,w,h);},
-      render(){const prepared=needsLighting(current.view)?lighting():maps,start=now(),pixels=renderInspection(state,current,prepared,width,height);record("drawing",now()-start);this.frames++;
+      render(frame){if(frame?.sun&&(frame.sun.elevation!==currentSun.elevation||frame.sun.azimuth!==currentSun.azimuth)){currentSun=frame.sun;maps=null;}const prepared=needsLighting(current.view)?lighting():maps,start=now(),pixels=renderInspection(state,current,prepared,width,height);record("drawing",now()-start);this.frames++;
         if(this.onImage){const inspectStart=now();this.onImage();record("inspection",now()-inspectStart);}return pixels;},
-      describe(){const sun=weatherSun(state,current),work=maps?.work;return `t ${state.time.toFixed(1)} s · sun ${sun.elevation.toFixed(1)}° / ${sun.azimuth.toFixed(0)}° · ${work?.cells??2440} cloud cells · ${work?.segments??0} edges · ms median/p95: dynamics ${summary(samples.dynamics)}, light ${summary(samples.lighting)}, draw ${summary(samples.drawing)}, inspect ${summary(samples.inspection)} · ${this.frames} images`;},
+      describe(){const sun=currentSun,work=maps?.work;return `t ${state.time.toFixed(1)} s · sun ${sun.elevation.toFixed(1)}° / ${sun.azimuth.toFixed(0)}° · ${work?.cells??2440} cloud cells · ${work?.segments??0} edges · ms median/p95: dynamics ${summary(samples.dynamics)}, light ${summary(samples.lighting)}, draw ${summary(samples.drawing)}, inspect ${summary(samples.inspection)} · ${this.frames} images`;},
       dispose(){maps=null;}
     };
   },stats:(params,frame,instance)=>instance.describe()

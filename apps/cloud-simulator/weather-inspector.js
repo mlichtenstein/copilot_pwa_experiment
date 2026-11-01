@@ -10,7 +10,7 @@ export function mountWeatherInspector({doc,root,select}){
   const tabs=make("div",{className:"inspector-tabs"}),fieldTab=make("button",{type:"button",textContent:"Field graph",title:"Show the fields and their real data dependencies"}),passTab=make("button",{type:"button",textContent:"Composition",title:"Show the image accumulating through the actual render passes"}),full=make("button",{type:"button",textContent:"Full scene",title:"Return the main viewport to the final combined image"});
   const help=make("p",{className:"inspector-help",textContent:"Tap a field to inspect it. Amber arrows enter; mint arrows leave. Preview style changes card size, keeping the graph interactive."});
   const detail=make("p",{className:"inspector-detail"});detail.setAttribute("role","status");
-  const explanation=make("details",{className:"inspector-explanation"},make("summary",{textContent:"Selected field details",title:"Data type, ingredients and ingestion or rendering rule"}),detail);
+  const explanation=make("section",{className:"inspector-explanation"},detail);explanation.setAttribute("aria-label","Selected field description");
   const previewMode=make("select",{title:"Choose full thumbnails, a cropped central strip, or labels only"});
   for(const [value,label] of [["full","Small thumbnails"],["strips","Preview strips"],["labels","Labels only"]])previewMode.append(make("option",{value,textContent:label}));
   previewMode.value="full";previewMode.setAttribute("aria-label","Field preview style");
@@ -38,7 +38,7 @@ export function mountWeatherInspector({doc,root,select}){
   board.append(columns);
   const composition=make("ol",{className:"weather-composition",hidden:true}),passTiles=[];
   for(const pass of passes){const button=tile(`pass-${pass.index}`,`${pass.index+1}. ${pass.label}`,pass.view,null,`Accumulated image after ${pass.label}. Uses the same renderer as the final scene.`);passTiles.push(tiles.at(-1));composition.append(make("li",{},button));}
-  tabs.append(fieldTab,passTab,full,previewMode);root.append(tabs,help,explanation,board,composition);
+  tabs.append(fieldTab,passTab,full,previewMode);root.append(tabs,help,explanation,make("div",{className:"inspector-scroll"},board,composition));
   const paths=graphEdges().map(edge=>{const path=svgNode("path",{fill:"none",stroke:edge.cross?"#e4b36a":"#76b7d0","stroke-width":edge.cross?1.7:1.2,"stroke-dasharray":edge.cross?"5 3":"none","marker-end":`url(#${edge.cross?"weather-cross-arrow":"weather-arrow"})`});wire.append(path);return {edge,path};});
   function drawWires(){
     if(!board.getBoundingClientRect)return;
