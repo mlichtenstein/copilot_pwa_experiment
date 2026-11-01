@@ -4,6 +4,8 @@
 import {defaults,createWeather,refreshFields,stepWeather,weatherSun} from "./weather-fields.js";
 import {buildWeatherLighting} from "./weather-model.js";
 import {nodes,passes,renderInspection,needsLighting} from "./weather-inspection.js";
+const fieldKeys=["cloudAltitude","altitudeSpread","coverage","textureMix"];
+const lightingKeys=[...fieldKeys,"sunElevation","sunAzimuth","sunSpeed","airDensity","aerosol","cloudOpacity","cloudSharpness","haze","shaftStrength","edgeFeather","near","middle","far"];
 const now=()=>globalThis.performance?.now()??Date.now();
 const slider=(key,min,max,step,help,group)=>({key,kind:"range",min,max,step,default:defaults[key],help,group});
 const toggle=(key,help)=>({key,kind:"toggle",default:defaults[key],help,group:"Layers"});
@@ -44,7 +46,7 @@ export const weather={id:"weather",title:"Weather layers",app:"cloud-simulator/w
     const lighting=()=>{if(!maps){const start=now();maps=buildWeatherLighting(state,current);record("lighting",now()-start);}return maps;};
     return {
       get state(){return state;},get metrics(){return samples;},frames:0,started:now(),
-      update(next){if(next.seed!==current.seed)state=createWeather(next.seed,next);else refreshFields(state,next);current=next;maps=null;},
+      update(next){if(next.seed!==current.seed){state=createWeather(next.seed,next);maps=null;}else {if(fieldKeys.some(key=>next[key]!==current[key]))refreshFields(state,next);if(lightingKeys.some(key=>next[key]!==current[key]))maps=null;}current=next;},
       step(dt){const start=now(),changed=stepWeather(state,dt,current);record("dynamics",now()-start);if(changed)maps=null;return changed;},
       preview(view,inspectLayer,w=32,h=20){return renderInspection(state,{...current,view,inspectLayer},needsLighting(view)?lighting():maps,w,h);},
       render(){const prepared=needsLighting(current.view)?lighting():maps,start=now(),pixels=renderInspection(state,current,prepared,width,height);record("drawing",now()-start);this.frames++;
