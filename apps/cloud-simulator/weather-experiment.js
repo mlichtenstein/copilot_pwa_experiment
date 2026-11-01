@@ -46,10 +46,11 @@ export const weather={id:"weather",title:"Weather layers",app:"cloud-simulator/w
       update(next){if(next.lightingMode!==current.lightingMode)for(const key of ["lighting","drawing","inspection"])samples[key].length=0;if(next.seed!==current.seed){state=createWeather(next.seed,next);maps=null;}else {if(fieldKeys.some(key=>next[key]!==current[key]))refreshFields(state,next);if(lightingKeys.some(key=>next[key]!==current[key]))maps=null;}current=next;},
       step(dt){const start=now(),changed=stepWeather(state,dt,current);record("dynamics",now()-start);if(changed)maps=null;return changed;},
       preview(view,inspectLayer,w=32,h=20){return renderInspection(state,{...current,view,inspectLayer},needsLighting(view)?lighting():maps,w,h);},
-      render(frame){if(frame?.sun&&(frame.sun.elevation!==currentSun.elevation||frame.sun.azimuth!==currentSun.azimuth)){currentSun=frame.sun;maps=null;}const prepared=needsLighting(current.view)?lighting():maps,start=now(),pixels=renderInspection(state,current,prepared,width,height);record("drawing",now()-start);this.frames++;
+      render(frame){if(frame?.sun&&(frame.sun.elevation!==currentSun.elevation||frame.sun.azimuth!==currentSun.azimuth||frame.sun.phase!==currentSun.phase)){currentSun=frame.sun;maps=null;}const prepared=needsLighting(current.view)?lighting():maps,start=now(),pixels=renderInspection(state,current,prepared,width,height);record("drawing",now()-start);this.frames++;
         if(this.onImage){const inspectStart=now();this.onImage();record("inspection",now()-inspectStart);}return pixels;},
       describe(){const sun=currentSun,work=maps?.work;return `${current.lightingMode??"interpolated"} · optics ${work?.skySamples??0} sky / ${work?.surfaceSamples??0} surface samples · t ${state.time.toFixed(1)} s · sun ${sun.elevation.toFixed(1)}° / ${sun.azimuth.toFixed(0)}° · ${work?.cells??2440} cloud cells · ${work?.segments??0} edges · ms median/p95: dynamics ${summary(samples.dynamics)}, light ${summary(samples.lighting)}, draw ${summary(samples.drawing)}, inspect ${summary(samples.inspection)} · ${this.frames} images`;},
       dispose(){maps=null;}
     };
   },stats:(params,frame,instance)=>instance.describe()
 };
+
