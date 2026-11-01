@@ -109,7 +109,7 @@ test("on a page: holding Randomize shows its help and randomizes nothing; a clic
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const $ = id => doc.getElementById(id), before = page.getParams();
   press(doc, $("randomize"), "pointerdown", touch); t.mock.timers.tick(HOLD_MS);
-  assert.equal(page.help.popover.hidden, false); assert.match(page.help.popover.textContent, /Every setting of this experiment jumps to a random value/);
+  assert.equal(page.help.popover.hidden, false); assert.match(page.help.popover.textContent, /Randomizes scene settings: sliders/);
   press(doc, $("randomize"), "pointerup", touch); press(doc, $("randomize"), "click");
   assert.deepEqual(page.getParams(), before, "the hold did not randomize");
   press(doc, $("randomize"), "pointerdown", touch); press(doc, $("randomize"), "pointerup", touch); press(doc, $("randomize"), "click");

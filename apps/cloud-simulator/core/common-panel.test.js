@@ -106,11 +106,13 @@ test("every page has the same header and nav, built from the registry", async ()
   for (const { entry, $ } of pages) {
     const header = $("header");
     assert.equal(header.className, "experiment-header");
-    assert.deepEqual(header.children.map(child => `${child.tagName}.${child.className ?? ""}`), ["P.eyebrow", "H1.", "P.tagline", "NAV.experiment-nav"], `${entry.title}: same lines`);
-    assert.equal(header.children[0].textContent, SITE_NAME);
-    assert.equal(header.children[1].textContent, entry.title);
-    assert.equal(header.children[2].textContent, entry.tagline);
-    // Every experiment, same order, labels and hrefs; only the current one is marked, not a link.
+    assert.deepEqual(header.children.map(child => `${child.tagName}.${child.className ?? ""}`), ["DIV.header-top", "P.launch-status", "H1.", "P.tagline", "NAV.experiment-nav"], `${entry.title}: same lines`);
+    const [home, actions] = header.children[0].children;
+    assert.equal(home.textContent, SITE_NAME);
+    assert.equal(home.href, "./", `${entry.title}: the site name links to the front page`);
+    assert.deepEqual(descendants(actions).filter(node => node.tagName === "BUTTON").map(node => node.textContent), ["🎲 Random", "❤️ Random"], `${entry.title}: launch buttons`);
+    assert.equal(header.children[2].textContent, entry.title);
+    assert.equal(header.children[3].textContent, entry.tagline);
     assert.deepEqual(navOf(header), all.map(line => line.startsWith(`${entry.nav} ->`) ? `[${entry.nav}]` : line), `${entry.title}: nav`);
     // The HTML leaves the header to the host: an empty <header id="header">, no nav of its own.
     const html = readFileSync(new URL(`../${entry.href}`, import.meta.url), "utf8");

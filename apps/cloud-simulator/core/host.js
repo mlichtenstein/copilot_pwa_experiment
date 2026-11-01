@@ -2,7 +2,8 @@
  * Purpose: Turn an experiment module (core/experiment.js contract) into a working page: build
  *   its controls from the params schema, run the one shared loop and clock, move the shared
  *   sun, draw to the canvas, and wire the emoji rating bar and ?p= links through generic
- *   getParams/applyParams. It alone builds the page header (core/header.js: title, tagline
+ *   getParams/applyParams. It carries the sun, its path and Drift over from the last page
+ *   (launch.js; a ?p= link wins) and presses Randomize for ?random=1 (🎲 Random). It alone builds the page header (core/header.js: title, tagline
  *   and the nav to every experiment, from the registry) and the common panel, identical on
  *   every page in compact rows (Play/Pause, Step, Randomize and, with `seed`, New seed; Drift
  *   and its speed; the time of day, inside the Sun group with `sun`, its path shape in a
@@ -14,7 +15,8 @@
  * Consumers: every experiment page script (../sunset.js, ../convection.js, ../horizon.js,
  *   ../shafts.js, ../noise.js, ../valley.js, ../lightning.js); the core tests (common-panel.test.js
  *   among them) and the per-experiment UI tests.
- * Dependencies: experiment.js, clock.js, sun-path.js, daylight.js, header.js, hold-help.js, ../../shared/presets-panel.js,
+ * Dependencies: experiment.js, clock.js, sun-path.js, daylight.js, header.js, hold-help.js, launch.js,
+ *   ../../shared/presets.js, ../../shared/presets-panel.js,
  *   ../../shared/drift.js; the page's DOM contract: <canvas id="sky">, and empty containers
  *   <header id="header"> (the header and nav),
  *   #presets (rating bar), #playback (the common panel), #stats (moved under the experiment's
@@ -30,6 +32,8 @@ import { mountPresetBar } from "../../shared/presets-panel.js";
 import { bindDrift, seededRandom, DRIFT } from "../../shared/drift.js";
 import { createHoldHelp } from "./hold-help.js";
 import { mountHeader } from "./header.js";
+import { paramsFromUrl } from "../../shared/presets.js";
+import { readCarry, writeCarry, wantsRandom, RANDOM_KEY } from "./launch.js";
 
 // Where the clock starts and where Reset sun puts it: an eighth of the way round, 09:00, in
 // the top lobe, high and to the right (15° across and about 21° up with the default path).
@@ -122,14 +126,26 @@ export function mountExperiment(experiment, {
   presets = true,
   serviceWorker = globalThis.navigator?.serviceWorker,
   // Randomize's random numbers (() => [0, 1)); tests pass a seeded one.
-  random = seededRandom(randomSeed())
+  random = seededRandom(randomSeed()),
+  // The page's address (?p= and ?random=1), the tab's session store for the sun carry-over
+  // (launch.js) and the window whose pagehide saves it; tests pass their own or none.
+  url = globalThis.location?.href ?? null,
+  session = (() => { try { return globalThis.sessionStorage ?? null; } catch { return null; } })(),
+  win = globalThis.window ?? null,
+  navigate
 } = {}) {
   validateExperiment(experiment);
   const element = id => doc.getElementById(id);
-  // The shared header (header.js): title, tagline and links to every experiment.
-  mountHeader(element("header"), { doc, current: experiment.id, title: experiment.title });
   // Hold-to-see help (hold-help.js) for every control on the page.
   const help = createHoldHelp(doc);
+  // The sun carry-over (launch.js): this page's sun, path and Drift, saved for the next page
+  // when leaving (pagehide, a header link, 🎲 or ❤️).
+  const saveCarry = () => writeCarry(session, getParams());
+  // The shared header (header.js): title, tagline, 🎲 and ❤️, and links to every experiment.
+  const header = mountHeader(element("header"), { doc, current: experiment.id, title: experiment.title, help,
+    launch: { beforeLeave: saveCarry, storage: session, random, ...(navigate ? { navigate } : {}) } });
+  header?.addEventListener("click", event => { if (event.target?.tagName === "A") saveCarry(); });
+  win?.addEventListener?.("pagehide", saveCarry);
   const context = canvas.getContext("2d");
   const sizeParam = experiment.params.find(param => param.kind === "size");
   // Defaults, except seeds marked random start each page load somewhere new.
@@ -316,7 +332,7 @@ export function mountExperiment(experiment, {
     if (param.kind === "seed") {
       const common = param.key === experiment.seed;
       const seedButton = common ? button("new-seed", "New seed")
-        : Object.assign(button("new-" + param.key, param.newLabel ?? "New seed"), { title: param.newTitle ?? "Pick a random seed" });
+        : Object.assign(button("new-" + param.key, param.newLabel ?? "New seed"), { title: param.newTitle ?? "Pick different starting conditions, keeping the same slider settings" });
       seedButton.addEventListener("click", () => commit(param.next ? param.next(params[param.key]) >>> 0 : randomSeed()));
       lockable.push(seedButton);
       if (common) newSeed = seedButton;
@@ -350,7 +366,8 @@ export function mountExperiment(experiment, {
   const randomize = button("randomize", "Randomize");
   buttonRow.append(described(randomize, PANEL_TEXT.randomizeNote));
   lockable.push(randomize);
-  randomize.addEventListener("click", () => {
+  randomize.addEventListener("click", randomizeAll);
+  function randomizeAll() {
     const next = randomParams(experiment, params, random);
     clock.set(timeForPhase(random()));
     if (experiment.sun) {
@@ -359,7 +376,7 @@ export function mountExperiment(experiment, {
     }
     setParams(next, { linked: true });
     drift?.sync();
-  });
+  }
   if (driftSliders.length) {
     // On by default on a fresh load (it still only moves while playing); a saved look sets it below.
     driftBox = make(doc, "input", { id: "drift", type: "checkbox", checked: true });
@@ -452,11 +469,13 @@ export function mountExperiment(experiment, {
     const migrated = experiment.migrate ? experiment.migrate(given) : given;
     const source = migrated && typeof migrated === "object" ? migrated : {};
     if (experiment.sun) {
-      setPlaying(false);
+      // A saved look shows that moment; a page that plays on load keeps playing.
+      if (!experiment.autoplay) setPlaying(false);
       // Saved before the path had settings: the shape it had then (LEGACY_SUN_SHAPE), so the
-      // sun lands where it was. Saved with a fixed sun (sunAzimuth/sunElevation sliders): the
+      // sun lands where it was (unless the page only followed the sun later:
+      // legacySunShape false). Saved with a fixed sun (sunAzimuth/sunElevation sliders): the
       // nearest point on the path. Other old keys, such as sunSpeed, are dropped by cleanParams.
-      const legacy = !SUN_PATH_PARAMS.some(param => param.key in source);
+      const legacy = experiment.legacySunShape !== false && !SUN_PATH_PARAMS.some(param => param.key in source);
       sunShape = Object.fromEntries(SUN_PATH_PARAMS.map(param => [param.key, cleanParam(param, source[param.key], (legacy ? LEGACY_SUN_SHAPE : DEFAULT_SUN_SHAPE)[param.key])]));
       for (const param of SUN_PATH_PARAMS) controls.get(param.key).write(sunShape[param.key]);
       if (finite(source.sunPhase)) clock.set(timeForPhase(source.sunPhase));
@@ -471,6 +490,30 @@ export function mountExperiment(experiment, {
     setParams(cleanParams(experiment, source, defaultParams(experiment)));
     drift?.sync();
   }
+  // The carried sun and Drift (launch.js), unless a ?p= link says otherwise: the link wins.
+  function applyCarry(carry) {
+    if (finite(carry.sunPhase)) clock.set(timeForPhase(carry.sunPhase));
+    if (experiment.sun) {
+      sunShape = Object.fromEntries(SUN_PATH_PARAMS.map(param => [param.key, cleanParam(param, carry[param.key], sunShape[param.key])]));
+      for (const param of SUN_PATH_PARAMS) controls.get(param.key).write(sunShape[param.key]);
+    }
+    if (driftBox && typeof carry.drift === "boolean") driftBox.checked = carry.drift;
+    if (driftBox && finite(carry.driftSpeed)) setDriftSpeed(carry.driftSpeed);
+    drift?.sync();
+    dirty = true;
+  }
+  const linked = url ? paramsFromUrl(url) : null;
+  const carry = linked ? null : readCarry(session);
+  if (carry) applyCarry(carry);
+  // ?random=1 (🎲 Random): press Randomize, then put the carried sun and Drift back, so only
+  // the experiment's own settings (and, arriving fresh, the sun) are new. The flag is then
+  // dropped from the address so a reload keeps the look.
+  if (!linked && url && wantsRandom(url)) {
+    randomizeAll();
+    if (carry) applyCarry(carry);
+    const clean = new URL(url); clean.searchParams.delete(RANDOM_KEY);
+    try { globalThis.history?.replaceState?.(null, "", clean.href); } catch { /* not a browser */ }
+  }
   if (presets) mountPresetBar(element("presets"), { app: experiment.app, getParams, applyParams, canvas });
 
   serviceWorker?.register("./cloud-sw.js").catch(error => {
@@ -479,7 +522,7 @@ export function mountExperiment(experiment, {
   });
 
   return {
-    clock, getParams, applyParams, setPlaying, render, help,
+    clock, getParams, applyParams, setPlaying, render, help, randomize: randomizeAll, saveCarry,
     get instance() { return instance; },
     get params() { return params; },
     dispose() { stop(); instance.dispose(); }

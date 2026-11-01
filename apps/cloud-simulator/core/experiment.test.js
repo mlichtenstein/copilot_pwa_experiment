@@ -5,6 +5,7 @@
  * Consumers: Node test runner. Dependencies: node:test, node:assert, experiment.js,
  *   registry.js, sun-path.js, clock.js and fake-dom.js. */
 import test from "node:test";
+import { isDeepStrictEqual } from "node:util";
 import assert from "node:assert/strict";
 import { validateExperiment, validateInstance, defaultParams, cleanParams, cleanParam, driftableParams, parseSize } from "./experiment.js";
 import { imageDocument } from "./fake-dom.js";
@@ -38,8 +39,13 @@ for (const entry of experiments) {
     assert.deepEqual(again.render(frame), pixels, "same params, same frame, same picture");
     again.dispose();
     if (experiment.sun) {
-      const later = { time: SUN_PATH.period / 4, sun: sunAt(SUN_PATH.period / 4) };
-      assert.notDeepEqual(instance.render(later), pixels, "the shared sun moves the picture");
+      // Over a day (noon, dusk, midnight) the shared sun changes the picture; a cloudless
+      // first frame of a simulation may only change once the light fades.
+      const changes = [0.25, 0.5, 0.75].some(phase => {
+        const time = SUN_PATH.period * phase;
+        return !isDeepStrictEqual(instance.render({ time, sun: sunAt(time) }), pixels);
+      });
+      assert.ok(changes, "the shared sun moves the picture");
     }
     // Every control's extremes render.
     for (const param of experiment.params) {

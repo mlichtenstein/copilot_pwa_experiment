@@ -18,17 +18,25 @@ const now = () => globalThis.performance?.now() ?? Date.now();
 // hidden and sunlight() fades the shafts out by about −4.6°; high suns sit above the view and
 // cast short, downward shafts. Elevation is only guarded short of straight up or down, where
 // the extrusion depth (cos elevation · cos azimuth) would reach 0; the path never gets there
-// (−45..60°). Azimuth stays within ±40°, the view's sideways reach, for the same reason.
-export const SUN_LIMITS = { elevation: [-85, 85], azimuth: [-40, 40] };
+// (−45..60°). Across, the path reaches ±90° (sunPathX ± sunPathWidth / 2); the view only
+// spans about ±41°, so a sun past that is off-screen and its shafts slant in from that side.
+// Azimuth passes through unchanged up to ±60°, then eases toward ±80° (softAzimuth), so at
+// ±90° the extrusions stay finite (cos 80° > 0) and the light keeps moving smoothly.
+export const SUN_LIMITS = { elevation: [-85, 85], azimuth: [-80, 80], softFrom: 60 };
 const clamp = (value, [low, high]) => Math.min(high, Math.max(low, value));
-export const sceneSun = sun => ({ sunElevation: clamp(sun.elevation, SUN_LIMITS.elevation), sunAzimuth: clamp(sun.azimuth, SUN_LIMITS.azimuth) });
+export function softAzimuth(azimuth) {
+  const from = SUN_LIMITS.softFrom, room = SUN_LIMITS.azimuth[1] - from, size = Math.abs(azimuth);
+  if (!Number.isFinite(azimuth)) return 0;
+  return size <= from ? azimuth : Math.sign(azimuth) * (from + room * (1 - Math.exp(-(size - from) / room)));
+}
+export const sceneSun = sun => ({ sunElevation: clamp(sun.elevation, SUN_LIMITS.elevation), sunAzimuth: softAzimuth(sun.azimuth) });
 const modeName = params => params.strategy === "layered" ? "layered visibility" : params.strategy === "visibility" ? "visibility polygons" : "geometric shadows";
-// The three cloud pictures' seeds, as createScene(42) chooses them; Change near/middle/far
-// steps one of them.
+// The three cloud pictures' seeds, as createScene(42) chooses them; the New nearPattern,
+// New middlePattern and New farPattern buttons (named for their keys, like New seed) step one.
 const sceneSeeds = createScene().layers.map(layer => layer.seed);
 const patternKeys = ["nearPattern", "middlePattern", "farPattern"];
 const pattern = (key, i, name) => ({ key, kind: "seed", default: sceneSeeds[i], hidden: true, next: seed => seed + 1, buttonsIn: "pattern-buttons",
-  newLabel: `Change ${name}`, newTitle: `Change the ${name} cloud picture` });
+  newLabel: `New ${key}`, newTitle: `Change the ${name} cloud picture` });
 
 export const shafts = {
   id: "shafts",

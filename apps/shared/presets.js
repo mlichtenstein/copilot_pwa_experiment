@@ -2,7 +2,8 @@
  * Purpose: App-agnostic emoji ratings of an app's current settings: encode settings into a
  *   shareable URL, validate a rating, and save and list rating rows in a Supabase
  *   table (cloud_simulator_presets by default), signing the visitor in anonymously on first tap.
- * Consumers: presets-panel.js (the drop-in rating bar), presets.test.js, and any app that wants
+ * Consumers: presets-panel.js (the drop-in rating bar), presets.test.js, the cloud simulator
+ *   front page and header (cloud-simulator/core/launch.js: a random ❤️), and any app that wants
  *   URL-encoded parameters without the bar.
  * Dependencies: fetch, URL, TextEncoder/TextDecoder, btoa/atob and a localStorage-like
  *   store (all injectable for tests); the Supabase Auth (/auth/v1) and PostgREST (/rest/v1)
@@ -181,6 +182,14 @@ export function createPresetStore({ app, table = DEFAULT_TABLE, url = SUPABASE_U
     // This app's most recent ratings from everyone, newest first.
     async list(limit = 10) {
       const query = new URLSearchParams({ select: "id,app_id,display_name,rating,params,thumbnail,created_at,created_by", app_id: `eq.${app}`, order: "created_at.desc", limit: String(limit) });
+      return call(`${rows}?${query}`);
+    },
+    // Ratings of one kind (a RATINGS value, such as "love") from everyone, newest first: this
+    // app's, or with appPrefix every app whose id starts with it ("cloud-simulator/").
+    async listRated(rating, { limit = 100, appPrefix = null } = {}) {
+      if (!ratingFor(rating)) throw new PresetError("invalid", `Rating must be one of ${RATINGS.map(r => r.value).join(", ")}.`);
+      const query = new URLSearchParams({ select: "id,app_id,rating,params,created_at", rating: `eq.${rating}`,
+        app_id: appPrefix ? `like.${appPrefix}*` : `eq.${app}`, order: "created_at.desc", limit: String(limit) });
       return call(`${rows}?${query}`);
     },
     // One tap: saves who, how it felt, the full settings and a thumbnail as a new row.
