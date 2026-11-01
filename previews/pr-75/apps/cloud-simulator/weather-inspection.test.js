@@ -35,7 +35,7 @@ test("inspector tiles select fields/passes, update live, and stop preview work w
   doc.createElement=tag=>{const node=create(tag);if(tag==="canvas")node.getContext=()=>({createImageData:(w,h)=>({data:new Uint8ClampedArray(w*h*4)}),putImageData(){painted++;}});return node;};
   const selections=[],ui=mountWeatherInspector({doc,root,select:value=>selections.push(value)}),p=defaultParams(weather),instance=weather.create({width:32,height:20,params:p});
   const descriptionPanel=descendants(root).find(n=>n.className==="inspector-explanation"),scroll=descendants(root).find(n=>n.className==="inspector-scroll");
-  assert.equal(descriptionPanel.tagName,"SECTION");assert.equal(descriptionPanel.parentNode,root);assert.equal(scroll.parentNode,root);assert.ok(!descendants(scroll).includes(descriptionPanel));
+  assert.equal(descriptionPanel.tagName,"SECTION");assert.equal(descriptionPanel.parentNode.className,"inspector-body");assert.equal(scroll.parentNode,descriptionPanel.parentNode);assert.ok(!descendants(scroll).includes(descriptionPanel));
   const before=JSON.stringify(instance.state);instance.update({...p,view:"cloudWater",inspectLayer:"far"});assert.equal(JSON.stringify(instance.state),before);instance.update(p);ui.update(p,instance);assert.equal(JSON.stringify(instance.state),before);assert.equal(painted,15);
   doc.getElementById("inspect-far-cloudWater").fire("click");assert.deepEqual(selections.at(-1),{view:"cloudWater",inspectLayer:"far"});
   ui.update({...p,view:"cloudWater",inspectLayer:"far"},instance);assert.match(doc.getElementById("inspection-caption").textContent,/far.*Cloud water/);
