@@ -1,0 +1,28 @@
+/* Purpose: Read-only field graph/composition tiles beside a persistent scene viewport.
+ * Consumers: weather.html. Dependencies: weather-inspector.js DOM classes and style.css layout. */
+.inspection-viewport { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.inspection-caption { margin: 0 0 4px; font-size: .75rem; color: #c0d1df; max-height: 3em; overflow: auto; }
+.weather-inspector { max-height: 45dvh; overflow: auto; border: 1px solid #344b63; border-radius: 8px; padding: 0 10px 10px; background: #0e1828; }
+.weather-inspector > summary { position: sticky; top: 0; z-index: 4; background: #0e1828; font-weight: bold; }
+.inspector-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.inspector-tabs button { padding: 7px 12px; font-size: .8rem; }
+.inspector-tabs [aria-pressed=true],.weather-node[aria-pressed=true] { outline: 2px solid #9ed8ec; outline-offset: -2px; }
+.inspector-help,.inspector-detail { font-size: .75rem; line-height: 1.4; margin: 8px 0; }
+.inspector-detail { color: #dbe9f1; }
+.weather-graph-board { position: relative; min-width: 720px; }
+.weather-graph-wires { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 0; opacity: .8; }
+.weather-graph-source { position: relative; z-index: 1; display: flex; gap: 14px; align-items: center; max-width: 570px; margin-bottom: 28px; }
+.weather-graph-source .weather-node { min-width: 130px; }
+.weather-graph-source p { font-size: .75rem; padding: 8px; background: #0e1828; }
+.weather-graph-columns { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 24px; }
+.weather-graph-column h3 { position: relative; z-index: 1; background: #0e1828; font-size: .85rem; margin: 0 0 18px; }
+.weather-node-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 24px 14px; }
+.weather-node { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: stretch; gap: 5px; padding: 7px; width: 100%; min-width: 0; background: #142237; border: 1px solid #45617a; border-radius: 6px; }
+.weather-node canvas { width: 100%; height: auto; aspect-ratio: 1.6; image-rendering: pixelated; background: #03070d; }
+.weather-node span { font-size: .7rem; line-height: 1.3; min-height: 2.6em; }
+.weather-composition { padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3,minmax(130px,1fr)); gap: 12px; min-width: 480px; }
+.weather-graph-board[hidden],.weather-composition[hidden] { display: none; }
+@media(max-width:760px) {
+  .weather-inspector { max-height: 30dvh; }
+  .simulation-pane:has(.weather-inspector[open]) .canvas-fit canvas { width: min(100%, 28dvh * var(--fit-ar)); }
+}

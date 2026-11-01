@@ -1,8 +1,9 @@
 /* Purpose: Adapt the combined weather prototype to the existing generated-controls host with stage timings.
  * Consumers: weather.js, core registry, and weather tests.
- * Dependencies: weather-fields.js, weather-model.js and core/experiment.js contract. */
+ * Dependencies: weather-fields.js, weather-model.js, weather-inspection.js and core/experiment.js contract. */
 import {defaults,createWeather,refreshFields,stepWeather,weatherSun} from "./weather-fields.js";
-import {buildWeatherLighting,renderWeather} from "./weather-model.js";
+import {buildWeatherLighting} from "./weather-model.js";
+import {nodes,passes,renderInspection,needsLighting} from "./weather-inspection.js";
 const now=()=>globalThis.performance?.now()??Date.now();
 const slider=(key,min,max,step,help,group)=>({key,kind:"range",min,max,step,default:defaults[key],help,group});
 const toggle=(key,help)=>({key,kind:"toggle",default:defaults[key],help,group:"Layers"});
@@ -11,7 +12,7 @@ export const weather={id:"weather",title:"Weather layers",app:"cloud-simulator/w
   params:[
     {key:"seed",kind:"seed",default:42,random:true,hidden:true,newLabel:"New weather",newTitle:"Generate fresh fields and terrain; internal seeds are saved in links"},
     toggle("near","Show the near cloud/rain/lightning/terrain layer, 8 km away."),toggle("middle","Show the middle layer, 24 km away."),toggle("far","Show the far layer, 65 km away."),
-    {key:"view",kind:"select",label:"View",default:"scene",options:[["scene","Combined scene"],["cloudWater","Cloud water"],["humidity","Humidity"],["rain","Rain water"],["charge","Charge potential"]],help:"Inspect a raw field independently of its lighting and draw order.",group:"Inspect"},
+    {key:"view",kind:"select",label:"View",default:"scene",options:[["scene","Combined scene"],...nodes.map(node=>[node.id,node.label]),["sky","Sky / atmospheric light"],...passes.filter(pass=>pass.view!=="scene").map(pass=>[pass.view,`Composition ${pass.index+1}: ${pass.label}`])],help:"Inspect a field, derived rendering input, or accumulated render pass. The graph shows their connections.",group:"Inspect"},
     {key:"inspectLayer",kind:"select",label:"Field layer",default:"near",options:[["near","Near · 24×15"],["middle","Middle · 32×20"],["far","Far · 48×30"]],help:"Which distance layer supplies the field view; charge is 12×6 in each.",group:"Inspect"},
     slider("sunElevation",-8,25,.25,"Starting sun elevation above the horizon, degrees.","Sun and atmosphere"),
     slider("sunAzimuth",-45,45,1,"Starting horizontal sun direction, degrees.","Sun and atmosphere"),
@@ -39,14 +40,16 @@ export const weather={id:"weather",title:"Weather layers",app:"cloud-simulator/w
   decorate({doc}){for(const param of weather.params){const input=doc.getElementById(param.key);if(input)input.title=param.help??param.key;}return ()=>{};},
   create({width,height,params}){
     let current=params,state=createWeather(params.seed,params),maps=null;
-    const samples={dynamics:[],lighting:[],drawing:[]},record=(key,value)=>{samples[key].push(value);if(samples[key].length>60)samples[key].shift();};
+    const samples={dynamics:[],lighting:[],drawing:[],inspection:[]},record=(key,value)=>{samples[key].push(value);if(samples[key].length>60)samples[key].shift();};
+    const lighting=()=>{if(!maps){const start=now();maps=buildWeatherLighting(state,current);record("lighting",now()-start);}return maps;};
     return {
       get state(){return state;},get metrics(){return samples;},frames:0,started:now(),
       update(next){if(next.seed!==current.seed)state=createWeather(next.seed,next);else refreshFields(state,next);current=next;maps=null;},
       step(dt){const start=now(),changed=stepWeather(state,dt,current);record("dynamics",now()-start);if(changed)maps=null;return changed;},
-      render(){if(!maps&&current.view==="scene"){const start=now();maps=buildWeatherLighting(state,current);record("lighting",now()-start);}
-        const start=now(),pixels=renderWeather(state,current,maps,width,height);record("drawing",now()-start);this.frames++;return pixels;},
-      describe(){const sun=weatherSun(state,current),work=maps?.work;return `t ${state.time.toFixed(1)} s · sun ${sun.elevation.toFixed(1)}° / ${sun.azimuth.toFixed(0)}° · ${work?.cells??2440} cloud cells · ${work?.segments??0} edges · ms median/p95: dynamics ${summary(samples.dynamics)}, light ${summary(samples.lighting)}, draw ${summary(samples.drawing)} · ${this.frames} images`;},
+      preview(view,inspectLayer,w=32,h=20){return renderInspection(state,{...current,view,inspectLayer},needsLighting(view)?lighting():maps,w,h);},
+      render(){const prepared=needsLighting(current.view)?lighting():maps,start=now(),pixels=renderInspection(state,current,prepared,width,height);record("drawing",now()-start);this.frames++;
+        if(this.onImage){const inspectStart=now();this.onImage();record("inspection",now()-inspectStart);}return pixels;},
+      describe(){const sun=weatherSun(state,current),work=maps?.work;return `t ${state.time.toFixed(1)} s · sun ${sun.elevation.toFixed(1)}° / ${sun.azimuth.toFixed(0)}° · ${work?.cells??2440} cloud cells · ${work?.segments??0} edges · ms median/p95: dynamics ${summary(samples.dynamics)}, light ${summary(samples.lighting)}, draw ${summary(samples.drawing)}, inspect ${summary(samples.inspection)} · ${this.frames} images`;},
       dispose(){maps=null;}
     };
   },stats:(params,frame,instance)=>instance.describe()
