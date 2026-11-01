@@ -332,7 +332,7 @@ export function mountExperiment(experiment, {
     if (param.kind === "seed") {
       const common = param.key === experiment.seed;
       const seedButton = common ? button("new-seed", "New seed")
-        : Object.assign(button("new-" + param.key, param.newLabel ?? "New seed"), { title: param.newTitle ?? "Pick a random seed" });
+        : Object.assign(button("new-" + param.key, param.newLabel ?? "New seed"), { title: param.newTitle ?? "Pick different starting conditions, keeping the same slider settings" });
       seedButton.addEventListener("click", () => commit(param.next ? param.next(params[param.key]) >>> 0 : randomSeed()));
       lockable.push(seedButton);
       if (common) newSeed = seedButton;
