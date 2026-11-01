@@ -1,7 +1,7 @@
 /* Purpose: Check the generic named-weather-state capability (experiment.weatherStates):
  *   validation of declared states, weatherStateParams (state values over defaults, fresh
- *   seeds, inspection/playback settings and grid size kept), and the common panel's jump row
- *   (its label, hold help, and a jump that keeps Play/Pause, Drift and its speed, sets the
+ *   seeds, inspection/playback settings and grid size kept), and the common panel's Jump to weather
+ *   state row (jumpToWeatherState: its label, hold help, and a jump that keeps Play/Pause, Drift and its speed, sets the
  *   time of day, and saves the resulting settings through getParams/applyParams).
  * Consumers: Node test runner. Dependencies: node:test, node:assert, experiment.js, host.js,
  *   ../../shared/drift.js and fake-dom.js. */
@@ -54,7 +54,7 @@ test("weatherStateParams: the state's values over defaults, fresh seeds, inspect
   assert.equal(weatherStateParams(experiment, { ...storm, params: { ...storm.params, view: "scene" } }, current, seededRandom(3)).view, "scene", "a state may set them");
 });
 
-test("the common panel's weatherStates row jumps to a state and keeps Play, Drift and its speed", async () => {
+test("the common panel's Jump to weather state row jumps to a state and keeps Play, Drift and its speed", async () => {
   const doc = fakeDocument(), $ = id => doc.getElementById(id);
   fakeCanvas(doc, 8, 4);
   const { raf, frame } = manualFrames();
@@ -63,9 +63,10 @@ test("the common panel's weatherStates row jumps to a state and keeps Play, Drif
   const button = $("storm");
   assert.equal(button.textContent, "storm", "labelled with its code name");
   const row = button.parentNode.parentNode;
-  assert.equal(row.className, "panel-row weather-states");
-  assert.equal(row.children[0].children[0].textContent, "weatherStates");
-  assert.equal(row.children[0].helpText.textContent, PANEL_TEXT.weatherStatesNote);
+  assert.equal(row.id, "jump-to-weather-state");
+  assert.equal(row.className, "panel-row jump-to-weather-state");
+  assert.equal(row.children[0].textContent, "Jump to weather state", "the label reads as its code name, jumpToWeatherState");
+  assert.equal(row.children[0].helpText.textContent, PANEL_TEXT.jumpToWeatherStateNote);
   assert.equal(helpOf(doc, button), "A storm.");
   $("drift").checked = false; $("drift").fire("change");
   $("drift-speed").value = "0.5"; $("drift-speed").fire("input");
@@ -86,11 +87,11 @@ test("the common panel's weatherStates row jumps to a state and keeps Play, Drif
   page.dispose();
 });
 
-test("no weatherStates row without weatherStates", async () => {
+test("no Jump to weather state row without weatherStates", async () => {
   const doc = fakeDocument();
   fakeCanvas(doc, 8, 4);
   const { raf } = manualFrames();
   const page = mountExperiment(toy(undefined), { doc, raf, presets: false, serviceWorker: null, playing: false });
-  assert.equal(doc.getElementById("playback").children.some(child => /weather-states/.test(child.className)), false);
+  assert.equal(doc.getElementById("playback").children.some(child => /jump-to-weather-state/.test(child.className)), false);
   page.dispose();
 });
