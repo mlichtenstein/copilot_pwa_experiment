@@ -77,7 +77,15 @@ a { color: #9ed8ec; }
 .experiment-header { grid-area: header; min-width: 0; }
 .experiment-header h1 { font-size: 1.4rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .experiment-header p { margin: 4px 0; font-size: .9rem; }
-.experiment-header .eyebrow { margin: 0; font-size: .7rem; }
+.experiment-header .eyebrow { margin: 0; font-size: .7rem; text-decoration: none; }
+/* Its top line: the site name (a link to the front page), then 🎲 Random and ❤️ Random
+ * (launch.js); a ❤️ that can't be had says why on the line below, which is empty otherwise. */
+.header-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.header-actions { display: flex; gap: 4px; flex: none; }
+.header-actions .launch { display: grid; }
+.header-actions button { min-height: 30px; padding: 3px 8px; font-size: .75rem; white-space: nowrap; }
+.experiment-header .launch-status { margin: 2px 0; font-size: .8rem; color: #f2c6a0; }
+.experiment-header .launch-status:empty { display: none; }
 .experiment-header .tagline { line-height: 1.4; height: 2.8em; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .experiment-nav { display: flex; flex-wrap: wrap; gap: 0 6px; font-size: .85rem; line-height: 1.6; }
 .experiment-nav .nav-sep { color: #536781; }
@@ -98,7 +106,7 @@ a { color: #9ed8ec; }
 @media (max-width: 760px) {
   .experiment-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr);
     grid-template-areas: "header" "sim" "controls"; gap: 6px; padding: 6px; }
-  .experiment-header .eyebrow, .experiment-header .tagline { display: none; }
+  .experiment-header .tagline { display: none; }
   .experiment-header h1 { font-size: 1.15rem; }
   .experiment-nav { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
   .experiment-nav::-webkit-scrollbar { display: none; }
@@ -109,3 +117,28 @@ a { color: #9ed8ec; }
 @media (max-height: 480px) and (min-width: 560px) {
   .experiment-header .tagline { display: none; }
 }
+
+/* The front page (index.html, home.js): the header, 🎲 / ❤️, the experiments as picture cards,
+ * then how the pages work. */
+.home-layout { max-width: 960px; padding: 12px 14px 32px; }
+.home .header-actions { display: none; }
+.home .experiment-header h1 { white-space: normal; }
+.home-intro { margin: 10px 0 0; max-width: 68ch; line-height: 1.5; }
+.home-intro p { margin: 0 0 6px; }
+.home-start { margin: 12px 0 4px; }
+.home-launch { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.home-launch .launch { display: grid; flex: 1 1 160px; }
+.home-launch button.big { font-size: 1rem; padding: 10px 14px; }
+.home-launch .launch-status { flex-basis: 100%; margin: 0; font-size: .9rem; color: #f2c6a0; }
+.home-launch .launch-status:empty { display: none; }
+.home-start .hold-hint { margin: 6px 0 0; font-size: .8rem; }
+.home-heading { margin: 18px 0 8px; font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: #8ebbcf; }
+.home-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.home-card a { display: grid; align-content: start; gap: 4px; height: 100%; padding: 6px 6px 10px; border: 1px solid #34455e; border-radius: 10px; background: #111c30; color: inherit; text-decoration: none; }
+.home-card a:hover, .home-card a:focus-visible { border-color: #9ed8ec; }
+.home-card-picture { display: block; aspect-ratio: 8 / 5; overflow: hidden; border-radius: 6px; background: #0b1220; }
+.home-card img { display: block; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+.home-card-title { font-weight: 600; color: #e0eaf6; }
+.home-card-line { font-size: .85rem; line-height: 1.4; color: #b9c9dd; }
+.home-about p { margin: 6px 0; font-size: .92rem; }
+@media (max-width: 480px) { .home-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .home-card-line { font-size: .78rem; } }

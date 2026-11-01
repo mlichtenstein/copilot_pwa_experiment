@@ -6,21 +6,22 @@
  *   only a little sideways, reaches the floor and is conserved; a texture slider from smooth
  *   to ragged; rain made only in dense, lasting cloud that stays while it rains; varied rain
  *   streaks and a curtain drawn from the falling rain, down to the floor; and weather that
- *   never stops moving, on random seeds.
- * Consumers: Node's test runner. Dependencies: node:test, node:assert and noise-model.js. */
+ *   never stops moving, on pinned seeds (core/test-seeds.js).
+ * Consumers: Node's test runner. Dependencies: node:test, node:assert, noise-model.js and core/test-seeds.js. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createNoise3, fractal, createWeather, step, sampleFields, renderWeather, airborneRain,
   pooledRain, defaults, RULES, FIELDS, layerBand, altitudeOf, createRainLayer, updateRainLayer,
   rainAlpha, curtainAlpha, cloudBases, formRain, textureShape, condense, dissipation, startCloud,
   exposure } from "./noise-model.js";
+import { testSeeds } from "./core/test-seeds.js";
 
-// Seeds are incidental: every check runs on fresh random seeds.
-const randomSeeds = count => Array.from({ length: count }, () => Math.floor(Math.random() * 2 ** 32));
+// Seeds are pinned (core/test-seeds.js) so runs are repeatable; FUZZ_SEEDS=1 draws fresh ones.
+const seeds = count => testSeeds(count);
 const sum = values => values.reduce((total, value) => total + value, 0);
 
 test("noise repeats per seed, differs across seeds and stays in range", () => {
-  for (const seed of randomSeeds(3)) {
+  for (const seed of seeds(3)) {
     const a = createNoise3(seed), b = createNoise3(seed), c = createNoise3(seed + 1);
     let differs = false;
     for (let k = 0; k < 200; k++) {
@@ -34,7 +35,7 @@ test("noise repeats per seed, differs across seeds and stays in range", () => {
 });
 
 test("noise is continuous in time and changes over longer times", () => {
-  for (const seed of randomSeeds(3)) {
+  for (const seed of seeds(3)) {
     const noise = createNoise3(seed);
     let maxJump = 0, totalChange = 0;
     for (let k = 0; k < 100; k++) {
@@ -49,7 +50,7 @@ test("noise is continuous in time and changes over longer times", () => {
 
 
 test("one global wind scrolls every field sideways together", () => {
-  for (const seed of randomSeeds(2)) {
+  for (const seed of seeds(2)) {
     const a = createWeather({ width: 40, height: 12, seed }), b = createWeather({ width: 40, height: 12, seed });
     // Same time, b scrolled 3 px further: b at x equals a at x − 3, for every field.
     b.scroll = a.scroll + 3;
@@ -87,7 +88,7 @@ test("the cloud-layer band is low at both ends, 1 in the middle, with asymmetry 
 });
 
 test("cloud is forced exactly where relative humidity × band passes the threshold", () => {
-  for (const seed of randomSeeds(2)) {
+  for (const seed of seeds(2)) {
     // Some seeds start with a clear sky, so sample frames along the noise's time axis
     // (as playback does) and check the rule on every one; at least one must have cloud.
     const simulation = createWeather({ width: 64, height: 48, seed });
@@ -107,7 +108,7 @@ test("cloud is forced exactly where relative humidity × band passes the thresho
 
 test("at defaults the cloud sits in a clear horizontal layer with clear sky above and below", () => {
   const { height, width } = { height: 96, width: 128 }, rows = new Array(height).fill(0);
-  for (const seed of randomSeeds(4)) {
+  for (const seed of seeds(4)) {
     const simulation = createWeather({ seed });
     for (let t = 0; t <= 1000; t += 125) {
       simulation.time = t * defaults.changeSpeed; simulation.scroll = t * defaults.wind;
@@ -128,7 +129,7 @@ test("at defaults the cloud sits in a clear horizontal layer with clear sky abov
 
 test("all rain moves fallSpeed down and wind sideways per tick, nothing lost", () => {
   for (const [fallSpeed, wind] of [[0.25, 0.1], [0.4, -0.2], [1, 0]]) {
-    const simulation = createWeather({ width: 48, height: 40, seed: randomSeeds(1)[0] });
+    const simulation = createWeather({ width: 48, height: 40, seed: seeds(1)[0] });
     // No cloud, so no new rain, and nothing reaches the puddles.
     const options = { cloudiness: -1, fallSpeed, wind };
     sampleFields(simulation, options); startCloud(simulation);
@@ -150,7 +151,7 @@ test("all rain moves fallSpeed down and wind sideways per tick, nothing lost", (
 });
 
 test("rain never dries in the air: it fills puddles and is conserved overall", () => {
-  for (const seed of randomSeeds(2)) {
+  for (const seed of seeds(2)) {
     const simulation = createWeather({ seed });
     for (let k = 0; k < 800; k++) step(simulation);
     assert.ok(simulation.rained > 0 && pooledRain(simulation) > 0, `seed ${seed} rains and pools`);
@@ -164,7 +165,7 @@ test("rain never dries in the air: it fills puddles and is conserved overall", (
 
 test("falling rain keeps all its mass until it leaves the floor", () => {
   for (const [fallSpeed, wind] of [[defaults.fallSpeed, defaults.wind], [0.6, -0.3]]) {
-    const width = 64, height = 48, simulation = createWeather({ width, height, seed: randomSeeds(1)[0] });
+    const width = 64, height = 48, simulation = createWeather({ width, height, seed: seeds(1)[0] });
     const options = { cloudiness: -1, fallSpeed, wind, rainAmount: 0 };
     sampleFields(simulation, options); startCloud(simulation);
     for (let x = 28; x < 32; x++) simulation.rain[2 * width + x] = 0.25;
@@ -189,7 +190,7 @@ test("falling rain keeps all its mass until it leaves the floor", () => {
 });
 
 test("a rain shaft reaches the floor under its cloud, spreading only a little sideways", () => {
-  const width = 128, height = 96, simulation = createWeather({ width, height, seed: randomSeeds(1)[0] });
+  const width = 128, height = 96, simulation = createWeather({ width, height, seed: seeds(1)[0] });
   const options = { cloudiness: -1, rainAmount: 0 };
   sampleFields(simulation, options); startCloud(simulation);
   const columnSpread = values => {
@@ -216,26 +217,33 @@ test("a rain shaft reaches the floor under its cloud, spreading only a little si
   assert.ok(landed.sd < start.sd + 2.5, `spread from ${start.sd.toFixed(2)} to ${landed.sd.toFixed(2)} px`);
 });
 
+// Seed 1607503078 is a known case from the old random-seed runs: its smooth field has unusually
+// high contrast, so raw neighbor change fell from smooth to middle (195.6 > 188.0) although
+// the field got finer. fractal() normalizes by the octaves' total weight, so adding octaves
+// lowers overall contrast (sd about 0.20 → 0.11 → 0.09); about 8% of seeds did the same. Fine
+// detail is therefore measured relative to the field's own spread, which rises on every seed.
 test("texture runs from smooth to ragged: more fine detail in humidity as it rises", () => {
-  for (const seed of randomSeeds(2)) {
-    const roughness = texture => {
+  for (const seed of [...seeds(8), 1607503078]) {
+    const detail = texture => {
       const simulation = createWeather({ seed });
       sampleFields(simulation, { texture });
-      // Mean neighbor-to-neighbor change: fine detail.
-      let change = 0;
-      for (let i = 1; i < simulation.humidity.length; i++) if (i % simulation.width) change += Math.abs(simulation.humidity[i] - simulation.humidity[i - 1]);
-      return change;
+      const values = simulation.humidity, mean = sum(values) / values.length;
+      const spread = Math.sqrt(sum(values.map(value => (value - mean) ** 2)) / values.length);
+      // Mean neighbor-to-neighbor change (fine detail) per unit of overall spread.
+      let change = 0, pairs = 0;
+      for (let i = 1; i < values.length; i++) if (i % simulation.width) { change += Math.abs(values[i] - values[i - 1]); pairs++; }
+      return change / pairs / spread;
     };
-    const smooth = roughness(0), middle = roughness(defaults.texture), ragged = roughness(1);
-    assert.ok(smooth < middle && middle < ragged, `seed ${seed}: ${smooth.toFixed(1)} < ${middle.toFixed(1)} < ${ragged.toFixed(1)}`);
-    assert.ok(ragged > 1.5 * smooth);
+    const smooth = detail(0), middle = detail(defaults.texture), ragged = detail(1);
+    assert.ok(smooth < middle && middle < ragged, `seed ${seed}: ${smooth.toFixed(3)} < ${middle.toFixed(3)} < ${ragged.toFixed(3)}`);
+    assert.ok(ragged > 2 * smooth, `seed ${seed}: ragged ${ragged.toFixed(3)} vs smooth ${smooth.toFixed(3)}`);
   }
   assert.deepEqual(textureShape(0), { octaves: 1, roughness: 0.3 });
   assert.ok(Math.abs(textureShape(1).octaves - 6) < 1e-12 && Math.abs(textureShape(1).roughness - 0.75) < 1e-12);
 });
 
 test("rain is made only in dense cloud water, and streaks are born only in falling rain", () => {
-  for (const seed of randomSeeds(2)) {
+  for (const seed of seeds(2)) {
     const simulation = createWeather({ seed }), layer = createRainLayer(seed);
     const { width } = simulation;
     let made = 0, born = 0;
@@ -261,10 +269,10 @@ test("rain is made only in dense cloud water, and streaks are born only in falli
 });
 
 test("rain streaks follow the falling rain, lean with the wind, and fade once the rain has passed", () => {
-  const simulation = createWeather({ width: 48, height: 40, seed: randomSeeds(1)[0] });
+  const simulation = createWeather({ width: 48, height: 40, seed: seeds(1)[0] });
   const options = { cloudiness: -1, wind: 0.2, fallSpeed: 0.25 };
   sampleFields(simulation, options); startCloud(simulation);
-  const layer = createRainLayer(randomSeeds(1)[0]);
+  const layer = createRainLayer(seeds(1)[0]);
   // No rain: no streaks, even under dense, charged cloud.
   for (let y = 6; y < 10; y++) for (let x = 20; x < 24; x++) { simulation.cloud[y * 48 + x] = 1; simulation.charge[y * 48 + x] = 1; }
   for (let k = 0; k < 20; k++) updateRainLayer(layer, simulation, options);
@@ -299,13 +307,13 @@ test("rain streaks follow the falling rain, lean with the wind, and fade once th
 });
 
 test("rain streaks vary: heavy-tailed lengths from 3 to 30 px, uneven spacing, own speeds", () => {
-  const simulation = createWeather({ width: 96, height: 60, seed: randomSeeds(1)[0] });
+  const simulation = createWeather({ width: 96, height: 60, seed: seeds(1)[0] });
   const options = { cloudiness: -1, wind: 0 };
   sampleFields(simulation, options); startCloud(simulation);
   // One wide, evenly raining cloud: any unevenness comes from the streaks themselves.
   for (let y = 5; y < 10; y++) for (let x = 0; x < 96; x++) { simulation.cloud[y * 96 + x] = 1; simulation.charge[y * 96 + x] = 1; }
   for (let y = 9; y < 12; y++) for (let x = 0; x < 96; x++) simulation.rain[y * 96 + x] = 0.2;
-  const layer = createRainLayer(randomSeeds(1)[0]), births = [];
+  const layer = createRainLayer(seeds(1)[0]), births = [];
   for (let k = 0; k < 400; k++) {
     updateRainLayer(layer, simulation, options);
     births.push(...layer.streaks.filter(streak => streak.age === 0));
@@ -346,7 +354,7 @@ test("cloud water forms fast, fades slowly (slower with persistence) and drifts 
   assert.ok(dissipation(1.5) < dissipation(1) / 5, "the new top lingers much longer than the old one");
   // In a full run, a cloud that has lost its forcing outlives it: some pixels are still
   // cloudy with no forcing, and stored cloud follows the wind with the noise.
-  for (const seed of randomSeeds(2)) {
+  for (const seed of seeds(2)) {
     const run = createWeather({ seed });
     let lingering = 0;
     for (let k = 0; k < 400; k++) {
@@ -357,7 +365,7 @@ test("cloud water forms fast, fades slowly (slower with persistence) and drifts 
     assert.ok(Math.abs(run.shifted - run.scroll) <= 0.5, "cloud carried within half a pixel of the noise scroll");
   }
   // Calm air, frozen noise: stored cloud and potential stay put.
-  const calm = createWeather({ width: 32, height: 24, seed: randomSeeds(1)[0] }), before = calm.cloud.slice();
+  const calm = createWeather({ width: 32, height: 24, seed: seeds(1)[0] }), before = calm.cloud.slice();
   for (let k = 0; k < 20; k++) step(calm, { wind: 0, changeSpeed: 0, rainAmount: 0 });
   calm.cloud.forEach((cloud, i) => assert.ok(cloud >= before[i] - 1e-9 || cloud >= calm.potential[i]));
   // Wind: an isolated, unforced cloud moves 10 px right over 100 ticks at wind 0.1.
@@ -409,7 +417,7 @@ test("a raining cloud stays above its rain, and stops raining before it fades", 
   assert.ok(gone > lastRain + 20, `rain stops (tick ${lastRain}) well before the cloud is gone (tick ${gone})`);
   // Full runs: every pixel that makes rain is still dense cloud afterwards, and every new
   // streak starts in falling rain.
-  for (const seed of randomSeeds(2)) {
+  for (const seed of seeds(2)) {
     const run = createWeather({ seed }), layer = createRainLayer(seed), { width, height } = run;
     let made = 0;
     for (let k = 0; k < 600; k++) {
@@ -430,7 +438,7 @@ test("a raining cloud stays above its rain, and stops raining before it fades", 
 });
 
 test("the weather never stops moving and keeps raining", () => {
-  for (const seed of randomSeeds(2)) {
+  for (const seed of seeds(2)) {
     const simulation = createWeather({ seed });
     let previous = renderWeather(simulation), stillFrames = 0, rainingFrames = 0, cloudyFrames = 0;
     for (let k = 1; k <= 3000; k++) {
@@ -451,7 +459,7 @@ test("the weather never stops moving and keeps raining", () => {
 });
 
 test("every view renders opaque pixels", () => {
-  const seed = randomSeeds(1)[0], simulation = createWeather({ seed }), layer = createRainLayer(seed);
+  const seed = seeds(1)[0], simulation = createWeather({ seed }), layer = createRainLayer(seed);
   for (let k = 0; k < 50; k++) { step(simulation); updateRainLayer(layer, simulation); }
   for (const view of ["sunset", "water", "relative", "humidity", "temperature", "pressure"]) {
     const pixels = renderWeather(simulation, view, defaults, layer);
@@ -461,7 +469,7 @@ test("every view renders opaque pixels", () => {
 });
 
 test("the curtain follows the rain: from inside the cloud down to the floor, with no gap or fade", () => {
-  const width = 48, height = 40, simulation = createWeather({ width, height, seed: randomSeeds(1)[0] });
+  const width = 48, height = 40, simulation = createWeather({ width, height, seed: seeds(1)[0] });
   const options = { cloudiness: -1, wind: 0, fallSpeed: 0.25, persistence: 1.5 };
   sampleFields(simulation, options); startCloud(simulation);
   // A dense, charged cloud (rows 6-11), kept full as if the noise still fed it.

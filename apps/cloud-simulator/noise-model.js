@@ -8,9 +8,11 @@
  *   spreads sideways only a little and never evaporates in the air, so every shaft reaches
  *   the floor and collects; plus the views and the display-only rain curtains and streaks
  *   drawn from that rain.
- * Consumers: noise.js and noise-model.test.js.
- * Dependencies: none; values are dimensionless experimental units, not a weather model.
+ * Consumers: noise-experiment.js and noise-model.test.js.
+ * Dependencies: core/sun-light.js (the Sunset view's light: the shared sun, or the low sun at
+ *   lower right it used to bake in); values are dimensionless experimental units, not a weather model.
  */
+import { fixedLight } from "./core/sun-light.js";
 
 // The noise fields. Their amplitude and bias are fixed; feature size and change speed are
 // shared sliders, scaled per field so they do not line up. Humidity's and temperature's
@@ -466,6 +468,15 @@ export const SKY = [[18, 16, 48], [40, 24, 72], [70, 34, 90], [110, 44, 98], [15
 // Cloud shades from shadow to lit edge; rain (diagnostic view), rain-streak and curtain
 // greys (tinted by the sky behind them) and puddles.
 export const CLOUD = [[70, 46, 88], [128, 84, 124], [222, 140, 150], [255, 206, 170]];
+// The same sky bands and cloud shades under a high sun (light.day 1).
+const DAY_SKY = [[30, 62, 140], [40, 76, 156], [52, 92, 172], [66, 108, 186], [82, 124, 198],
+  [100, 142, 210], [120, 160, 220], [144, 180, 230], [170, 200, 236]];
+const DAY_CLOUD = [[112, 118, 140], [160, 166, 184], [216, 220, 230], [252, 252, 250]];
+// The Sunset view's light (core/sun-light.js): the shared sun, or by default the low sun off
+// the lower right it was drawn with before. NIGHT_LIGHT is how lit cloud stays once the sun
+// is down (light.strength 0), NIGHT_SKY how bright the sky stays.
+export const BAKED_LIGHT = fixedLight(1, 1, 0.35);
+const NIGHT_LIGHT = 0.3, NIGHT_SKY = 0.5;
 const RAIN = [150, 210, 236], RAIN_GREY = [168, 162, 178], CURTAIN_GREY = [132, 112, 142], PUDDLE = [76, 120, 168];
 // 4×4 ordered dither so bands and opacities break into chunky pixel patterns.
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
@@ -473,10 +484,19 @@ const clip01 = value => Math.max(0, Math.min(1, value));
 const mix = (a, b, t) => a.map((channel, k) => channel + (b[k] - channel) * t);
 export const RAIN_SCALE = 0.02;
 
-export function skyColor(altitude, threshold = 0.5) {
+export function skyColor(altitude, threshold = 0.5, day = 0) {
   const depth = clip01(1 - altitude) * (SKY.length - 1);
   const band = Math.floor(depth), within = depth - band;
-  return SKY[Math.min(SKY.length - 1, band + (within > threshold ? 1 : 0))];
+  const k = Math.min(SKY.length - 1, band + (within > threshold ? 1 : 0));
+  return day > 0 ? mix(SKY[k], DAY_SKY[k], day) : SKY[k];
+}
+
+// Cloud water a fraction of a pixel away (bilinear; nothing beyond the edges).
+function cloudAt(cloud, width, height, x, y) {
+  const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+  const at = (cx, cy) => cx >= 0 && cy >= 0 && cx < width && cy < height ? cloud[cy * width + cx] : 0;
+  if (fx === 0 && fy === 0) return at(x0, y0);
+  return (at(x0, y0) * (1 - fx) + at(x0 + 1, y0) * fx) * (1 - fy) + (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy;
 }
 
 function diverging(value, low, high) {
@@ -486,8 +506,13 @@ function diverging(value, low, high) {
 
 // `layer` (from createRainLayer/updateRainLayer) supplies the Sunset rain streaks; without
 // it Sunset shows no rain in the air.
-export function renderWeather(simulation, view = "sunset", options = {}, layer = null) {
+export function renderWeather(simulation, view = "sunset", options = {}, layer = null, light = BAKED_LIGHT) {
   const rules = { ...defaults, ...options };
+  const strength = clip01(light.strength), day = light.day;
+  const sunScale = NIGHT_LIGHT + (1 - NIGHT_LIGHT) * strength, skyScale = NIGHT_SKY + (1 - NIGHT_SKY) * strength;
+  // Side light shows the cloud's relief at full contrast; light from the front flattens it.
+  const relief = 1.5 * light.relief / BAKED_LIGHT.relief;
+  const cloudShades = day > 0 ? CLOUD.map((shade, k) => mix(shade, DAY_CLOUD[k], day)) : CLOUD;
   const { width, height, humidity, temperature, pressure, relative, cloud, rain, puddle, band } = simulation;
   const pixels = new Uint8ClampedArray(width * height * 4);
   const streaks = view === "sunset" && layer ? rainAlpha(layer, simulation, rules) : null;
@@ -508,23 +533,24 @@ export function renderWeather(simulation, view = "sunset", options = {}, layer =
       if (raining(simulation, i)) rgb = mix(rgb, [255, 220, 120], 0.35);
       rgb = mix(rgb, RAIN, clip01(rain[i] / RAIN_SCALE));
     } else {
-      // Sunset: banded sky, cloud in four shades (lit where the cloud thins toward the low
-      // sun at lower right, shaded inside), the rain curtain smoothing a raining cloud's base
-      // into a soft sheet, soft rain streaks, puddles on the floor.
-      rgb = skyColor(altitude, dither);
+      // Sunset: banded sky, cloud in four shades (lit where the cloud thins toward the sun,
+      // one step along light.march, shaded inside), the rain curtain smoothing a raining
+      // cloud's base into a soft sheet, soft rain streaks, puddles on the floor.
+      rgb = skyColor(altitude, dither, day);
+      if (skyScale < 1) rgb = rgb.map(channel => channel * skyScale);
       const density = cloud[i], sheet = curtains ? curtains[i] : 0;
       if (density > dither * 0.6) {
-        const toward = y + 1 < height && x + 1 < width ? cloud[i + width + 1] : 0;
-        const light = clip01(0.4 + 1.5 * (density - toward) + 0.2 * (1 - altitude) - 0.15 * (1 - density));
-        rgb = CLOUD[Math.min(3, Math.floor(light * 3.999))];
+        const toward = light.march ? cloudAt(cloud, width, height, x + light.march.x, y + light.march.y) : density;
+        const lit = sunScale * clip01(0.4 + relief * (density - toward) + 0.2 * (1 - altitude) - 0.15 * (1 - density));
+        rgb = cloudShades[Math.min(3, Math.floor(lit * 3.999))];
       }
       if (sheet > 0.005) {
         // Inside the cloud the curtain evens out the shading (less texture); below it, a
         // dithered grey sheet over the sky. Four opacity steps keep it pixel art.
         const level = Math.min(1, Math.floor((density > dither * 0.6 ? 1.4 : 1) * sheet * 4 + dither) / 4);
-        rgb = mix(rgb, mix(CURTAIN_GREY, skyColor(altitude), 0.25), level);
+        rgb = mix(rgb, mix(CURTAIN_GREY, skyColor(altitude, 0.5, day), 0.25), level);
       }
-      if (streaks && streaks[i] > 0.005) rgb = mix(rgb, mix(RAIN_GREY, skyColor(altitude), 0.3), streaks[i] * (1 - 0.7 * density));
+      if (streaks && streaks[i] > 0.005) rgb = mix(rgb, mix(RAIN_GREY, skyColor(altitude, 0.5, day), 0.3), streaks[i] * (1 - 0.7 * density));
     }
     if (y === height - 1 && puddle[x] > 0.02 + dither * 0.2) rgb = PUDDLE;
     pixels.set([rgb[0], rgb[1], rgb[2], 255], i * 4);

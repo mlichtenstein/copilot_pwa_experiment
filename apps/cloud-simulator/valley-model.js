@@ -1,5 +1,7 @@
-/* Purpose: Animate fixed cloud texture sampling and soft reveal fields over a valley.
- * Consumers: valley.js and valley-model.test.js. Dependencies: valley-noise.js, valley-sampling.js; no DOM or image decoding. */
+/* Purpose: Animate fixed cloud texture sampling and soft reveal fields over a valley, lit by
+ *   the shared sun (or, without one, the fixed low sun it was painted with before).
+ * Consumers: valley-experiment.js and valley-model.test.js. Dependencies: valley-noise.js,
+ *   valley-sampling.js; lights come from core/sun-light.js; no DOM or image decoding. */
 import { cloudSampler } from "./valley-sampling.js";
 import { perlin3 } from "./valley-noise.js";
 export const defaults = { wind: 4, formationSpeed: 0.3, cloudY: 0.46,
@@ -84,8 +86,29 @@ export function mixCloudSamples(a, b, amount) {
   const t = clamp(amount), alpha = a.alpha * (1 - t) + b.alpha * t;
   return { alpha, shade: alpha > 0 ? (a.shade * a.alpha * (1 - t) + b.shade * b.alpha * t) / alpha : 0 };
 }
-export function renderValley(texture, time = 0, options = {}, shape = "combined", width = 192, height = 120, textureB = texture) {
+// Where the sun sits in the picture: SUN_VIEW.across degrees of azimuth reach the side
+// edges (x ±1), elevation 0 sits at y = SUN_VIEW.horizon (the valley floor's eye level)
+// and each SUN_VIEW.rise degrees up moves it one picture height. Below the horizon the
+// terrain hides its glow.
+export const SUN_VIEW = { across: 45, horizon: 0.82, rise: 50 };
+// What a light from core/sun-light.js does to the picture: the glow's place and strength,
+// which side the slopes are lit from (across, −1 left … 1 right), cloud brightness
+// (strength) and how far colours have moved toward plain daylight (day). Without a light,
+// the fixed look the valley was painted with: a low glow left of centre, slopes lit from
+// the right.
+const PAINTED = { glowX: -0.18, glowY: 0.6, glow: 1, across: 1, strength: 1, day: 0, lining: 0 };
+export function valleyLook(light) {
+  if (!light) return PAINTED;
+  return {
+    glowX: Math.max(-1.4, Math.min(1.4, light.azimuth / SUN_VIEW.across)),
+    glowY: SUN_VIEW.horizon - light.elevation / SUN_VIEW.rise,
+    glow: light.strength, across: light.across, strength: light.strength, day: light.day, lining: light.strength
+  };
+}
+export function renderValley(texture, time = 0, options = {}, shape = "combined", width = 192, height = 120, textureB = texture, light) {
   const s = { ...defaults, ...options }, pixels = new Uint8ClampedArray(width * height * 4);
+  // As the sun sets, cloud light dims to 55% and the sky to 50%.
+  const look = valleyLook(light), day = look.day, cloudLight = 0.55 + 0.45 * look.strength, skyScale = 0.5 + 0.5 * look.strength;
   const grids = shape === "noise" ? [0, 1, 2].map(layer => noiseGrid(time, s, layer)) : [];
   const terrain = Array.from({ length: width }, (_, px) => terrainProfile(2 * (px + 0.5) / width - 1, s));
   const samplersA = [0, 1, 2].map(layer => cloudSampler(texture, time, s, layer, width, height));
@@ -94,8 +117,13 @@ export function renderValley(texture, time = 0, options = {}, shape = "combined"
     const x = 2 * (px + 0.5) / width - 1, y = (py + 0.5) / height;
     const horizon = Math.pow(y, 1.8);
     let color = [0.19 + 0.62 * horizon, 0.26 + 0.32 * horizon, 0.43 - 0.07 * horizon];
-    const sun = Math.exp(-(((x + 0.18) / 0.1) ** 2) - ((y - 0.6) / 0.065) ** 2);
-    color = color.map((v, c) => v + sun * [0.35, 0.23, 0.08][c]);
+    if (day > 0) color = color.map((v, c) => v + day * ([0.24 + 0.36 * horizon, 0.44 + 0.3 * horizon, 0.78 - 0.04 * horizon][c] - v));
+    const dx = x - look.glowX, dy = y - look.glowY;
+    const sun = look.glow * Math.exp(-((dx / 0.1) ** 2) - (dy / 0.065) ** 2);
+    const glowColor = [0.35, 0.23 + 0.1 * day, 0.08 + 0.2 * day];
+    color = color.map((v, c) => (v + sun * glowColor[c]) * skyScale);
+    // Cloud near the sun is lit through its thin edges (a silver lining).
+    const lining = look.lining > 0 ? look.lining * Math.exp(-(dx * dx + dy * dy) / 0.09) : 0;
     for (let layer = 0; layer < 3; layer++) {
       const fields = revealFields(x, y, time, s, shape, layer, grids[layer]?.(x, y), terrain[px]);
       if (fields.mask < 0.001) continue;
@@ -103,7 +131,9 @@ export function renderValley(texture, time = 0, options = {}, shape = "combined"
       const mixed = s.textureBlend <= 0 || textureB === texture ? a : mixCloudSamples(a, samplersB[layer](px, py), s.textureBlend);
       const alpha = clamp(mixed.alpha * s.opacity * fields.mask), shade = mixed.shade;
       // Existing renderer palette owns color; photographs supply only scalar shading/opacity.
-      const tint = [0.64 + shade * 0.28, 0.5 + shade * 0.3, 0.5 + shade * 0.22];
+      let tint = [0.64 + shade * 0.28, 0.5 + shade * 0.3, 0.5 + shade * 0.22];
+      if (day > 0) tint = tint.map((v, c) => v + day * ([0.62 + shade * 0.33, 0.64 + shade * 0.32, 0.68 + shade * 0.28][c] - v));
+      if (look !== PAINTED) tint = tint.map((v, c) => v * cloudLight + lining * (1 - alpha * 0.6) * [0.3, 0.22, 0.12][c]);
       color = color.map((value, c) => value * (1 - alpha) + tint[c] * alpha);
     }
     // Terrain is the final silhouette; clouds and their clearance share this same boundary.
@@ -111,8 +141,9 @@ export function renderValley(texture, time = 0, options = {}, shape = "combined"
       const ridge = mountainRidge(x, layer, s.horizon);
       if (y >= ridge) {
         const slope = mountainRidge(x + 0.015, layer, s.horizon) - ridge;
-        const light = clamp(0.5 + slope * 12);
-        color = [[0.22, 0.25, 0.34], [0.13, 0.17, 0.24], [0.055, 0.095, 0.14]][layer].map(v => v * (0.8 + light * 0.35));
+        // A slope facing the sun's side is lit; with the sun ahead both sides even out.
+        const lit = clamp(0.5 + slope * 12 * look.across);
+        color = [[0.22, 0.25, 0.34], [0.13, 0.17, 0.24], [0.055, 0.095, 0.14]][layer].map(v => v * (0.8 + lit * 0.35));
         // A narrow reflected river threads the central valley floor.
         if (s.horizon !== "open" && layer === 2 && Math.abs(x - 0.015 * Math.sin(y * 25)) < 0.006 + Math.max(0, y - 0.8) * 0.02 && y > 0.8) color = [0.46, 0.45, 0.4];
       }
