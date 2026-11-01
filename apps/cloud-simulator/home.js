@@ -9,7 +9,7 @@ import { mountHeader, launchButtons } from "./core/header.js";
 import { createHoldHelp } from "./core/hold-help.js";
 
 export const HOME_TITLE = "Seven small skies";
-export const HOME_TAGLINE = "Pixel-art experiments in clouds, light and weather. Pick one, or let chance pick.";
+export const HOME_TAGLINE = "Pixel-art experiments in clouds, light and weather.";
 export const thumbnailFor = entry => `thumbs/${entry.id}.png`;
 
 export function mountHome({ doc = globalThis.document, serviceWorker = globalThis.navigator?.serviceWorker, launch = {} } = {}) {
