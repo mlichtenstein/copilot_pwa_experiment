@@ -1,10 +1,10 @@
 /* Purpose: Check the Weather layers weather states do what they promise on pinned seeds:
  *   after a `thunderstorm` jump the first strike comes within 10 s of play and strikes keep
  *   coming at a lively but not constant rate; `clearDay`, `overcast` and `gentleClouds` give
- *   no strikes in 60 s, and their cloud water ranks clearDay < gentleClouds < overcast; and
- *   the panel buttons jump the live page there.
+ *   no strikes in 60 s, and their cloud water ranks clearDay < gentleClouds < overcast;
+ *   `overcast` shows visible shafts of light; and the panel buttons jump the live page there.
  * Consumers: Node test runner. Dependencies: node:test, node:assert, weather-fields.js,
- *   weather-experiment.js, core/experiment.js, core/host.js, core/fake-dom.js and
+ *   weather-experiment.js, core/experiment.js, core/sun-path.js, core/host.js, core/fake-dom.js and
  *   ../shared/drift.js. */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -12,6 +12,7 @@ import { createWeather, stepWeather } from "./weather-fields.js";
 import { weather } from "./weather-experiment.js";
 import { defaultParams, weatherStateParams } from "./core/experiment.js";
 import { mountExperiment } from "./core/host.js";
+import { sunAt, timeForPhase, phaseForTimeOfDay, DEFAULT_SUN_SHAPE } from "./core/sun-path.js";
 import { pageDocument, fakeCanvas, manualFrames } from "./core/fake-dom.js";
 import { seededRandom } from "../shared/drift.js";
 
@@ -58,6 +59,40 @@ test("clearDay, overcast and gentleClouds: no lightning in 60 s, and cloud ranks
   assert.ok(water.clearDay < 0.01, `clearDay is nearly cloudless (${water.clearDay})`);
   assert.ok(water.gentleClouds > 3 * water.clearDay, `gentleClouds (${water.gentleClouds}) clearly cloudier than clearDay (${water.clearDay})`);
   assert.ok(water.overcast > 1.4 * water.gentleClouds, `overcast (${water.overcast}) clearly cloudier than gentleClouds (${water.gentleClouds})`);
+});
+
+// Rows of a 160x100 overcast frame where the shaft veil (luma with shafts minus without)
+// varies by >= 10 and crosses its midpoint at least twice (hysteresis amp/4), so a whole lit
+// or shadowed wedge lies in the row. 10+ such rows reads as visible shafts.
+function shaftRows(seed, seconds) {
+  const W = 160, H = 100, overcast = stateById("overcast");
+  const params = { ...weatherStateParams(weather, overcast, defaultParams(weather), seededRandom(seed)), seed };
+  const instance = weather.create({ width: W, height: H, params });
+  let time = timeForPhase(phaseForTimeOfDay(overcast.timeOfDay));
+  for (let t = 0; t < seconds - 1e-9; t += 0.25) { instance.step(0.25); time += 0.25; }
+  const frame = { time, sun: sunAt(time, DEFAULT_SUN_SHAPE) };
+  const lit = instance.render(frame).slice();
+  instance.update({ ...params, shaftStrength: 0 });
+  const flat = instance.render(frame), luma = (px, i) => 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2];
+  let rows = 0;
+  for (let y = 0; y < H; y++) {
+    const row = Array.from({ length: W }, (_, x) => luma(lit, 4 * (y * W + x)) - luma(flat, 4 * (y * W + x)));
+    const max = Math.max(...row), min = Math.min(...row), amp = max - min, mid = (max + min) / 2;
+    if (amp < 10) continue;
+    let side = 0, crossings = 0;
+    for (const d of row) { const c = d >= mid + amp / 4 ? 1 : d <= mid - amp / 4 ? -1 : 0; if (c && side && c !== side) crossings++; if (c) side = c; }
+    if (crossings >= 2) rows++;
+  }
+  instance.dispose?.();
+  return rows;
+}
+
+test("overcast: visible shafts of light on the pinned seeds", () => {
+  // Measured over 20 seeds at 0.5, 2, 4, 6 and 8 s: 100/100 frames.
+  for (const seed of [1, 2, 3, 4, 5, 6]) {
+    const rows = shaftRows(seed, 2);
+    assert.ok(rows >= 10, `seed ${seed}: ${rows} shaft rows`);
+  }
 });
 
 test("the weather state buttons jump the Weather layers page to each state", async () => {
