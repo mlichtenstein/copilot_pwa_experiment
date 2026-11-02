@@ -1,6 +1,7 @@
 /*
  * Purpose: The common contract every cloud simulator experiment module meets, plus pure
- *   helpers over its params schema (defaults, cleaning untrusted params, which params drift).
+ *   helpers over its params schema (defaults, cleaning untrusted params, which params drift,
+ *   a named weather state's full params).
  *   An experiment describes its controls in code and draws pixels; core/host.js turns that
  *   into a page (controls, shared loop and clock, shared sun, rating bar, ?p= links).
  * Consumers: core/host.js, core/registry.js, the experiment modules (../*-experiment.js),
@@ -48,6 +49,11 @@
  *   stats(params, frame, instance)    one-line status under the buttons
  *   loadError     status line shown if an instance's ready promise rejects
  *   groupNotes    { group: note } bolds those groups' titles and adds the note ("" for none)
+ *   weatherStates named, checked-in weather states the common panel can jump to (one button
+ *                 each, labelled with its id): [{ id, help, params, timeOfDay? }]. params are
+ *                 that state's own values (every other setting takes its default); timeOfDay
+ *                 (hours) sets the shared clock too. weatherStateParams builds the full params,
+ *                 so a later pull-toward (Drift gravitating to a state) can use it as a target
  * An instance is:
  *   update(params, { playing })  take a full, cleaned params object (rebuild what depends on it)
  *   step(dt, frame)  advance any simulation by dt clock seconds; return false if nothing
@@ -137,6 +143,7 @@ export function validateExperiment(experiment) {
     else if (COMMON_IDS.includes(action.id) || action.id.startsWith("new-")) problems.push(`action id ${action.id} is reserved for the common panel`);
   }
   for (const [id, readout] of Object.entries(experiment?.readouts ?? {})) if (typeof readout !== "function") problems.push(`readout ${id} must be a function`);
+  if (experiment?.weatherStates !== undefined) problems.push(...weatherStateProblems(experiment));
   if (!Array.isArray(experiment?.params)) problems.push("params must be an array");
   if (problems.length) throw new Error(`Experiment ${experiment?.id ?? "?"}: ${problems.join("; ")}`);
   return experiment;
@@ -204,3 +211,42 @@ export function randomParams(experiment, params, random) {
 
 // Sliders Drift may move: visible ranges not marked drift: false (playback speeds and the like).
 export const driftableParams = experiment => experiment.params.filter(param => param.kind === "range" && param.drift !== false && !param.hidden);
+
+// Problems with an experiment's weatherStates: each needs a code-name id (its button's id and
+// label) that no common control, param or action uses, a help sentence, and params that are
+// all known, valid values; timeOfDay, if given, is 0 to 24 hours.
+function weatherStateProblems(experiment) {
+  if (!Array.isArray(experiment.weatherStates)) return ["weatherStates must be an array"];
+  const problems = [], ids = new Set(), byKey = new Map((experiment.params ?? []).map(param => [param?.key, param]));
+  const taken = new Set([...COMMON_IDS, ...byKey.keys(), ...(experiment.actions ?? []).map(action => action?.id)]);
+  for (const state of experiment.weatherStates) {
+    const id = state?.id;
+    if (typeof id !== "string" || !/^[a-z][A-Za-z0-9]*$/.test(id)) { problems.push("every weather state needs a camelCase id"); continue; }
+    if (ids.has(id) || taken.has(id)) problems.push(`weather state id ${id} is already used`);
+    ids.add(id);
+    if (typeof state.help !== "string" || !state.help) problems.push(`weather state ${id} needs help text`);
+    if (state.timeOfDay !== undefined && !(state.timeOfDay >= 0 && state.timeOfDay <= 24)) problems.push(`weather state ${id} timeOfDay must be 0 to 24`);
+    if (!state.params || typeof state.params !== "object") { problems.push(`weather state ${id} needs params`); continue; }
+    for (const [key, value] of Object.entries(state.params)) {
+      const param = byKey.get(key);
+      if (!param) problems.push(`weather state ${id} sets unknown param ${key}`);
+      else if (cleanParam(param, value, null) !== value) problems.push(`weather state ${id} has a bad ${key}`);
+    }
+  }
+  return problems;
+}
+
+// A named weather state's full params: every setting at its default, then the state's own
+// values, with fresh seeds (from `random`, () => [0, 1)). Settings Randomize leaves alone
+// (randomize: false: inspection views, playback speeds, start modes) and the grid size keep
+// their current values unless the state sets them.
+export function weatherStateParams(experiment, state, params, random) {
+  const kept = experiment.params.filter(param => param.kind === "size" || param.randomize === false);
+  const seeds = experiment.params.filter(param => param.kind === "seed");
+  return cleanParams(experiment, {
+    ...defaultParams(experiment),
+    ...Object.fromEntries(kept.map(param => [param.key, params[param.key]])),
+    ...Object.fromEntries(seeds.map(param => [param.key, randomValue(param, random)])),
+    ...state.params
+  });
+}
