@@ -77,7 +77,7 @@ For documentation-only work, inspect links, template structure, policy consisten
 
 ### Deployments
 
-Check the Deploy workflow and its “Review deployments” comment. Link affected-app previews only after successful deployment. Report pending/failed/unavailable accurately; never construct a URL and imply it is live without evidence. No preview is expected when no deployable app changes. Fork PRs cannot push previews with the current workflow. Production and previews use different paths; see the README.
+Check the Deploy workflow and its “Review deployments” comment. Link affected-app previews only after successful deployment. Report pending/failed/unavailable accurately; never construct a URL and imply it is live without evidence. No preview is expected when no deployable app changes. Fork PRs skip the preview deploy and do not get a preview. The workflow does not fail for that reason. Production and previews use different paths; see the README.
 
 ## Review and readiness
 
