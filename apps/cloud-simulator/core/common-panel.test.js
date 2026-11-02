@@ -3,7 +3,8 @@
  *   and order, Lightning included), only the current-page marker moving, and no hand-written
  *   header or nav left in the HTML. The common panel: the same buttons, sliders, labels and
  *   (hidden) explanatory texts in the same order; New seed present exactly when the
- *   experiment declares `seed`, the Sun group exactly when it declares `sun`; no page has a
+ *   experiment declares `seed`, the Sun group exactly when it declares `sun`, the
+ *   Jump to weather state row exactly when it declares `weatherStates`; no page has a
  *   Play, Pause, Step, Randomize or New seed of its own (in its generated controls or its
  *   HTML). Descriptions everywhere are hidden until held (hold-help.test.js covers the hold).
  * Consumers: Node test runner. Dependencies: node:test, node:assert, node:fs, host.js,
@@ -22,6 +23,7 @@ const describe = node => [node.tagName, node.id ?? "", node.className ?? "", nod
   node.title ?? "", node.type ?? "", node.min ?? "", node.max ?? "", node.step ?? "", node.attributes["aria-label"] ?? ""].join(" | ");
 const isSunItem = node => { for (let n = node; n; n = n.parentNode) if (n.className === "panel-sun") return true; return false; };
 const isTimeItem = node => { for (let n = node; n; n = n.parentNode) if (/(^| )time-row( |$)/.test(n.className ?? "")) return true; return false; };
+const isStatesItem = node => { for (let n = node; n; n = n.parentNode) if (/(^| )jump-to-weather-state( |$)/.test(n.className ?? "")) return true; return false; };
 const isSeedItem = node => { for (let n = node; n; n = n.parentNode) if (/(^| )new-seed( |$)/.test(n.className ?? "")) return true; return false; };
 
 async function mountAll() {
@@ -42,7 +44,7 @@ async function mountAll() {
 test("the common panel is identical on every experiment page", async () => {
   const pages = await mountAll();
   assert.equal(pages.length, 8, "all eight experiments are on the shared core");
-  const shared = ({ panel }) => panel.filter(node => !isSunItem(node) && !isSeedItem(node) && !isTimeItem(node)).map(describe);
+  const shared = ({ panel }) => panel.filter(node => !isSunItem(node) && !isSeedItem(node) && !isTimeItem(node) && !isStatesItem(node)).map(describe);
   const reference = shared(pages[0]);
   // The always-present items, in order.
   assert.deepEqual(reference.filter(line => / \| (play|step|randomize|drift|drift-speed) \| /.test(line)).map(line => line.split(" | ")[1]),
@@ -60,6 +62,9 @@ test("the common panel is identical on every experiment page", async () => {
     const ids = page.panel.map(node => node.id).filter(Boolean);
     assert.equal(ids.includes("new-seed"), Boolean(page.experiment.seed), `${page.entry.title}: New seed iff seed`);
     assert.equal(ids.includes("reset-sun"), page.experiment.sun, `${page.entry.title}: Sun group iff sun`);
+    // The Jump to weather state row (one button per named state) exactly with `weatherStates`.
+    assert.deepEqual(page.panel.filter(node => node.tagName === "BUTTON" && isStatesItem(node)).map(node => node.id),
+      (page.experiment.weatherStates ?? []).map(state => state.id), `${page.entry.title}: a button per weather state`);
     const order = ["play", "step", "randomize", "new-seed", "drift", "drift-speed", "reset-sun", "timeOfDay"].filter(id => ids.includes(id));
     assert.deepEqual(ids.filter(id => order.includes(id)), order, `${page.entry.title}: panel order`);
     // The time of day is on every page: in the Sun group with `sun`, on its own row without.
