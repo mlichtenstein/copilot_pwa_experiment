@@ -1,10 +1,17 @@
+<!-- Purpose: Repository overview and app navigation. Consumers: users and contributors. Dependencies: app folders and contribution documents. -->
 # copilot_pwa_experiment
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the issue/PR workflow and verification, [CODING_STANDARDS.md](CODING_STANDARDS.md) for code conventions, and [AGENTS.md](AGENTS.md) for agent instructions.
 
+One UI guideline worth knowing up front: **explanatory text sits next to the thing it explains**, for example a tooltip on each button or an About expander beside the rating bar, rather than in a separate help page. See [Explanatory text](CODING_STANDARDS.md#explanatory-text). Likewise, **control labels are their code names** (a slider shows its parameter key, a button's words match its id), so code names should be descriptive, and the longer explanation goes in the hold-to-see help; see [Control labels are code names](CODING_STANDARDS.md#control-labels-are-code-names).
+
 ## Apps
+
+- [Cloud simulator · Noise weather](apps/cloud-simulator/)
+- [Weather lab · Lightning](apps/cloud-simulator/lightning.html)
+- [Weather lab · Combined weather layers](apps/cloud-simulator/weather.html)
 
 - [Counter](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/counter/)
 - [Dice roll / coin flip](https://mlichtenstein.github.io/copilot_pwa_experiment/apps/dice/)
@@ -35,6 +42,7 @@ The app itself is deliberately trivial: it says "Hello World!" and has a button 
 | `app/sw.js` | Service worker: offline caching, required for installability |
 | `app/icons/` | App icons (192 and 512 px) |
 | `.github/workflows/deploy.yml` | The deployment automation |
+| `apps/cloud-simulator/` | Cloud and weather experiments (noise weather, sunset, convection, horizon); see its [guide](apps/cloud-simulator/README.md) |
 | `apps/counter/` | A standalone counter PWA |
 | `apps/dice/` | Dice roller and coin flip PWA |
 | `apps/adventure/` | Button-driven, three-room text adventure |

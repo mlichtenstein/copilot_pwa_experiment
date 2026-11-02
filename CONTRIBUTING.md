@@ -55,7 +55,7 @@ Update checkboxes at meaningful progress points and before final review. Reopen 
 
 State what you checked, how to repeat it, expected and observed results, and what remains unverified. Include commands/results, manual steps, screenshots, or preview links as appropriate. Distinguish checks you executed from suggested reviewer steps. Never claim unrun checks passed.
 
-Inspect the current checkout for available tools. This repository currently has no automated test runner or build step. The Waiting Game design describes planned unit and integration tests; those requirements do not mean the tests already exist. Run available relevant checks and record exact results; do not invent test commands.
+Inspect the current checkout for available tools. Waiting Game tests run with `node --test apps/waiting-game/game.test.js` (Node 22+) and in the Test workflow. There is no build step. The Waiting Game design describes planned unit and integration tests; those requirements do not mean the tests already exist. Run available relevant checks and record exact results; do not invent test commands.
 
 For local browser checks, with Python 3 installed, run from the repository root:
 
