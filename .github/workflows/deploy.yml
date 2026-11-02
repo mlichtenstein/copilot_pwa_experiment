@@ -153,7 +153,7 @@ jobs:
           IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
           JOB_STATUS: ${{ job.status }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PUSH_RECEIVED_AT: ${{ github.event.action == 'synchronize' && github.event.pull_request.updated_at || '' }}
+          PUSH_RECEIVED_AT: ${{ contains(fromJSON('["opened","synchronize"]'), github.event.action) && github.event.pull_request.updated_at || '' }}
         run: |
           set -euo pipefail
           base="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/previews/pr-${PR}"
@@ -182,8 +182,13 @@ jobs:
           marker='<!-- review-deployments -->'
           body="$marker"$'\n'"## Review deployments"$'\n\n'
           run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [ -z "$PUSH_RECEIVED_AT" ]; then
+            # reopened events carry no push time; fall back to the head commit's committer date
+            PUSH_RECEIVED_AT=$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA" --jq '.commit.committer.date' 2>/dev/null || true)
+          fi
           if [ -n "$PUSH_RECEIVED_AT" ]; then
-            body+="Latest commit pushed (UTC): $PUSH_RECEIVED_AT"$'\n'
+            PUSH_RECEIVED_PT=$(TZ=America/Los_Angeles date -d "$PUSH_RECEIVED_AT" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "$PUSH_RECEIVED_AT (UTC)")
+            body+="Latest commit pushed (Pacific): $PUSH_RECEIVED_PT"$'\n'
           else
             body+="Latest commit push time unavailable for this PR event."$'\n'
           fi
