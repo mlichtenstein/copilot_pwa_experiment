@@ -1,3 +1,8 @@
+/*
+ * Purpose: Verify narrative rules and executable player journeys.
+ * Consumers: Node test runner and CI.
+ * Dependencies: game.js, story-examples.js, testing/journey.cjs, Node built-ins.
+ */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -56,3 +61,8 @@ test("Maria's Day 1 conversation unlocks the follow-up on Day 2", () => {
   assert.equal(state.narrative.flags["maria.considering_quitting"], true);
   assert.ok(state.narrative.seenExchanges.includes(mariaStoryExchange));
 });
+
+const { journey } = require("./testing/journey.cjs");
+for (const example of require("./story-examples.js")) {
+  test(example.name, () => example.run(journey(game)));
+}
