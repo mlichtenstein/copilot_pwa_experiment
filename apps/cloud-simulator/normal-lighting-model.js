@@ -1,6 +1,15 @@
 /* Purpose: Shade baked cloud maps without deriving runtime normals.
  * Consumers: normal-lighting experiment and tests. Dependencies: decoded RGB normal/RGBA geometry arrays. */
 export const clamp=x=>Math.max(0,Math.min(1,x));
+// Linear-light control palettes; interpolation happens before display encoding.
+export const palettes={sunset:[[.16,.015,.4],[.65,.015,.4],[1,.015,.03],[1,.2,.01],[1,.85,.12]],spectrum:[[.3,.01,.6],[.02,.06,1],[0,.7,.9],[.03,.7,.06],[1,.9,.03],[1,.22,.01],[1,.01,.02]],bicolor:[[1,.035,.02],[1,.485,.2]],moon:[[.035,.015,.1],[.12,.18,.32],[.6,.7,.85]]};
+export function gradientColor(position,params={}){
+ const {gradientKind='sunset',gradientStart=0,gradientEnd=1,gradientWarp=1,gradientPosition=.5,gradientCompression=3,lightSource='sun'}=params;
+ const palette=palettes[gradientKind==='auto'?(lightSource==='moon'?'moon':'sunset'):gradientKind]??palettes.sunset;
+ const t=Math.pow(clamp((position-gradientPosition)*gradientCompression+.5),gradientWarp);
+ const u=clamp(gradientStart+(gradientEnd-gradientStart)*t)*(palette.length-1),k=Math.min(palette.length-2,Math.floor(u)),f=u-k;
+ return palette[k].map((v,c)=>v*(1-f)+palette[k+1][c]*f);
+}
 export function facing(mu,model="lambert",wrap=.4){return model==="wrapped"?clamp((mu+wrap)/(1+wrap)):Math.max(0,mu);}
 export function decodeMaps(normal,geometry,width,height){
   const count=width*height,normals=new Float32Array(count*3),depth=new Float32Array(count),thickness=new Float32Array(count),coverage=new Float32Array(count);
@@ -14,12 +23,13 @@ export function decodeMaps(normal,geometry,width,height){
 export function shadeCloud(asset,params={}){
   const {width,height,normals,depth,thickness,coverage}=asset,count=width*height;
   const {azimuth=-40,elevation=25,model="lambert",wrap=.4,gradientPosition=.5,gradientCompression=3,gradientStrength=1,diffusionAmount=.25,diffusionDistance=3}=params;
-  const sunlight=clamp((elevation+6)/10);
+  const moon=params.lightSource==='moon',brightness=moon?(params.nightBrightness??.45):1,saturation=moon?(params.nightSaturation??.45):1;
+  const sunlight=clamp((elevation+6)/10)*brightness;
   const a=azimuth*Math.PI/180,e=elevation*Math.PI/180,l=[Math.sin(a)*Math.cos(e),Math.sin(e),Math.cos(a)*Math.cos(e)];
-  const fields={incoming:new Float32Array(count*3),facing:new Float32Array(count),visibility:new Float32Array(count),direct:new Float32Array(count*3),diffusion:new Float32Array(count*3),scene:new Float32Array(count*3)};
+  const fields={incoming:new Float32Array(count*3),facing:new Float32Array(count),visibility:new Float32Array(count),direct:new Float32Array(count*3),diffusion:new Float32Array(count*3),sky:new Float32Array(count*3),ambient:new Float32Array(count*3),ambientPass:new Float32Array(count*3),directPass:new Float32Array(count*3),directAdded:new Float32Array(count*3),diffusionAdded:new Float32Array(count*3),scene:new Float32Array(count*3)};
   for(let i=0;i<count;i++){
     const x=i%width,y=Math.floor(i/width),t=clamp(((1-y/height)-gradientPosition)*gradientCompression+.5);
-    const warm=[1,.035+.45*t,.02+.18*t];
+    const warm=gradientColor(1-y/height,params);
     for(let c=0;c<3;c++)fields.incoming[i*3+c]=sunlight*(1+(warm[c]-1)*gradientStrength);
     if(!coverage[i])continue;
     const mu=l.reduce((sum,v,c)=>sum+v*normals[i*3+c],0);fields.facing[i]=facing(mu,model,wrap);
@@ -32,8 +42,8 @@ export function shadeCloud(asset,params={}){
     }
     fields.visibility[i]=Math.exp(-optical);
     for(let c=0;c<3;c++){
-      const ramp=[[.12,.025,.25],[1,.025,.045],[1,.6,.12]],u=clamp((mu+1)/2)*2,k=Math.min(1,Math.floor(u)),f=u-k;
-      fields.direct[i*3+c]=(model==="ramp"?sunlight*(ramp[k][c]*(1-f)+ramp[k+1][c]*f):fields.incoming[i*3+c]*fields.facing[i])*fields.visibility[i];
+      const ramp=gradientColor((mu+1)/2,{...params,gradientPosition:.5,gradientCompression:1});
+      fields.direct[i*3+c]=(model==="ramp"?sunlight*ramp[c]:fields.incoming[i*3+c]*fields.facing[i])*fields.visibility[i];
     }
   }
   const radius=Math.max(0,Math.round(diffusionDistance));
@@ -45,7 +55,17 @@ export function shadeCloud(asset,params={}){
     }
     fields.diffusion[i*3+c]=weight?diffusionAmount*sum/weight:0;
     const sky=[.07,.035,.13][c],ambient=[.09,.035,.17][c];
-    fields.scene[i*3+c]=sky*(1-coverage[i])+coverage[i]*(ambient+fields.direct[i*3+c]+fields.diffusion[i*3+c]);
+    const j=i*3+c;
+    fields.sky[j]=sky*brightness;
+    fields.ambient[j]=coverage[i]*ambient*brightness;
+    fields.ambientPass[j]=fields.sky[j]*(1-coverage[i])+fields.ambient[j];
+    fields.directAdded[j]=params.directEnabled===false?0:coverage[i]*fields.direct[j];
+    fields.diffusionAdded[j]=params.diffusionEnabled===false?0:coverage[i]*fields.diffusion[j];
+    fields.directPass[j]=fields.ambientPass[j]+fields.directAdded[j];
+    fields.scene[j]=fields.directPass[j]+fields.diffusionAdded[j];
+  }
+  if(moon)for(const name of ['incoming','direct','diffusion','sky','ambient','ambientPass','directAdded','diffusionAdded','directPass','scene']){
+    const f=fields[name];for(let i=0;i<count;i++){const j=i*3,gray=.2126*f[j]+.7152*f[j+1]+.0722*f[j+2];for(let c=0;c<3;c++)f[j+c]=gray+(f[j+c]-gray)*saturation;}
   }
   return fields;
 }

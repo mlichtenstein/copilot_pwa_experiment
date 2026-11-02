@@ -11,3 +11,11 @@ Image preset uses the existing CC0 WickedInsignia CloudAlpha01 opacity map; prov
 Surface shading, artistic color ramps, depth-slab shadow sampling and coverage-normalized box diffusion are independent approximations. Transmission and physically based atmospheric color remain follow-up work. The experiment uses a fixed violet sky and a controllable vertical sunlight color gradient. A yellow sun-direction marker overlays composition views, using the same azimuth/elevation as illumination. Azimuth ±90° spans the image width and elevation ±45° spans its height; off-screen directions clamp to the border. It is a diagnostic marker, always drawn over clouds, not a physically occluded sun disc. Raw field views stay marker-free.
 
 The main viewport follows the shared host night filter; inspector thumbnails show raw field values.
+
+## Lighting controls and inspection
+
+`lightSource` selects exactly one Sun or Moon, independently of time of day. The shared clock moves that source; auto palette selects sunset or moon colors. Moon brightness/saturation are artistic appearance controls, not different atmospheric scattering physics. Other palette choices override auto. Range start/end can reverse; position/compression locate the transition, and warp redistributes its interior. The preview strip shows the sampled illumination palette from bottom to top, before brightness, saturation and strength adjustments.
+
+The workbench starts with an 85° × 58° figure-eight centered at azimuth +15°, elevation +2°. Its explicit shape overrides cross-page carry, while saved links still restore their recorded shape. Other experiments retain their defaults.
+
+View remains serialized but its redundant dropdown is hidden. Field tiles isolate quantities. Composition tiles now show accumulated stages and added contributions; direct/diffusion toggles affect the accumulated scene. Ambient addition is shown separately from the background attenuation caused by cloud coverage. Disabled direct lighting still feeds diffusion, allowing independent inspection of the two contributions. Each lighting mode has plain-language hold/hover/focus help. Mobile canvas rows use their actual aspect-ratio height.

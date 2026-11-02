@@ -95,6 +95,7 @@ function buildInput(doc, param, value, help) {
       ...param.options.map(([, text], i) => make(doc, "label", { className: "choice" }, radios[i], make(doc, "span", { textContent: text }))));
     group.setAttribute("role", "radiogroup"); group.setAttribute("aria-labelledby", heading.id);
     describe(heading, group);
+    for (const radio of radios) if (param.optionHelp?.[radio.value]) help.attach(radio.parentNode, param.optionHelp[radio.value], radio);
     return {
       element: group, radios,
       read: () => radios.find(radio => radio.checked)?.value,
@@ -154,7 +155,8 @@ export function mountExperiment(experiment, {
   const clock = createClock({ time: timeForPhase(DEFAULT_SUN_PHASE), playing: false });
   // The shared sun path's shape (sunPathWidth, sunPathHeight, sunPathX, sunPathY): host-owned
   // settings every sun-bearing experiment shows and saves the same way.
-  let sunShape = { ...DEFAULT_SUN_SHAPE };
+  const defaultSunShape = Object.fromEntries(SUN_PATH_PARAMS.map(param => [param.key, cleanParam(param, experiment.sunShape?.[param.key], param.default)]));
+  let sunShape = { ...defaultSunShape };
   const frameInfo = () => ({ time: clock.time, sun: sunAt(clock.time, sunShape) });
   // Night on every page (daylight.js): how much daylight the frame keeps, from the shared sun.
   // Sun-lit experiments shade their own dusk, so their ramp starts at the horizon instead of
@@ -277,7 +279,7 @@ export function mountExperiment(experiment, {
     resetToDefaults({ keep = [] } = {}) {
       const kept = Object.fromEntries(keep.map(key => [key, params[key]]));
       if (experiment.sun) {
-        clock.set(timeForPhase(DEFAULT_SUN_PHASE)); sunShape = { ...DEFAULT_SUN_SHAPE };
+        clock.set(timeForPhase(DEFAULT_SUN_PHASE)); sunShape = { ...defaultSunShape };
         for (const param of SUN_PATH_PARAMS) controls.get(param.key).write(sunShape[param.key]);
       }
       setParams({ ...freshDefaults(), ...kept });
@@ -476,7 +478,7 @@ export function mountExperiment(experiment, {
       // legacySunShape false). Saved with a fixed sun (sunAzimuth/sunElevation sliders): the
       // nearest point on the path. Other old keys, such as sunSpeed, are dropped by cleanParams.
       const legacy = experiment.legacySunShape !== false && !SUN_PATH_PARAMS.some(param => param.key in source);
-      sunShape = Object.fromEntries(SUN_PATH_PARAMS.map(param => [param.key, cleanParam(param, source[param.key], (legacy ? LEGACY_SUN_SHAPE : DEFAULT_SUN_SHAPE)[param.key])]));
+      sunShape = Object.fromEntries(SUN_PATH_PARAMS.map(param => [param.key, cleanParam(param, source[param.key], (legacy ? LEGACY_SUN_SHAPE : defaultSunShape)[param.key])]));
       for (const param of SUN_PATH_PARAMS) controls.get(param.key).write(sunShape[param.key]);
       if (finite(source.sunPhase)) clock.set(timeForPhase(source.sunPhase));
       else if (finite(source.sunAzimuth) && finite(source.sunElevation)) clock.set(timeForPhase(nearestPhase(source.sunAzimuth, source.sunElevation, sunShape)));
@@ -493,7 +495,7 @@ export function mountExperiment(experiment, {
   // The carried sun and Drift (launch.js), unless a ?p= link says otherwise: the link wins.
   function applyCarry(carry) {
     if (finite(carry.sunPhase)) clock.set(timeForPhase(carry.sunPhase));
-    if (experiment.sun) {
+    if (experiment.sun && !experiment.sunShape) {
       sunShape = Object.fromEntries(SUN_PATH_PARAMS.map(param => [param.key, cleanParam(param, carry[param.key], sunShape[param.key])]));
       for (const param of SUN_PATH_PARAMS) controls.get(param.key).write(sunShape[param.key]);
     }
