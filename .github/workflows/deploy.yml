@@ -192,7 +192,13 @@ jobs:
           else
             body+="Latest commit push time unavailable for this PR event."$'\n'
           fi
-          body+="Commit: $HEAD_SHA"$'\n'
+          # Show the first line of the commit message; fall back to the hash alone
+          COMMIT_MSG=$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA" --jq '.commit.message | split("\n")[0]' 2>/dev/null || true)
+          if [ -n "$COMMIT_MSG" ]; then
+            body+="Commit: $HEAD_SHA — $COMMIT_MSG"$'\n'
+          else
+            body+="Commit: $HEAD_SHA"$'\n'
+          fi
           if [ "$IS_FORK" = true ]; then
             body+="Status: no preview for fork PRs."$'\n\n'
           elif [ "$JOB_STATUS" = success ]; then
@@ -216,7 +222,7 @@ jobs:
           done <<< "$apps"
           [ "$found" = true ] || body+="No deployable app changed in this PR, so there is no preview."$'\n'
           if [ "$JOB_STATUS" = success ] && [ "$IS_FORK" != true ]; then
-            body+=$'\n'"Updated for commit ${HEAD_SHA}. Links may take a minute to go live after GitHub Pages rebuilds."
+            body+=$'\n'"Updated for commit ${HEAD_SHA}${COMMIT_MSG:+ ($COMMIT_MSG)}. Links may take a minute to go live after GitHub Pages rebuilds."
           fi
 
           id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
