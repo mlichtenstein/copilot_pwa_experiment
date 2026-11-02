@@ -1,0 +1,11 @@
+# Purpose: Open pull requests that update pinned GitHub Actions.
+# Consumers: GitHub Dependabot version updates.
+# Dependencies: workflow files under .github/workflows/; GitHub Dependabot.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      # Check workflow action pins once a week.
+      interval: weekly
