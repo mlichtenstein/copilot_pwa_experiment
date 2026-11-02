@@ -187,7 +187,8 @@ jobs:
             PUSH_RECEIVED_AT=$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA" --jq '.commit.committer.date' 2>/dev/null || true)
           fi
           if [ -n "$PUSH_RECEIVED_AT" ]; then
-            body+="Latest commit pushed (UTC): $PUSH_RECEIVED_AT"$'\n'
+            PUSH_RECEIVED_PT=$(TZ=America/Los_Angeles date -d "$PUSH_RECEIVED_AT" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "$PUSH_RECEIVED_AT (UTC)")
+            body+="Latest commit pushed (Pacific): $PUSH_RECEIVED_PT"$'\n'
           else
             body+="Latest commit push time unavailable for this PR event."$'\n'
           fi
