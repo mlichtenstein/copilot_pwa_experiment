@@ -26,6 +26,10 @@ canvas { display: block; width: 100%; aspect-ratio: 4 / 3; image-rendering: pixe
 .panel-row .drift input { width: 20px; height: 20px; margin: 0; accent-color: #9ed8ec; }
 .panel-row .drift-speed { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; font-size: .85rem; }
 .panel-row .drift-speed input { flex: 1 1 60px; min-width: 0; }
+.panel-row.jump-to-weather-state { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 4px; font-size: .85rem; }
+.panel-row .jump-to-weather-state-label { grid-column: 1 / -1; text-decoration: underline dotted #536781; text-underline-offset: 3px; }
+.panel-row .weather-state { display: grid; }
+.panel-row .weather-state button { padding: 6px 10px; font-size: .75rem; white-space: nowrap; }
 .common-panel .panel-sun { margin: 0; padding: 4px 8px 8px; gap: 6px; grid-template-columns: minmax(0, 1fr); }
 .panel-row.sun-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; }
 .sun-path summary { padding: 4px 0; font-size: .85rem; }
