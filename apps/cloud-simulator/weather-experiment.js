@@ -32,7 +32,8 @@ export const weather={id:"weather",title:"Weather layers",app:"cloud-simulator/w
     slider("haze",0,1,.05,"Strength of light visible in the air between layers.","Light and weather"),
     slider("shaftStrength",0,1,.05,"Opacity of layered visibility light veils; clouds cover the veils.","Light and weather"),
     slider("edgeFeather",0,12,1,"Feather cloud-facing polygon caps, in 128-pixel reference units; ray sides stay crisp.","Light and weather"),
-    slider("rainAmount",0,1,.05,"Rain generated above the cloud-water threshold; rain transports downward on its own grid.","Light and weather"),
+    slider("rainAmount",0,1,.05,"Rain generated above denseCloudWater; rain transports downward on its own grid.","Light and weather"),
+    slider("denseCloudWater",.2,1.5,.05,"Cloud water that counts as dense. Rain forms only above it, charge builds at full rate only at it, and lightning starts only inside it; clear air drains charge. Higher means fewer, denser storm cores.","Light and weather"),
     slider("storminess",0,2,.1,"Charge buildup rate; zero hides and stops lightning while other fields continue.","Light and weather"),
     slider("chargeBias",-1,1,.05,"Mean signed charge buildup; either polarity can favor ground strikes.","Light and weather")
   ],

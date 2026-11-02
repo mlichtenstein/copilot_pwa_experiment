@@ -72,8 +72,9 @@ function stepLayer(state,dt,params) {
     state.age+=dt;
     if(state.age+1e-10>=params.flashDuration){state.phase="quiet";state.age=0;}
   } else {
-    stepCharge(state.charge,dt,params.chargeRate,params.chargeBias);
-    const candidate=strongestGradient(state.charge,state.depth,groundAt);
+    // cloudSupport is absent here; a host that owns clouds (weather-fields.js) sets it each tick.
+    stepCharge(state.charge,dt,params.chargeRate,params.chargeBias,state.cloudSupport);
+    const candidate=strongestGradient(state.charge,state.depth,groundAt,state.cloudSupport);
     if(candidate.gradient>=params.breakdownGradient){state.strike=candidate;beginStrike(state);}
   }
 }

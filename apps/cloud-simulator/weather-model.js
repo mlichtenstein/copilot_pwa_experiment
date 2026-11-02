@@ -3,9 +3,9 @@
  * Dependencies: weather-fields.js, atmosphere/visibility/shafts models, lightning terrain helpers, and the shared sun clock. */
 import {SCALE,CAMERA_LIFT,clamp,enabled,cloudAltitude,terrainY,weatherSun} from "./weather-fields.js";
 import {skyRadiance,sunDirection,pointAtAltitude,directSunlight,viewTransmission,EARTH_RADIUS,CAMERA_HEIGHT,earthBlocks,dot} from "./atmosphere-model.js";
+import {mapBolt} from "./weather-fields.js"; // Shared with cloud support, which samples clouds where charge cells project.
 import {buildLayeredVisibility,combinedCoverage} from "./visibility-model.js";
 import {sampleCloud} from "./shafts-model.js";
-import {groundAt} from "./lightning-model.js";
 import {terrainShadowAt,drawTerrainObjects,groundLightRadius} from "./lightning-terrain.js";
 import {sunPhase} from "./core/sun-path.js";
 
@@ -81,10 +81,6 @@ export function buildWeatherLighting(state,p,sunOverride,width=160,height=100){
   const camera=[0,EARTH_RADIUS+CAMERA_HEIGHT,0],sunlight=directSunlight(camera,direction,p);
   const moon=weatherMoon(sun.phase??sunPhase(state.time)),moonDirection=sunDirection(moon.elevation,moon.azimuth);
   return {width,height,sun,moon,moonDirection,direction,camera,sunlight,visibility,sky,colors,veilColors,work:{skySamples:skyWidth*skyHeight,surfaceSamples:3*colorWidth*colorHeight,cells:state.layers.reduce((n,l)=>n+l.width*l.height,0),segments:visibility.bands.reduce((n,b)=>n+b.layers.reduce((k,l)=>k+l.segments.length,0),0)}};
-}
-function mapBolt(layer,node,p){
-  const top=.5-((cloudAltitude(layer,p)-.15)/layer.distance-CAMERA_LIFT)/(2*SCALE)-.09;
-  return {x:node.x,y:top+(node.y-.09)/(groundAt(node.x,layer.lightning.depth)-.09)*(terrainY(layer,node.x)-top)};
 }
 export function boltLight(layer,p,width,height){
   const storm=layer.lightning,power=p.storminess<=0?0:storm.phase==="flash"?.65*Math.exp(-storm.age/.18):storm.phase==="leader"?.09:0;

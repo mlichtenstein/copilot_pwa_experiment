@@ -25,7 +25,7 @@ export function mountWeatherInspector({doc,root,select}){
     button.addEventListener("click",()=>select({view,...(layer?{inspectLayer:layer}:{})}));
     refs.set(id,button);tiles.push({id,view,layer,canvas,button,label});return button;
   }
-  const source=make("div",{className:"weather-graph-source"},tile("sun","Sun + atmosphere","sky",null,"Atmospheric sky and sun/path lighting. Supplies polygon origins, cloud colors and light-veil colors."),make("p",{textContent:"Shared sun & atmosphere feed every depth. Humidity is diagnostic; charge remains independent of cloud water."}));board.append(source);
+  const source=make("div",{className:"weather-graph-source"},tile("sun","Sun + atmosphere","sky",null,"Atmospheric sky and sun/path lighting. Supplies polygon origins, cloud colors and light-veil colors."),make("p",{textContent:"Shared sun & atmosphere feed every depth. Humidity is diagnostic; dense cloud water feeds rain and charge."}));board.append(source);
   const sections=[];
   const columns=make("div",{className:"weather-graph-columns"}),headers=[];
   for(const [index,name] of ["near","middle","far"].entries()){
