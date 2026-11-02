@@ -2,7 +2,7 @@
  * Consumers: weather.js. Dependencies: weather-inspection.js metadata, a DOM/document and instance.preview(). */
 import {nodes,passes,graphEdges,describeNode} from "./weather-inspection.js";
 const SVG="http://www.w3.org/2000/svg";
-export function mountWeatherInspector({doc,root,select,metadata={}}){
+export function mountWeatherInspector({doc,root,select,help:contextHelp,metadata={}}){
   const {nodes: fields=nodes,passes: stages=passes,edges=graphEdges(),describe=describeNode,layers=[{name:"near",label:"near · 8 km"},{name:"middle",label:"middle · 24 km"},{name:"far",label:"far · 65 km"}],sourceLabel="Sun + atmosphere",sourceHelp="Atmospheric sky and sun/path lighting.",sourceNote="Shared sun & atmosphere feed every depth. Humidity is diagnostic; charge remains independent of cloud water."}=metadata;
   const layerNames=layers.map(layer=>layer.name);
   if(!root)return {update(){}};
@@ -39,7 +39,10 @@ export function mountWeatherInspector({doc,root,select,metadata={}}){
   }
   board.append(columns);
   const composition=make("ol",{className:"weather-composition",hidden:true}),passTiles=[];
-  for(const pass of stages){const button=tile(`pass-${pass.index}`,`${pass.index+1}. ${pass.label}`,pass.view,null,`Accumulated image after ${pass.label}. Uses the same renderer as the final scene.`);passTiles.push(tiles.at(-1));composition.append(make("li",{},button));}
+  for(const pass of stages){const button=tile(`pass-${pass.index}`,`${pass.index+1}. ${pass.contribution?"Accumulated: ":""}${pass.label}`,pass.view,null,`Accumulated image after ${pass.label}. Uses the same renderer as the final scene.`);passTiles.push(tiles.at(-1));const row=make("li",{},button);
+    if(pass.contribution){row.append(tile(`pass-contribution-${pass.index}`,`Added: ${pass.label}`,pass.contribution,null,`Only the contribution added by ${pass.label}.`));passTiles.push(tiles.at(-1));}
+    if(pass.toggle){const input=make("input",{type:"checkbox",checked:true});input.setAttribute("aria-label",pass.toggle);input.addEventListener("change",()=>select({[pass.toggle]:input.checked}));const label=make("label",{},input,make("span",{textContent:pass.toggle}));row.append(label);contextHelp?.attach(label,`Include ${pass.label} in accumulated images; turn off to compare its effect.`,input);tiles.at(-1).toggleInput=input;tiles.at(-1).toggleKey=pass.toggle;}
+    composition.append(row);}
   tabs.append(fieldTab,passTab,full,previewMode);root.append(make("div",{className:"inspector-body"},tabs,help,explanation,make("div",{className:"inspector-scroll"},board,composition)));
   const paths=edges.map(edge=>{const path=svgNode("path",{fill:"none",stroke:edge.cross?"#e4b36a":"#76b7d0","stroke-width":edge.cross?1.7:1.2,"stroke-dasharray":edge.cross?"5 3":"none","marker-end":`url(#${edge.cross?"weather-cross-arrow":"weather-arrow"})`});wire.append(path);return {edge,path};});
   function drawWires(){
@@ -56,6 +59,7 @@ export function mountWeatherInspector({doc,root,select,metadata={}}){
   root.addEventListener("toggle",()=>{if(latest&&root.open)update(...latest);});
   function update(params,instance){
     latest=[params,instance];
+    for(const t of tiles)if(t.toggleInput)t.toggleInput.checked=params[t.toggleKey]!==false;
     const selected=fields.find(node=>node.id===params.view),pass=stages.find(pass=>pass.view===params.view);
     const description=params.view==="scene"?"Final combined scene.":selected?`${params.inspectLayer} · ${selected.label}: ${describe(selected)}`:params.view==="sky"?"Sky: atmospheric background before any light veils or scene layers.":pass?`Composition ${pass.index+1}/${stages.length}: accumulated image ${pass.label}.`:"Final combined scene.";
     if(detail.textContent!==description)detail.textContent=description;
