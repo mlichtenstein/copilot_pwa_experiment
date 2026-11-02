@@ -9,6 +9,7 @@
 // href is relative to apps/cloud-simulator/. Every experiment page is ported to
 // core/experiment.js (see issue #68).
 export const experiments = [
+  { id: "normal-lighting", title: "Normal lighting", nav: "Normals", tagline: "Baked shapes. Warm light. Cool folds.", href: "normal-lighting.html", load: () => import("../normal-lighting-experiment.js").then(module => module.normalLighting) },
   { id: "weather", title: "Weather layers", nav: "Combined layers", tagline: "One cloud field. Several ways to see it.", href: "weather.html", load: () => import("../weather-experiment.js").then(module => module.weather) },
   { id: "sunset", title: "Sunset study", nav: "Sunset", tagline: "Fixed droplets. Moving sunlight. Follow the light to the camera.", href: "sunset.html", load: () => import("../sunset-experiment.js").then(module => module.sunset) },
   { id: "convection", title: "Convection study", nav: "Convection", tagline: "Hot floor. Cold lid. Warm blobs rise, rain falls, the water comes back.", href: "convection.html", load: () => import("../convection-experiment.js").then(module => module.convection) },
