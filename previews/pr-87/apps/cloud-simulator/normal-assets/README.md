@@ -1,6 +1,6 @@
 <!-- Purpose: Explain baked normal-map data and reproduction. Consumers: contributors and lighting experiment. Dependencies: bake.py, Pillow, existing CC0 texture. -->
 # Fixed cloud data maps
-Run `python apps/cloud-simulator/normal-assets/bake.py` with Pillow installed to reproduce all eight PNGs. No geometry or normals are generated at runtime.
+Run `python apps/cloud-simulator/normal-assets/bake.py` with Pillow installed to reproduce all twelve PNGs. No geometry or normals are generated at runtime.
 
 96×60 maps use X right, Y up, Z toward the viewer. Length units are image pixels. Normal RGB encodes (n+1)/2; decode as data, then normalize. Geometry RGBA encodes front depth as (z+32)/64, thickness/64, unused blue, and coverage. Eight-bit depth quantization is about 0.25 pixels. Transparent normals have no meaning.
 
@@ -19,3 +19,11 @@ The main viewport follows the shared host night filter; inspector thumbnails sho
 The workbench starts with an 85° × 58° figure-eight centered at azimuth +15°, elevation +2°. Its explicit shape overrides cross-page carry, while saved links still restore their recorded shape. Other experiments retain their defaults.
 
 View remains serialized but its redundant dropdown is hidden. Field tiles isolate quantities. Composition tiles now show accumulated stages and added contributions; direct/diffusion toggles affect the accumulated scene. Ambient addition is shown separately from the background attenuation caused by cloud coverage. Disabled direct lighting still feeds diffusion, allowing independent inspection of the two contributions. Each lighting mode has plain-language hold/hover/focus help. Mobile canvas rows use their actual aspect-ratio height.
+
+## Broad color normals and fine shading normals
+
+Every preset now has a `*-broad-normal.png` alongside `*-normal.png`. Smooth analytic surfaces supply broad normals; cluster/teardrop fine normals include small deterministic shading-only ripples. The image broad map comes from its height interpretation smoothed at 3 pixels, while fine relief retains the 0.55-pixel filter. Wisps retain matching maps as a thin-shape control. Never blur encoded normal RGB. Runtime only decodes and normalizes baked fields.
+
+Color coordinate = 0.5 + heightInfluence × (normalizedHeight − 0.5) + broadNormalInfluence × dot(broadNormal, lightDirection). Position/compression, clamping, warp and ramp range are applied after combining these inputs. `colorCoordinate` displays the clamped pre-warp coordinate; `incoming` shows the resulting color. The ramp preview is a reference at zero normal offset.
+
+Fine shading blends between unity and the fine-normal facing response using `detailShadingStrength`. Lambert/wrapped multiply the selected color by that factor and the unchanged depth-slab visibility. Artistic ramp skips facing modulation but retains the same combined color selection and geometric shadows. `broadNormalInfluence=0` restores height-only selection. Fine shading changes cannot alter ramp selection, and color controls cannot alter shadow visibility. This is an artistic two-scale model, not physical atmospheric scattering. Geometry/coverage/shadow maps are unchanged by the fine shading ripples.
