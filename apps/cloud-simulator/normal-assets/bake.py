@@ -70,3 +70,31 @@ for name in ['wisps','teardrop','image']:
             z=heights[y][x]
             geometry.putpixel((x,y),(round((z+32)*255/64),round(z*255/64),0,round(alpha[y][x]*255)))
     normal.save(ROOT/f'{name}-normal.png');geometry.save(ROOT/f'{name}-geometry.png')
+
+# Two-scale normals: preserve smooth analytic shape; smooth image HEIGHT, not RGB normals.
+# Fine analytic ripples are shading-only relief: the shadow envelope is unchanged.
+for name in ['cluster','wisps','teardrop','image']:
+    original=Image.open(ROOT/f'{name}-normal.png').copy()
+    broad=original.copy()
+    if name=='image':
+        source=Image.open(ROOT.parent/'textures/FX_CloudAlpha01.jpg').convert('L').resize(SIZE)
+        smooth=source.filter(ImageFilter.GaussianBlur(3))
+        h=[[30*(smooth.getpixel((x,y))/255)**.65 for x in range(96)] for y in range(60)]
+        for y in range(60):
+            for x in range(96):
+                dx=(h[y][min(95,x+1)]-h[y][max(0,x-1)])/2
+                dy=(h[min(59,y+1)][x]-h[max(0,y-1)][x])/2
+                n=(-dx,dy,1);length=sqrt(sum(v*v for v in n))
+                broad.putpixel((x,y),tuple(round((v/length+1)*127.5) for v in n))
+    elif name in ['cluster','teardrop']:
+        # Small deterministic bumps perturb slope while retaining broad-facing direction.
+        from math import cos
+        for y in range(60):
+            for x in range(96):
+                nx,ny,nz=[c/127.5-1 for c in original.getpixel((x,y))]
+                dx=.32*cos(x*.8)*sin(y*.65)
+                dy=.26*sin(x*.8)*cos(y*.65)
+                n=(nx-dx*nz,ny+dy*nz,nz);length=sqrt(sum(v*v for v in n))
+                original.putpixel((x,y),tuple(round((v/length+1)*127.5) for v in n))
+    broad.save(ROOT/f'{name}-broad-normal.png')
+    original.save(ROOT/f'{name}-normal.png')

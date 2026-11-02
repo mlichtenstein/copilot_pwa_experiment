@@ -40,3 +40,20 @@ test('inspection view remains saved but is hidden from generated controls',()=>{
  assert.ok(normalLighting.sunShape.sunPathWidth>30);
  assert.notEqual(normalLighting.sunShape.sunPathX,0);
 });
+
+test('broad normals shift color at equal height without changing shadow or fine shading',()=>{
+ const source=asset();source.broadNormals=new Float32Array([1,0,0,-1,0,0,0,0,1]);
+ const p={azimuth:40,elevation:25,heightInfluence:0,broadNormalInfluence:.35,gradientCompression:1};
+ const a=shadeCloud(source,p),b=shadeCloud(source,{...p,broadNormalInfluence:0});
+ assert.notDeepEqual(Array.from(a.incoming.slice(0,3)),Array.from(a.incoming.slice(3,6)));
+ assert.deepEqual(Array.from(b.incoming.slice(0,3)),Array.from(b.incoming.slice(3,6)));
+ assert.deepEqual(a.facing,b.facing);assert.deepEqual(a.visibility,b.visibility);
+});
+test('fine normals affect brightness independently of broad color selection',()=>{
+ const source=asset();source.broadNormals=source.normals.slice();
+ const p={elevation:25};const a=shadeCloud(source,p);
+ source.normals=new Float32Array([1,0,0,-1,0,0,0,1,0]);
+ const b=shadeCloud(source,p),flat=shadeCloud(source,{...p,detailShadingStrength:0});
+ assert.deepEqual(a.incoming,b.incoming);assert.notDeepEqual(a.facing,b.facing);
+ assert.deepEqual(a.visibility,b.visibility);assert.ok(flat.facing.every(v=>v===1));
+});

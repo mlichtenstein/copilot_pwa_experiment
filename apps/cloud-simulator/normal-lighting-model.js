@@ -11,28 +11,33 @@ export function gradientColor(position,params={}){
  return palette[k].map((v,c)=>v*(1-f)+palette[k+1][c]*f);
 }
 export function facing(mu,model="lambert",wrap=.4){return model==="wrapped"?clamp((mu+wrap)/(1+wrap)):Math.max(0,mu);}
-export function decodeMaps(normal,geometry,width,height){
-  const count=width*height,normals=new Float32Array(count*3),depth=new Float32Array(count),thickness=new Float32Array(count),coverage=new Float32Array(count);
+export function decodeMaps(normal,geometry,width,height,broadNormal=normal){
+  const count=width*height,normals=new Float32Array(count*3),broadNormals=new Float32Array(count*3),depth=new Float32Array(count),thickness=new Float32Array(count),coverage=new Float32Array(count);
   for(let i=0;i<count;i++){
     let length=0;for(let c=0;c<3;c++){const v=normal[i*4+c]/127.5-1;normals[i*3+c]=v;length+=v*v;}
     length=Math.sqrt(length)||1;for(let c=0;c<3;c++)normals[i*3+c]/=length;
+    let broadLength=0;for(let c=0;c<3;c++){const v=broadNormal[i*4+c]/127.5-1;broadNormals[i*3+c]=v;broadLength+=v*v;}
+    broadLength=Math.sqrt(broadLength)||1;for(let c=0;c<3;c++)broadNormals[i*3+c]/=broadLength;
     depth[i]=geometry[i*4]*64/255-32;thickness[i]=geometry[i*4+1]*64/255;coverage[i]=geometry[i*4+3]/255;
   }
-  return {width,height,normals,depth,thickness,coverage};
+  return {width,height,normals,broadNormals,depth,thickness,coverage};
 }
 export function shadeCloud(asset,params={}){
-  const {width,height,normals,depth,thickness,coverage}=asset,count=width*height;
-  const {azimuth=-40,elevation=25,model="lambert",wrap=.4,gradientPosition=.5,gradientCompression=3,gradientStrength=1,diffusionAmount=.25,diffusionDistance=3}=params;
+  const {width,height,normals,broadNormals=normals,depth,thickness,coverage}=asset,count=width*height;
+  const {azimuth=-40,elevation=25,model="lambert",wrap=.4,heightInfluence=1,broadNormalInfluence=.35,detailShadingStrength=1,gradientStrength=1,diffusionAmount=.25,diffusionDistance=3}=params;
   const moon=params.lightSource==='moon',brightness=moon?(params.nightBrightness??.45):1,saturation=moon?(params.nightSaturation??.45):1;
   const sunlight=clamp((elevation+6)/10)*brightness;
   const a=azimuth*Math.PI/180,e=elevation*Math.PI/180,l=[Math.sin(a)*Math.cos(e),Math.sin(e),Math.cos(a)*Math.cos(e)];
-  const fields={incoming:new Float32Array(count*3),facing:new Float32Array(count),visibility:new Float32Array(count),direct:new Float32Array(count*3),diffusion:new Float32Array(count*3),sky:new Float32Array(count*3),ambient:new Float32Array(count*3),ambientPass:new Float32Array(count*3),directPass:new Float32Array(count*3),directAdded:new Float32Array(count*3),diffusionAdded:new Float32Array(count*3),scene:new Float32Array(count*3)};
+  const fields={colorCoordinate:new Float32Array(count),incoming:new Float32Array(count*3),facing:new Float32Array(count),visibility:new Float32Array(count),direct:new Float32Array(count*3),diffusion:new Float32Array(count*3),sky:new Float32Array(count*3),ambient:new Float32Array(count*3),ambientPass:new Float32Array(count*3),directPass:new Float32Array(count*3),directAdded:new Float32Array(count*3),diffusionAdded:new Float32Array(count*3),scene:new Float32Array(count*3)};
   for(let i=0;i<count;i++){
-    const x=i%width,y=Math.floor(i/width),t=clamp(((1-y/height)-gradientPosition)*gradientCompression+.5);
-    const warm=gradientColor(1-y/height,params);
+    const x=i%width,y=Math.floor(i/width);
+    const broadFacing=coverage[i]?l.reduce((sum,v,c)=>sum+v*broadNormals[i*3+c],0):0;
+    const coordinate=.5+heightInfluence*((1-(y+.5)/height)-.5)+broadNormalInfluence*broadFacing;
+    fields.colorCoordinate[i]=clamp(coordinate);
+    const warm=gradientColor(coordinate,params);
     for(let c=0;c<3;c++)fields.incoming[i*3+c]=sunlight*(1+(warm[c]-1)*gradientStrength);
     if(!coverage[i])continue;
-    const mu=l.reduce((sum,v,c)=>sum+v*normals[i*3+c],0);fields.facing[i]=facing(mu,model,wrap);
+    const mu=l.reduce((sum,v,c)=>sum+v*normals[i*3+c],0);fields.facing[i]=1-detailShadingStrength+detailShadingStrength*facing(mu,model,wrap);
     let optical=0;
     for(let step=1;step<100;step++){
       const xx=Math.floor(x+.5+l[0]*step),yy=Math.floor(y+.5-l[1]*step),z=depth[i]+l[2]*step;
@@ -42,8 +47,7 @@ export function shadeCloud(asset,params={}){
     }
     fields.visibility[i]=Math.exp(-optical);
     for(let c=0;c<3;c++){
-      const ramp=gradientColor((mu+1)/2,{...params,gradientPosition:.5,gradientCompression:1});
-      fields.direct[i*3+c]=(model==="ramp"?sunlight*ramp[c]:fields.incoming[i*3+c]*fields.facing[i])*fields.visibility[i];
+      fields.direct[i*3+c]=fields.incoming[i*3+c]*(model==="ramp"?1:fields.facing[i])*fields.visibility[i];
     }
   }
   const radius=Math.max(0,Math.round(diffusionDistance));
