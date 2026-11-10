@@ -17,11 +17,11 @@ test(`every preview reads the live frame without mutation (fresh seeds ${seeds})
     for(const pass of passes)assert.deepEqual(renderInspection(state,{...defaults,view:pass.view},maps,32,20),renderWeather(state,defaults,maps,32,20,pass.index));
   }
 });
-test("graph shows real local/cross-depth inputs and exposes the uncoupled fields",()=>{
+test("graph shows real local/cross-depth inputs, cloud water feeding charge, and the uncoupled humidity",()=>{
   const edges=graphEdges(),has=(from,to)=>edges.some(e=>e.from===from&&e.to===to);
   assert.ok(has("near:cloudWater","near:rain"));assert.ok(has("far:visibility","near:shafts"));assert.ok(has("far:visibility","middle:cloudColor"));
   assert.ok(has("near:terrain","near:groundLight"));assert.ok(has("near:charge","near:lightning"));assert.ok(has("sun","near:visibility"));
-  assert.ok(!edges.some(e=>e.to.endsWith(":charge")));assert.ok(!edges.some(e=>e.from.endsWith(":humidity")));
+  assert.ok(has("near:cloudWater","near:charge"));assert.deepEqual(edges.filter(e=>e.to.endsWith(":charge")).map(e=>e.from),["near:cloudWater","middle:cloudWater","far:cloudWater"]);assert.ok(!edges.some(e=>e.from.endsWith(":humidity")));
   assert.ok(!has("near:visibility","near:cloudColor"));assert.ok(!has("near:visibility","far:shafts"));
 });
 test("native opacity/masks reflect cloud water and inactive ground light stays black",()=>{
