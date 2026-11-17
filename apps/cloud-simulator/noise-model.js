@@ -362,10 +362,15 @@ export const STREAK = { length: [3, 30], lengthPower: 0.7, life: [40, 170], spee
   alpha: 0.6, wide: 0.15, spawnTries: 80, max: 300, scale: 0.03, clumpSize: 9, follow: 0.2 };
 // Curtain: opacity CURTAIN.alpha × clamp(rain / scale)^power.
 export const CURTAIN = { alpha: 0.5, scale: 0.06, power: 0.7 };
+// The layer is plain JSON like the simulation: its streaks and the random generator's state
+// (`rng`) are stored in it, so a saved layer continues exactly where it left off. `clump` is
+// rebuilt from the seed (a function, so it is left out of JSON); restoreRainLayer puts it back.
 export function createRainLayer(seed = 1) {
-  let state = (seed ^ 0x5bd1e995) >>> 0;
-  const random = () => (state = (Math.imul(1664525, state) + 1013904223) >>> 0) / 4294967296;
-  return { streaks: [], random, clump: createNoise3((seed ^ 0x2545f491) >>> 0) };
+  return restoreRainLayer({ seed: seed >>> 0, rng: (seed ^ 0x5bd1e995) >>> 0, streaks: [] });
+}
+// A layer saved as JSON, ready to step again.
+export function restoreRainLayer(saved) {
+  return { ...saved, clump: createNoise3((saved.seed ^ 0x2545f491) >>> 0) };
 }
 
 // Lowest cloud row in each column (−1 if the column is clear).
@@ -396,7 +401,8 @@ function streakLength(u) {
 
 export function updateRainLayer(layer, simulation, options = {}) {
   const rules = { ...defaults, ...options };
-  const { width, height } = simulation, random = layer.random, clump = layer.clump ?? (() => 0);
+  const { width, height } = simulation, clump = layer.clump ?? (() => 0);
+  const random = () => (layer.rng = (Math.imul(1664525, layer.rng) + 1013904223) >>> 0) / 4294967296;
   for (const streak of layer.streaks) {
     streak.age++; streak.y += rules.fallSpeed * streak.speed; streak.x += rules.wind;
     // Its brightness eases toward the rain around its head, so it never shows in dry air.

@@ -12,7 +12,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createNoise3, fractal, createWeather, step, sampleFields, renderWeather, airborneRain,
   pooledRain, defaults, RULES, FIELDS, layerBand, altitudeOf, createRainLayer, updateRainLayer,
-  rainAlpha, curtainAlpha, cloudBases, formRain, textureShape, condense, dissipation, startCloud,
+  rainAlpha, curtainAlpha, restoreRainLayer, cloudBases, formRain, textureShape, condense, dissipation, startCloud,
   exposure } from "./noise-model.js";
 import { testSeeds } from "./core/test-seeds.js";
 
@@ -304,6 +304,39 @@ test("rain streaks follow the falling rain, lean with the wind, and fade once th
   simulation.rain.fill(0);
   for (let k = 0; k < 30; k++) updateRainLayer(layer, simulation, options);
   assert.equal(layer.streaks.length, 0);
+});
+
+// One run: the weather and its rain streaks, stepped `ticks` times from a seed.
+function run(seed, ticks, from = null) {
+  const simulation = from?.simulation ?? createWeather({ seed }), layer = from?.layer ?? createRainLayer(seed);
+  for (let k = 0; k < ticks; k++) { step(simulation); updateRainLayer(layer, simulation); }
+  return { simulation, layer };
+}
+const saved = ({ simulation, layer }) => JSON.stringify({ simulation, layer });
+
+test("a seed and the same steps replay the same weather and rain streaks", () => {
+  for (const seed of seeds(2)) {
+    const a = run(seed, 400), b = run(seed, 400);
+    assert.ok(a.layer.streaks.length > 0, `seed ${seed} has streaks to compare`);
+    assert.equal(saved(a), saved(b), `seed ${seed} replays identically`);
+    assert.notEqual(saved(a), saved(run(seed + 1, 400)), `seed ${seed + 1} differs`);
+  }
+});
+
+test("the rain layer keeps all its randomness in plain JSON state, so a saved run continues exactly", () => {
+  for (const seed of seeds(2)) {
+    const first = run(seed, 250);
+    assert.ok(first.layer.streaks.length > 0, `seed ${seed} is raining when saved`);
+    assert.equal(typeof first.layer.rng, "number");
+    // Save mid-run, restore from the JSON text, and run both on.
+    const text = saved(first), copy = JSON.parse(text);
+    const restored = { simulation: copy.simulation, layer: restoreRainLayer(copy.layer) };
+    const onward = run(seed, 250, first), replayed = run(seed, 250, restored);
+    assert.equal(saved(replayed), saved(onward), `seed ${seed}: saved state continues identically`);
+    assert.deepEqual(rainAlpha(replayed.layer, replayed.simulation), rainAlpha(onward.layer, onward.simulation));
+    // Replaying from the seed to the same total number of steps gives that state too.
+    assert.equal(saved(run(seed, 500)), saved(onward), `seed ${seed}: seed + 500 steps matches`);
+  }
 });
 
 test("rain streaks vary: heavy-tailed lengths from 3 to 30 px, uneven spacing, own speeds", () => {
