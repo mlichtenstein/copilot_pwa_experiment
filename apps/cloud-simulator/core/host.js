@@ -2,7 +2,7 @@
  * Purpose: Turn an experiment module (core/experiment.js contract) into a working page: build
  *   its controls from the params schema, run the one shared loop and clock, move the shared
  *   sun, draw to the canvas, and wire the emoji rating bar and ?p= links through generic
- *   getParams/applyParams. It carries the sun, its path and Drift over from the last page
+ *   getParams/applyParams. Every frame carries the sky lights (frame.sun, frame.moon). It carries the sun, its path and Drift over from the last page
  *   (launch.js; a ?p= link wins) and presses Randomize for ?random=1 (🎲 Random). It alone builds the page header (core/header.js: title, tagline
  *   and the nav to every experiment, from the registry) and the common panel, identical on
  *   every page in compact rows (Play/Pause, Step, Randomize and, with `seed`, New seed; Drift
@@ -16,7 +16,7 @@
  * Consumers: every experiment page script (../sunset.js, ../convection.js, ../horizon.js,
  *   ../shafts.js, ../noise.js, ../valley.js, ../lightning.js); the core tests (common-panel.test.js
  *   among them) and the per-experiment UI tests.
- * Dependencies: experiment.js, clock.js, sun-path.js, daylight.js, header.js, hold-help.js, launch.js,
+ * Dependencies: experiment.js, clock.js, sun-path.js, moon-path.js, daylight.js, header.js, hold-help.js, launch.js,
  *   ../../shared/presets.js, ../../shared/presets-panel.js,
  *   ../../shared/drift.js; the page's DOM contract: <canvas id="sky">, and empty containers
  *   <header id="header"> (the header and nav),
@@ -28,6 +28,7 @@
 import { validateExperiment, validateInstance, cleanParams, cleanParam, defaultParams, driftableParams, parseSize, randomParams, randomValue, weatherStateParams } from "./experiment.js";
 import { createClock, startLoop } from "./clock.js";
 import { DEFAULT_SUN_SHAPE, LEGACY_SUN_SHAPE, SUN_PATH_PARAMS, clockText, nearestPhase, phaseForTimeOfDay, sunAt, sunPhase, timeForPhase, timeOfDay } from "./sun-path.js";
+import { moonAt } from "./moon-path.js";
 import { NIGHT, applyNight, daylight } from "./daylight.js";
 import { mountPresetBar } from "../../shared/presets-panel.js";
 import { bindDrift, seededRandom, DRIFT } from "../../shared/drift.js";
@@ -157,7 +158,9 @@ export function mountExperiment(experiment, {
   // The shared sun path's shape (sunPathWidth, sunPathHeight, sunPathX, sunPathY): host-owned
   // settings every sun-bearing experiment shows and saves the same way.
   let sunShape = { ...DEFAULT_SUN_SHAPE };
-  const frameInfo = () => ({ time: clock.time, sun: sunAt(clock.time, sunShape) });
+  // Sky lights move on the shared clock and reach every experiment through the frame: the sun
+  // on its host-owned path, the moon on its fixed one (moon-path.js).
+  const frameInfo = () => ({ time: clock.time, sun: sunAt(clock.time, sunShape), moon: moonAt(clock.time) });
   // Night on every page (daylight.js): how much daylight the frame keeps, from the shared sun.
   // Sun-lit experiments shade their own dusk, so their ramp starts at the horizon instead of
   // +6°; a scene that lights itself (instance.selfLight, a lightning flash) stays that bright.
