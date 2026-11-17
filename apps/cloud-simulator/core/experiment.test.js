@@ -7,7 +7,7 @@
 import test from "node:test";
 import { isDeepStrictEqual } from "node:util";
 import assert from "node:assert/strict";
-import { validateExperiment, validateInstance, defaultParams, cleanParams, cleanParam, driftableParams, parseSize } from "./experiment.js";
+import { validateExperiment, validateInstance, defaultParams, cleanParams, cleanParam, driftableParams, parseSize, paramsAffecting } from "./experiment.js";
 import { imageDocument } from "./fake-dom.js";
 import { experiments, findExperiment } from "./registry.js";
 import { sunAt, SUN_PATH } from "./sun-path.js";
@@ -95,6 +95,15 @@ test("validation rejects broken experiment descriptions and instances", () => {
   assert.throws(() => validateExperiment({ ...sample, params: [{ key: "sunPhase", kind: "seed", default: 1 }] }), /reserved/);
   assert.throws(() => validateExperiment({ ...sample, sun: "yes" }), /sun must be/);
   assert.throws(() => validateInstance({ update() {}, render() {} }), /missing step, dispose/);
+  assert.throws(() => validateExperiment({ ...sample, params: [{ ...sample.params[0], affects: "everything" }] }), /affects must be one of fields, lighting, draw/);
+});
+
+test("params declare what a change invalidates, and paramsAffecting lists them by level", () => {
+  const declared = { ...sample, params: [{ ...sample.params[0], affects: "fields" }, ...sample.params.slice(1).map((param, i) => i === 0 ? { ...param, affects: "lighting" } : param)] };
+  assert.equal(validateExperiment(declared), declared);
+  assert.deepEqual(paramsAffecting(declared, "fields"), [declared.params[0].key]);
+  assert.deepEqual(paramsAffecting(declared, "fields", "lighting"), declared.params.slice(0, 2).map(param => param.key));
+  assert.deepEqual(paramsAffecting(sample, "fields", "lighting", "draw"), []);
 });
 
 test("untrusted params are cleaned against the schema", () => {

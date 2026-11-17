@@ -1,6 +1,6 @@
 /* Purpose: Interpret shared weather fields as atmospheric colors, layered visibility, and explicit render passes.
  * Consumers: weather-experiment.js, weather-inspection.js and weather tests.
- * Dependencies: weather-fields.js, atmosphere/visibility/shafts models, lightning terrain helpers, and the shared sun clock. */
+ * Dependencies: weather-fields.js, atmosphere/visibility/shafts models, lightning terrain helpers, and the shared sun clock and moon (core/sun-path.js, core/moon-path.js). */
 import {SCALE,CAMERA_LIFT,clamp,enabled,cloudAltitude,terrainY,weatherSun} from "./weather-fields.js";
 import {skyRadiance,sunDirection,pointAtAltitude,directSunlight,viewTransmission,EARTH_RADIUS,CAMERA_HEIGHT,earthBlocks,dot} from "./atmosphere-model.js";
 import {buildLayeredVisibility,combinedCoverage} from "./visibility-model.js";
@@ -8,13 +8,8 @@ import {sampleCloud} from "./shafts-model.js";
 import {groundAt} from "./lightning-model.js";
 import {terrainShadowAt,drawTerrainObjects,groundLightRadius} from "./lightning-terrain.js";
 import {sunPhase} from "./core/sun-path.js";
+import {moonAtPhase} from "./core/moon-path.js";
 
-// A separate ellipse: rises at 19:41 and sets at 07:41 on the shared clock.
-// Fixed geometry keeps the moon in frame even when Randomize changes the sun path.
-export function weatherMoon(phase){
-  const angle=2*Math.PI*(phase-.57);
-  return {phase,azimuth:-22*Math.cos(angle),elevation:24*Math.sin(angle)};
-}
 // Artistic forward scattering through cloud water, limited to a 9-degree radius.
 // Thick cloud cores extinguish it; thinner edges reveal the cool backlight.
 export function moonCloudLight(maps,u,v,density,p){
@@ -56,7 +51,8 @@ export function interpolateRGB(grid,width,height,u,v,key){
   return a.map((value,k)=>(value*(1-fx)+b[k]*fx)*(1-fy)+(c[k]*(1-fx)+d[k]*fx)*fy);
 }
 export const lightingIndex=(maps,u,v)=>Math.min(maps.height-1,Math.floor(v*maps.height))*maps.width+Math.min(maps.width-1,Math.floor(u*maps.width));
-export function buildWeatherLighting(state,p,sunOverride,width=160,height=100){
+// The moon is a sky light from the frame (frame.moon); without one, the shared moon at the sun's phase.
+export function buildWeatherLighting(state,p,sunOverride,width=160,height=100,moonOverride){
   const sun=sunOverride??weatherSun(state,p),direction=sunDirection(sun.elevation,sun.azimuth),layers=projectionLayers(state,p),full=p.lightingMode==="full";
   const skyWidth=full?width:32,skyHeight=full?height:20,colorWidth=full?width:12,colorHeight=full?height:8;
   const {lightingMode,...visibilityParams}=p;
@@ -79,15 +75,20 @@ export function buildWeatherLighting(state,p,sunOverride,width=160,height=100){
   });
   const veilColors=state.layers.map(layer=>directSunlight(pointAtAltitude(layer.distance,cloudAltitude(layer,p)),direction,p));
   const camera=[0,EARTH_RADIUS+CAMERA_HEIGHT,0],sunlight=directSunlight(camera,direction,p);
-  const moon=weatherMoon(sun.phase??sunPhase(state.time)),moonDirection=sunDirection(moon.elevation,moon.azimuth);
+  const moon=moonOverride??moonAtPhase(sun.phase??sunPhase(state.time)),moonDirection=sunDirection(moon.elevation,moon.azimuth);
   return {width,height,sun,moon,moonDirection,direction,camera,sunlight,visibility,sky,colors,veilColors,work:{skySamples:skyWidth*skyHeight,surfaceSamples:3*colorWidth*colorHeight,cells:state.layers.reduce((n,l)=>n+l.width*l.height,0),segments:visibility.bands.reduce((n,b)=>n+b.layers.reduce((k,l)=>k+l.segments.length,0),0)}};
 }
 function mapBolt(layer,node,p){
   const top=.5-((cloudAltitude(layer,p)-.15)/layer.distance-CAMERA_LIFT)/(2*SCALE)-.09;
   return {x:node.x,y:top+(node.y-.09)/(groundAt(node.x,layer.lightning.depth)-.09)*(terrainY(layer,node.x)-top)};
 }
+// How bright one layer's bolt is right now (0 … .65): a scene light, read from state only.
+export const flashPower=(layer,p)=>{const storm=layer.lightning;return p.storminess<=0?0:storm.phase==="flash"?.65*Math.exp(-storm.age/.18):storm.phase==="leader"?.09:0;};
+// The scene light Weather reports to the host (selfLight, 0 … 1), so night dimming spares a
+// flash; the same scale as Lightning's. Hidden layers do not light the scene.
+export const weatherSelfLight=(state,p)=>Math.min(1,Math.max(0,...state.layers.filter(layer=>enabled(layer,p)).map(layer=>flashPower(layer,p)*2)));
 export function boltLight(layer,p,width,height){
-  const storm=layer.lightning,power=p.storminess<=0?0:storm.phase==="flash"?.65*Math.exp(-storm.age/.18):storm.phase==="leader"?.09:0;
+  const storm=layer.lightning,power=flashPower(layer,p);
   const nodes=storm.nodes.map(n=>({...mapBolt(layer,n,p),parent:n.parent,branch:n.branch})),path=new Set(storm.returnPath),light=new Float32Array(width*height),cores=new Float32Array(width*height);
   for(let i=1;i<nodes.length&&power>0;i++){
     const b=nodes[i],a=nodes[b.parent],ax=a.x*width,ay=a.y*height,bx=b.x*width,by=b.y*height,energy=power*(path.has(i)?1:b.branch?.3:.6),radius=7*width/160;
