@@ -1,6 +1,6 @@
 /* Purpose: Linked side elevation of the renderer's solids, camera and distant source.
  * Consumers: normal-lighting.js. Dependencies: cloud-geometry, canvas, shared hold help. */
-import {lightDirection,cameraRay,rayCloud,along,pickCloud,localToWorld,sideSilhouettes,sideCloudAt,sideLightMarker,SIDE,SIDE_PLOT,sidePixel} from './cloud-geometry.js';
+import {lightDirection,cameraRay,rayCloud,along,pickCloud,localToWorld,sideSilhouettes,sideCloudAt,sideLightMarker,SIDE,SIDE_PLOT,sidePixel,sidePoint,spatialGradientColor,SOURCE_DIAL} from './cloud-geometry.js';
 export function mountCloudSideView({doc,root,canvas:front,instance,help,render}){
  const make=(tag,props={})=>Object.assign(doc.createElement(tag),props);
  const heading=make('summary',{textContent:'Side view · world geometry'}),canvas=make('canvas',{width:720,height:390});
@@ -11,7 +11,7 @@ export function mountCloudSideView({doc,root,canvas:front,instance,help,render})
   const button=make('button',{type:'button',textContent:id});button.addEventListener('click',()=>{selected=id;sample=null;update();render?.();});
   help?.attach(button,`Highlight the ${id} cloud in both views.`,button);buttons.push(button);controls.append(button);
  }
- const note=make('p',{className:'geometry-note',textContent:'X collapsed. White: viewing ray. Green: surface normal. Sun/Moon marks direction at infinity. Tap a cloud in either view.'});
+ const note=make('p',{className:'geometry-note',textContent:'X collapsed. White: viewing ray. Green: surface normal. Tint: solar color field at X=0, before normal offsets and shading. Sun/Moon inset: direction only, not world position. Tap a cloud in either view.'});
  root.append(heading,canvas,controls,note);
  let selected='near',sample=null,scene=null,lastScene=null,silhouettes=[];
  const plot=SIDE_PLOT,map=sidePixel; // Shared equal-scale projection, including the source marker.
@@ -27,7 +27,12 @@ export function mountCloudSideView({doc,root,canvas:front,instance,help,render})
     for(let i=0;i<mask.length;i++)if(mask[i])image.data.set([...color,200],i*4);context.putImageData(image,0,0);return off;});
   }
   buttons.forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===selected)));
-  ctx.font='14px sans-serif';ctx.fillStyle='#9eafc9';
+  // Same palette and coordinate function as the renderer; low opacity keeps geometry readable.
+  for(let y=0;y<SIDE.height;y+=2)for(let x=0;x<SIDE.width;x+=2){
+   const color=spatialGradientColor(sidePoint((x+1)/SIDE.width,(y+1)/SIDE.height),data.params,sun).map(v=>Math.round(255*Math.pow(Math.max(0,Math.min(1,v)),1/2.2)));
+   ctx.fillStyle=`rgba(${color.join(',')},0.32)`;ctx.fillRect(plot.x+x*plot.width/SIDE.width,plot.y+y*plot.height/SIDE.height,2*plot.width/SIDE.width,2*plot.height/SIDE.height);
+  }
+  ctx.font='14px sans-serif';ctx.fillStyle='#c1cce0';
   for(let z=0;z<=40;z+=10){line(ctx,[0,-4,z],[0,22,z],'#29394e');ctx.fillText(`${z}`,map([0,0,z])[0]-4,359);}
   for(let y=0;y<=20;y+=4){line(ctx,[0,y,-3],[0,y,49],'#29394e');ctx.fillText(`${y}`,12,map([0,y,0])[1]+4);}
   ctx.fillText('altitude',8,17);ctx.fillText('distance → (world units)',475,380);line(ctx,[0,0,-3],[0,0,49],'#698470');
@@ -42,13 +47,19 @@ export function mountCloudSideView({doc,root,canvas:front,instance,help,render})
   for(const cloud of scene.clouds){const [x,y]=map(cloud.center);ctx.fillStyle=cloud.color;ctx.fillText(`${cloud.id} · ${cloud.shapeName}`,Math.min(550,Math.max(60,x-30)),Math.max(52,y-cloud.radii[1]*12-12));}
   const camera=map(scene.camera.position);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(...camera,4,0,Math.PI*2);ctx.fill();ctx.fillText('camera',camera[0]+8,camera[1]-6);
   const marker=sideLightMarker(sun),moon=data.source==='moon',color=moon?'#d7e6ff':'#ffdc83';
+  const dial=SOURCE_DIAL;
+  ctx.fillStyle='#111c30';ctx.fillRect(470,22,220,185);
+  ctx.strokeStyle='#7286a5';ctx.lineWidth=1;ctx.beginPath();ctx.arc(dial.x,dial.y,dial.radius,0,Math.PI*2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(dial.x-82,dial.y);ctx.lineTo(dial.x+82,dial.y);ctx.stroke();
+  ctx.fillStyle='#c1cce0';ctx.font='12px sans-serif';ctx.fillText('source direction · angular inset',478,37);ctx.fillText('horizon',638,128);
+  if(!marker.outOfPlane){ctx.strokeStyle=color;ctx.beginPath();ctx.moveTo(dial.x,dial.y);ctx.lineTo(marker.x,marker.y);ctx.stroke();}
   ctx.fillStyle=color;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(marker.x,marker.y,10,0,Math.PI*2);ctx.fill();
   if(!moon)for(let a=0;a<Math.PI*2;a+=Math.PI/4){ctx.beginPath();ctx.moveTo(marker.x+14*Math.cos(a),marker.y+14*Math.sin(a));ctx.lineTo(marker.x+19*Math.cos(a),marker.y+19*Math.sin(a));ctx.stroke();}
-  ctx.font='bold 16px sans-serif';const labelX=Math.min(565,Math.max(45,marker.x-45)),labelY=marker.y<195?marker.y+35:marker.y-27;
+  ctx.font='bold 14px sans-serif';const labelX=480,labelY=197;
   ctx.fillText(`${moon?'Moon':'Sun'} · ∞`,labelX,labelY);
-  if(marker.outOfPlane){ctx.font='13px sans-serif';ctx.fillText(`out of plane (${marker.towardX?'+':'−'}X)`,labelX,marker.y+51);}
+  if(marker.outOfPlane){ctx.font='13px sans-serif';ctx.fillText(`out of plane (${marker.towardX?'+':'−'}X)`,570,197);}
   ctx.font='14px sans-serif';ctx.fillStyle=color;ctx.fillText(`elevation ${sun.elevation.toFixed(1)}° · azimuth ${sun.azimuth.toFixed(1)}°`,170,17);
-  canvas.setAttribute('aria-label',`Side elevation. ${moon?'Moon':'Sun'} at infinity: elevation ${sun.elevation.toFixed(1)} degrees, azimuth ${sun.azimuth.toFixed(1)} degrees. Selected ${selected}: ${cloud.shapeName}.`);
+  canvas.setAttribute('aria-label',`Side elevation. ${moon?'Moon':'Sun'} at infinity: elevation ${sun.elevation.toFixed(1)} degrees, azimuth ${sun.azimuth.toFixed(1)} degrees. Rotating solar color field at X=0. Source shown on a separate angular inset. Selected ${selected}: ${cloud.shapeName}.`);
   instance.highlightCloud?.(selected);
  }
  canvas.addEventListener('click',event=>{if(!scene)return;const r=canvas.getBoundingClientRect(),x=(event.clientX-r.left)*720/r.width,y=(event.clientY-r.top)*390/r.height,u=(x-plot.x)/plot.width,v=(y-plot.y)/plot.height;if(u<0||u>1||v<0||v>1)return;const id=sideCloudAt(scene,u,v);if(id){selected=id;sample=null;update();render?.();}});

@@ -69,6 +69,22 @@ for (const entry of experiments) {
   });
 }
 
+test("every experiment but Weather declares what each setting invalidates", async () => {
+  // Weather (which uses the declarations for its caches) leaves its draw-only settings out.
+  // The seed and size params, and Lightning's start mode, restart the instance instead.
+  const restarts = param => param.kind === "size" || (param.kind === "seed" && param.key === "seed") || param.key === "start";
+  for (const entry of experiments.filter(entry => entry.id !== "weather")) {
+    const experiment = await entry.load(), missing = experiment.params.filter(param => !restarts(param) && param.affects === undefined).map(param => param.key);
+    assert.deepEqual(missing, [], `${entry.id} params without affects`);
+  }
+});
+
+test("Noise rebuilds its forcing for exactly the settings that declare fields", async () => {
+  const noise = await findExperiment("noise").load();
+  assert.deepEqual(paramsAffecting(noise, "fields"), ["cloudiness", "featureSize", "texture", "changeSpeed", "wind", "layerHeight", "layerThickness", "layerAsymmetry", "persistence", "rainAmount", "fallSpeed"]);
+  assert.deepEqual(paramsAffecting(noise, "draw"), ["view"]);
+});
+
 test("the registry finds experiments by id", () => {
   assert.equal(findExperiment("sunset")?.title, "Sunset study");
   assert.equal(findExperiment("nope"), null);

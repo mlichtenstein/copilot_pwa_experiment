@@ -15,7 +15,10 @@ import { sunLight } from "./core/sun-light.js";
 import { decodeCloudTexture, makeWrappingPhoto } from "./valley-textures.js";
 
 const BLEND = "Cloud blend", HORIZON = "Horizon";
-const slider = (key, min, max, stepSize, help, extra = {}) => ({ key, kind: "range", min, max, step: stepSize, default: defaults[key], help, ...extra });
+// affects: how far a change reaches (core/experiment.js). Valley caches nothing: every frame
+// recomputes its reveal fields, cloud samplers and lighting from the params, so each setting
+// only needs a redraw ("draw"). The brush-layout seed restarts through the host.
+const slider = (key, min, max, stepSize, help, extra = {}) => ({ key, kind: "range", min, max, step: stepSize, default: defaults[key], help, affects: "draw", ...extra });
 const textureChoices = textureOptions.map(option => [option.id, option.name]);
 const textureFor = id => textureOptions.find(option => option.id === id) ?? textureOptions[0];
 const sliderKeys = Object.keys(defaults);
@@ -59,13 +62,13 @@ export const valley = {
   stepSeconds: 1,
   loadError: "Cloud textures could not load. Reload online to try again.",
   params: [
-    { key: "textureA", kind: "select", help: TEXTURE_HELP, group: BLEND, default: "rose", options: textureChoices },
-    { key: "textureB", kind: "select", help: TEXTURE_HELP, group: BLEND, default: "billow", options: textureChoices },
+    { key: "textureA", kind: "select", affects: "draw", help: TEXTURE_HELP, group: BLEND, default: "rose", options: textureChoices },
+    { key: "textureB", kind: "select", affects: "draw", help: TEXTURE_HELP, group: BLEND, default: "billow", options: textureChoices },
     slider("textureBlend", 0, 1, 0.01, "0 = textureA, 1 = textureB. Crossfades cloud opacity and opacity-weighted grayscale shading before lighting.", { group: BLEND, wide: true }),
-    { key: "horizon", kind: "select", display: "radio", group: HORIZON, default: "hills", options: [["valley", "Deep valley"], ["hills", "Low rolling hills"], ["open", "Open horizon"]] },
-    { key: "placement", kind: "select", default: "full",
+    { key: "horizon", kind: "select", affects: "draw", display: "radio", group: HORIZON, default: "hills", options: [["valley", "Deep valley"], ["hills", "Low rolling hills"], ["open", "Open horizon"]] },
+    { key: "placement", kind: "select", affects: "draw", default: "full",
       options: [["full", "Full sky"], ["spread", "Three separated heights"], ["high", "High clouds"], ["low", "Low clouds"], ["band", "Adjustable band"]] },
-    { key: "shape", kind: "select", default: "noise",
+    { key: "shape", kind: "select", affects: "draw", default: "noise",
       options: [["noise", "Two evolving Perlin fields"], ["combined", "Ribbon + pockets"], ["ribbon", "Flowing ribbon"], ["pockets", "Drifting oval"]] },
     slider("wind", -12, 12, 0.5, "Signed horizontal drift in 192-pixel reference-screen pixels/second. Positive blows right; layers drift at different rates."),
     slider("formationSpeed", 0, 1, 0.05, "Speed of the broad reveal/dissolve fields, independent of wind."),

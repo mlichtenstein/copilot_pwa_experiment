@@ -7,7 +7,9 @@
  */
 import { defaults, createDensity, renderSunset } from "./sunset-model.js";
 
-const slider = (key, min, max, step, help) => ({ key, kind: "range", min, max, step, default: defaults[key], help });
+// affects: how far a change reaches (core/experiment.js). The slab is relit from scratch on every
+// frame, so nothing is cached: light settings relight it, exposure and the view only redraw.
+const slider = (key, min, max, step, help, affects) => ({ key, kind: "range", min, max, step, default: defaults[key], help, affects });
 
 export const sunset = {
   id: "sunset",
@@ -21,15 +23,15 @@ export const sunset = {
   // Relighting the slab takes about 12 ms, so redraw ten times a second while the sun moves.
   frameInterval: 100,
   params: [
-    { key: "view", randomize: false, kind: "select", default: "light", options: [["light", "Camera light"], ["density", "Droplet density"], ["sun", "Sunlight transmission"], ["camera", "Camera transmission"]] },
+    { key: "view", randomize: false, kind: "select", affects: "draw", default: "light", options: [["light", "Camera light"], ["density", "Droplet density"], ["sun", "Sunlight transmission"], ["camera", "Camera transmission"]] },
     { key: "seed", kind: "seed", default: 42, help: "Fixed droplet arrangement; changing this regenerates density." },
-    slider("extinction", 0, 0.5, 0.01, "Light loss per density unit per pixel of path (inverse pixels)."),
-    slider("slabDepth", 1, 30, 1, "Cloud thickness toward the camera, in pixel-length units."),
-    slider("albedo", 0, 1, 0.05, "Fraction of removed light scattered rather than absorbed."),
-    slider("g", 0, 0.9, 0.05, "Scattering asymmetry; 0 is isotropic, positive favors forward scattering."),
-    slider("airOpticalDepth", 0, 0.5, 0.01, "Atmospheric extinction scale; stronger values redden low sunlight."),
-    slider("ambient", 0, 0.2, 0.005, "Unshadowed neutral fill light, approximating indirect illumination."),
-    slider("exposure", 0.1, 4, 0.1, "Camera exposure multiplier before tone mapping.")
+    slider("extinction", 0, 0.5, 0.01, "Light loss per density unit per pixel of path (inverse pixels).", "lighting"),
+    slider("slabDepth", 1, 30, 1, "Cloud thickness toward the camera, in pixel-length units.", "lighting"),
+    slider("albedo", 0, 1, 0.05, "Fraction of removed light scattered rather than absorbed.", "lighting"),
+    slider("g", 0, 0.9, 0.05, "Scattering asymmetry; 0 is isotropic, positive favors forward scattering.", "lighting"),
+    slider("airOpticalDepth", 0, 0.5, 0.01, "Atmospheric extinction scale; stronger values redden low sunlight.", "lighting"),
+    slider("ambient", 0, 0.2, 0.005, "Unshadowed neutral fill light, approximating indirect illumination.", "lighting"),
+    slider("exposure", 0.1, 4, 0.1, "Camera exposure multiplier before tone mapping.", "draw")
   ],
   create({ width, height, params }) {
     let current = params, field = createDensity(width, height, params.seed);

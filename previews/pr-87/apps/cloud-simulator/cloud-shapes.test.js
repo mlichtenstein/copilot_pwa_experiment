@@ -3,7 +3,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {ANALYTIC_SHAPES,imageReliefShape,traceShape} from './cloud-shapes.js';
-import {createCloudScene,rayCloud,localToWorld,opticalDepth,sideSilhouettes,sideLightMarker,sidePixel,CAMERA,renderCloudScene,pickCloud,projectDirection} from './cloud-geometry.js';
+import {createCloudScene,rayCloud,localToWorld,opticalDepth,sideSilhouettes,sideLightMarker,sidePixel,CAMERA,SOURCE_DIAL,renderCloudScene,pickCloud,projectDirection} from './cloud-geometry.js';
 import {migrateLayerShapes} from './normal-lighting-experiment.js';
 const image=imageReliefShape({width:2,height:2,coverage:[1,1,1,1],depth:[16,16,16,16],thickness:[32,32,32,32]});
 const shapes={...ANALYTIC_SHAPES,image};
@@ -50,12 +50,15 @@ test('legacy global shapes migrate without overriding new independent choices',(
  assert.deepEqual(migrateLayerShapes({cloudShape:'layers'}),{nearShape:'ellipsoid',middleShape:'ellipsoid',farShape:'ellipsoid'});
  assert.deepEqual(migrateLayerShapes({nearShape:'cluster',middleShape:'teardrop'}),{nearShape:'cluster',middleShape:'teardrop'});
 });
-test('sun marker follows projected direction and handles horizon, rear and out-of-plane sources',()=>{
- for(const elevation of [-90,-20,0,20,90])for(const azimuth of [-180,-90,0,90,180]){const p=sideLightMarker({azimuth,elevation});assert.ok(Number.isFinite(p.x)&&Number.isFinite(p.y));assert.ok(p.x>=20&&p.x<=700&&p.y>=20&&p.y<=360);}
- assert.ok(sideLightMarker({azimuth:0,elevation:20}).y<190);assert.ok(sideLightMarker({azimuth:0,elevation:-20}).y>190);
- const [cx,cy]=sidePixel(CAMERA.position);
+test('sun marker keeps fixed angular radius and the true projected angle',()=>{
+ const {x:cx,y:cy,radius}=SOURCE_DIAL;
+ for(const elevation of [-90,-20,0,20,90])for(const azimuth of [-180,-90,0,90,180]){
+  const p=sideLightMarker({azimuth,elevation});assert.ok(Number.isFinite(p.x)&&Number.isFinite(p.y));
+  if(!p.outOfPlane){assert.ok(Math.abs(Math.hypot(p.x-cx,p.y-cy)-radius)<1e-9);const a=azimuth*Math.PI/180,e=elevation*Math.PI/180;assert.ok(Math.abs((p.x-cx)*Math.sin(e)+(p.y-cy)*Math.cos(a)*Math.cos(e))<1e-9);}
+ }
  assert.equal(sideLightMarker({azimuth:0,elevation:0}).y,cy);
- for(const elevation of [-20,-1])assert.ok(sideLightMarker({azimuth:0,elevation}).y>cy,'below the camera horizon');
- for(const elevation of [1,20])assert.ok(sideLightMarker({azimuth:0,elevation}).y<cy,'above the camera horizon');
- assert.ok(sideLightMarker({azimuth:180,elevation:0}).x<cx);assert.equal(sideLightMarker({azimuth:90,elevation:0}).outOfPlane,true);
+ assert.ok(sideLightMarker({azimuth:0,elevation:-20}).y>cy);
+ assert.ok(sideLightMarker({azimuth:0,elevation:20}).y<cy);
+ assert.ok(sideLightMarker({azimuth:180,elevation:0}).x<cx);
+ assert.equal(sideLightMarker({azimuth:90,elevation:0}).outOfPlane,true);
 });
