@@ -1,5 +1,6 @@
-/* Purpose: Perspective ellipsoid geometry and distant-light transport in one world space.
+/* Purpose: Layer transforms, shared solid intersections and distant-light transport in one world space.
  * Consumers: normal-lighting experiment, side inspector and tests. Dependencies: palette helpers. */
+import {ANALYTIC_SHAPES,traceShape} from './cloud-shapes.js';
 import {clamp,gradientColor,facing} from './normal-lighting-model.js';
 export const dot=(a,b)=>a.reduce((sum,v,i)=>sum+v*b[i],0);
 export const unit=v=>{const n=Math.hypot(...v)||1;return v.map(x=>x/n);};
@@ -9,12 +10,12 @@ export function lightDirection({azimuth=15,elevation=15}={}){
  const a=azimuth*Math.PI/180,e=elevation*Math.PI/180;
  return [Math.sin(a)*Math.cos(e),Math.sin(e),Math.cos(a)*Math.cos(e)];
 }
-export function createCloudScene(params={}){
+export function createCloudScene(params={},shapes=ANALYTIC_SHAPES){
  const thickness=params.cloudThickness??1,spacing=params.layerSpacing??1;
  return {camera:CAMERA,clouds:[
   {id:'near',center:[-2,2.5,9*spacing],radii:[3.1,.85*thickness,1.8],color:'#89d9ef'},
   {id:'middle',center:[2.8,7,18*spacing],radii:[5,1.15*thickness,2.5],color:'#f3bb83'},
-  {id:'far',center:[-2,16,32*spacing],radii:[8,1.5*thickness,3.5],color:'#bfadf6'}]};
+  {id:'far',center:[-2,16,32*spacing],radii:[8,1.5*thickness,3.5],color:'#bfadf6'}].map(cloud=>({...cloud,shapeName:params[`${cloud.id}Shape`]??'ellipsoid',shape:shapes[params[`${cloud.id}Shape`]??'ellipsoid'],yaw:(params[`${cloud.id}Yaw`]??0)*Math.PI/180}))};
 }
 export function cameraRay(u,v,camera=CAMERA){
  const y=(1-2*v)*camera.tanHalfFov,z=1,s=Math.sin(camera.pitch),c=Math.cos(camera.pitch);
@@ -33,32 +34,64 @@ export function intersectEllipsoid(origin,direction,cloud){
  return end>0?[Math.max(0,start),end]:null;
 }
 export function surfaceNormal(p,cloud){return unit(p.map((v,i)=>(v-cloud.center[i])/cloud.radii[i]**2));}
-export function opticalDepth(scene,origin,direction,density){
- return scene.clouds.reduce((sum,cloud)=>{const hit=intersectEllipsoid(origin,direction,cloud);return sum+(hit?(hit[1]-hit[0])*density:0);},0);
+// Inverse-transform rays without renormalizing: intersection t stays in world units.
+const rotate=(v,yaw)=>[v[0]*Math.cos(yaw)+v[2]*Math.sin(yaw),v[1],v[2]*Math.cos(yaw)-v[0]*Math.sin(yaw)];
+export function localToWorld(cloud,p){return along(cloud.center,rotate(p.map((v,i)=>v*cloud.radii[i]),cloud.yaw??0),1);}
+export function rayCloud(cloud,origin,direction,withNormals=true){
+ const yaw=cloud.yaw??0,o=rotate(origin.map((v,i)=>v-cloud.center[i]),-yaw).map((v,i)=>v/cloud.radii[i]),d=rotate(direction,-yaw).map((v,i)=>v/cloud.radii[i]);
+ const normal=n=>unit(rotate(n.map((v,i)=>v/cloud.radii[i]),yaw));
+ const shape=cloud.shapeName?cloud.shape:ANALYTIC_SHAPES.ellipsoid;
+ const hits=traceShape(shape,o,d,withNormals);
+ return withNormals?hits.map(hit=>({...hit,normal:normal(hit.normal),geometricNormal:normal(hit.geometricNormal),cloud})):hits;
 }
-export function pickCloud(scene,u,v){
- const ray=cameraRay(u,v,scene.camera);
- return scene.clouds.map(cloud=>({cloud,hit:intersectEllipsoid(scene.camera.position,ray,cloud)})).filter(x=>x.hit).sort((a,b)=>a.hit[0]-b.hit[0])[0]?.cloud.id??null;
+export function sceneIntervals(scene,origin,direction){return scene.clouds.flatMap(cloud=>rayCloud(cloud,origin,direction)).sort((a,b)=>a.start-b.start);}
+export function opticalDepth(scene,origin,direction,density){
+ let length=0;for(const cloud of scene.clouds)for(const hit of rayCloud(cloud,origin,direction,false))length+=hit.end-hit.start;return length*density;
+}
+export function pickCloud(scene,u,v){return sceneIntervals(scene,scene.camera.position,cameraRay(u,v,scene.camera))[0]?.cloud.id??null;}
+export const SIDE={width:240,height:130,minZ:-3,maxZ:49,minY:-4,maxY:22};
+export function sidePoint(u,v){return [0,SIDE.maxY-v*(SIDE.maxY-SIDE.minY),SIDE.minZ+u*(SIDE.maxZ-SIDE.minZ)];}
+export function sideCloudAt(scene,u,v){const p=sidePoint(u,v);return sceneIntervals(scene,[-50,p[1],p[2]],[1,0,0])[0]?.cloud.id??null;}
+export function sideSilhouettes(scene){
+ const {width,height}=SIDE,masks=scene.clouds.map(()=>new Uint8Array(width*height));
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+  const p=sidePoint((x+.5)/width,(y+.5)/height);
+  scene.clouds.forEach((cloud,k)=>{if(rayCloud(cloud,[-50,p[1],p[2]],[1,0,0],false).length)masks[k][y*width+x]=1;});
+ }
+ return masks;
+}
+// Direction-only marker at the diagram boundary; never a finite point light.
+export function sideLightMarker(sun){
+ const l=lightDirection(sun),dx=l[2],dy=-l[1],projected=Math.hypot(dx,dy);
+ if(projected<1e-6)return {x:670,y:35,outOfPlane:true,towardX:l[0]>0};
+ const scale=Math.min(335/Math.max(Math.abs(dx),1e-12),160/Math.max(Math.abs(dy),1e-12));
+ return {x:360+dx*scale,y:190+dy*scale,outOfPlane:false,towardX:l[0]>0};
+}
+const cameraCache=new WeakMap();
+function cameraSamples(scene,width,height){
+ const cached=cameraCache.get(scene);if(cached?.width===width&&cached.height===height)return cached.samples;
+ const samples=[];for(let y=0;y<height;y++)for(let x=0;x<width;x++){const ray=cameraRay((x+.5)/width,(y+.5)/height,scene.camera),ground=ray[1]<0?-scene.camera.position[1]/ray[1]:Infinity;samples.push({ray,ground,hits:sceneIntervals(scene,scene.camera.position,ray).filter(hit=>hit.start<ground)});}
+ cameraCache.set(scene,{width,height,samples});return samples;
 }
 const scalar=['coverage','colorCoordinate','depth','thickness','facing','visibility','transmission'];
 const rgb=['normals','broadNormals','incoming','direct','diffusion','sky','ambient','ambientPass','directPass','directAdded','diffusionAdded','scene'];
-// Homogeneous participating ellipsoids: exact ray lengths, six midpoint samples for
+// Homogeneous participating solids: shared ray intervals, six midpoint samples for
 // single scattering. Surface and broad-normal color remain artistic controls.
 export function renderCloudScene(scene,params={},sun={},width=96,height=60){
  const count=width*height,fields=Object.fromEntries([...scalar,...rgb].map(k=>[k,new Float32Array(count*(scalar.includes(k)?1:3))]));
+ fields.layerIndex=new Int8Array(count).fill(-1);
  const l=lightDirection(sun),density=params.cloudDensity??.7,light=clamp(((sun.elevation??15)+6)/10)*(params.lightSource==='moon'?(params.nightBrightness??.45):1);
  const ambientLight=.08+.92*light;
+ const samples=cameraSamples(scene,width,height);
  const saturation=params.lightSource==='moon'?(params.nightSaturation??.45):1;
  for(let y=0;y<height;y++)for(let x=0;x<width;x++){
-  const i=y*width+x,ray=cameraRay((x+.5)/width,(y+.5)/height,scene.camera);
-  const ground=ray[1]<0?-scene.camera.position[1]/ray[1]:Infinity;
-  const hits=scene.clouds.map(cloud=>({cloud,hit:intersectEllipsoid(scene.camera.position,ray,cloud)})).filter(({hit})=>hit&&hit[0]<ground).sort((a,b)=>a.hit[0]-b.hit[0]);
+  const i=y*width+x,{ray,ground,hits}=samples[i];
   const solarDisc=dot(ray,l)>Math.cos(.9*Math.PI/180)&&ground===Infinity;
   const sky=ground<Infinity?[.035,.045,.055]:[.045+.08*(1-y/height),.035+.07*(1-y/height),.12+.12*(1-y/height)];
   for(let c=0;c<3;c++)fields.sky[i*3+c]=solarDisc?(params.lightSource==='moon'?[.7,.8,1]:[1,.8,.38])[c]:sky[c]*ambientLight;
   let cameraTransmission=1,ambient=[0,0,0],direct=[0,0,0],scatter=[0,0,0];
-  for(const {cloud,hit} of hits){
-   const [start,end]=hit,length=Math.min(end,ground)-start,p=along(scene.camera.position,ray,start),n=surfaceNormal(p,cloud);
+  for(const hit of hits){
+   const {start,end,normal:n,geometricNormal}=hit,length=Math.min(end,ground)-start,p=along(scene.camera.position,ray,start);
    // Small tangent perturbation changes detail normals, never body boundaries or broad colors.
    const noise=[Math.sin(p[0]*9+p[2]*3),Math.sin(p[2]*8-p[1]*5),Math.sin(p[1]*11+p[0]*4)];
    const normalNoise=dot(noise,n),fine=unit(n.map((v,c)=>v+.12*(noise[c]-normalNoise*v)));
@@ -66,7 +99,7 @@ export function renderCloudScene(scene,params={},sun={},width=96,height=60){
    const color=gradientColor(coordinate,params).map(v=>light*(1+(v-1)*(params.gradientStrength??1)));
    const mu=facing(dot(fine,l),params.lightingModel??'lambert',params.wrap??.4);
    const surfaceFacing=1-(params.detailShadingStrength??1)+(params.detailShadingStrength??1)*mu;
-   const visibility=Math.exp(-opticalDepth(scene,along(p,n,.001),l,density));
+   const visibility=Math.exp(-opticalDepth(scene,along(p,geometricNormal,.001),l,density));
    const opacity=1-Math.exp(-density*length),weight=cameraTransmission*opacity;
    let transmission=0;
    const ds=length/6;
@@ -77,7 +110,7 @@ export function renderCloudScene(scene,params={},sun={},width=96,height=60){
    // Modest forward bias; an artistic single-scattering approximation, not a phase solver.
    transmission*=.3+.7*Math.max(0,dot(ray,l))**6;
    if(cameraTransmission===1){
-    fields.depth[i]=start;fields.thickness[i]=length;fields.colorCoordinate[i]=clamp(coordinate);
+    fields.layerIndex[i]=scene.clouds.indexOf(hit.cloud);fields.depth[i]=start;fields.thickness[i]=length;fields.colorCoordinate[i]=clamp(coordinate);
     fields.facing[i]=surfaceFacing;fields.visibility[i]=visibility;fields.transmission[i]=transmission;
     fields.normals.set(fine,i*3);fields.broadNormals.set(n,i*3);fields.incoming.set(color,i*3);
    }

@@ -167,4 +167,4 @@ Lightning timing is charge-driven: quiet → leader → flash → quiet. Each qu
 
 ## Normal lighting: geometry workbench
 
-[normal-lighting.html](normal-lighting.html) starts with three perspective ellipsoid clouds and a live side elevation showing the camera, viewing rays, normals and incoming sunlight. See [world geometry and transport](cloud-geometry.md) for coordinates, controls, approximations and checks. The [four baked relief presets](normal-assets/README.md) remain available for comparison.
+[normal-lighting.html](normal-lighting.html) gives each layer an independent shape and orientation, alongside a live side elevation showing the same solids, camera rays, normals and a visible distant Sun/Moon marker. See [world geometry and transport](cloud-geometry.md) for coordinates, controls, approximations and checks. The [baked relief assets](normal-assets/README.md) document the image source and earlier studies.

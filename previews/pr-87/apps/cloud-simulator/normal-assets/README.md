@@ -1,7 +1,10 @@
 <!-- Purpose: Explain baked normal-map data and reproduction. Consumers: contributors and lighting experiment. Dependencies: bake.py, Pillow, existing CC0 texture. -->
 # Fixed cloud data maps
 
-These four legacy presets complement the default perspective `layers` scene. See [world geometry](../cloud-geometry.md) for its renderer and linked side elevation.
+The workbench now places every shape inside the same world scene; the old standalone baked renderer is no longer a UI mode. See [world geometry](../cloud-geometry.md). Cluster uses overlapping ellipsoid solids, wisps use closed curved ribbons, and teardrop uses a closed swept mesh. Image uses `image-geometry.png` to construct a closed front/back relief mesh with outline walls. Other maps are retained as documented source/reference assets for earlier lighting studies; they are not separate scene modes.
+
+The following sections document how the baked assets were produced and the earlier workbench conventions. Current controls and rendering contracts are in the world-geometry document.
+
 Run `python apps/cloud-simulator/normal-assets/bake.py` with Pillow installed to reproduce all twelve PNGs. No geometry or normals are generated at runtime.
 
 96×60 maps use X right, Y up, Z toward the viewer. Length units are image pixels. Normal RGB encodes (n+1)/2; decode as data, then normalize. Geometry RGBA encodes front depth as (z+32)/64, thickness/64, unused blue, and coverage. Eight-bit depth quantization is about 0.25 pixels. Transparent normals have no meaning.
