@@ -50,6 +50,8 @@ export function opticalDepth(scene,origin,direction,density){
 }
 export function pickCloud(scene,u,v){return sceneIntervals(scene,scene.camera.position,cameraRay(u,v,scene.camera))[0]?.cloud.id??null;}
 export const SIDE={width:240,height:130,minZ:-3,maxZ:49,minY:-4,maxY:22};
+export const SIDE_PLOT={x:42,y:30,width:624,height:312};
+export const sidePixel=p=>[SIDE_PLOT.x+(p[2]-SIDE.minZ)*12,SIDE_PLOT.y+(SIDE.maxY-p[1])*12];
 export function sidePoint(u,v){return [0,SIDE.maxY-v*(SIDE.maxY-SIDE.minY),SIDE.minZ+u*(SIDE.maxZ-SIDE.minZ)];}
 export function sideCloudAt(scene,u,v){const p=sidePoint(u,v);return sceneIntervals(scene,[-50,p[1],p[2]],[1,0,0])[0]?.cloud.id??null;}
 export function sideSilhouettes(scene){
@@ -64,8 +66,11 @@ export function sideSilhouettes(scene){
 export function sideLightMarker(sun){
  const l=lightDirection(sun),dx=l[2],dy=-l[1],projected=Math.hypot(dx,dy);
  if(projected<1e-6)return {x:670,y:35,outOfPlane:true,towardX:l[0]>0};
- const scale=Math.min(335/Math.max(Math.abs(dx),1e-12),160/Math.max(Math.abs(dy),1e-12));
- return {x:360+dx*scale,y:190+dy*scale,outOfPlane:false,towardX:l[0]>0};
+ const [cx,cy]=sidePixel(CAMERA.position);
+ const tx=Math.abs(dx)<1e-12?Infinity:((dx>0?695:25)-cx)/dx;
+ const ty=Math.abs(dy)<1e-12?Infinity:((dy>0?350:30)-cy)/dy;
+ const scale=Math.min(tx,ty);
+ return {x:cx+dx*scale,y:cy+dy*scale,outOfPlane:false,towardX:l[0]>0};
 }
 const cameraCache=new WeakMap();
 function cameraSamples(scene,width,height){

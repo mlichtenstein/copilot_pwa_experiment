@@ -1,6 +1,6 @@
 /* Purpose: Linked side elevation of the renderer's solids, camera and distant source.
  * Consumers: normal-lighting.js. Dependencies: cloud-geometry, canvas, shared hold help. */
-import {lightDirection,cameraRay,rayCloud,along,pickCloud,localToWorld,sideSilhouettes,sideCloudAt,sideLightMarker,SIDE} from './cloud-geometry.js';
+import {lightDirection,cameraRay,rayCloud,along,pickCloud,localToWorld,sideSilhouettes,sideCloudAt,sideLightMarker,SIDE,SIDE_PLOT,sidePixel} from './cloud-geometry.js';
 export function mountCloudSideView({doc,root,canvas:front,instance,help,render}){
  const make=(tag,props={})=>Object.assign(doc.createElement(tag),props);
  const heading=make('summary',{textContent:'Side view · world geometry'}),canvas=make('canvas',{width:720,height:390});
@@ -14,8 +14,7 @@ export function mountCloudSideView({doc,root,canvas:front,instance,help,render})
  const note=make('p',{className:'geometry-note',textContent:'X collapsed. White: viewing ray. Green: surface normal. Sun/Moon marks direction at infinity. Tap a cloud in either view.'});
  root.append(heading,canvas,controls,note);
  let selected='near',sample=null,scene=null,lastScene=null,silhouettes=[];
- const plot={x:42,y:30,width:624,height:312}; // Equal 12-pixel/world-unit axes.
- const map=p=>[plot.x+(p[2]-SIDE.minZ)*12,plot.y+(SIDE.maxY-p[1])*12];
+ const plot=SIDE_PLOT,map=sidePixel; // Shared equal-scale projection, including the source marker.
  const line=(ctx,a,b,color,width=1)=>{ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(...map(a));ctx.lineTo(...map(b));ctx.stroke();};
  function arrow(ctx,p,d,length,color){const q=along(p,d,length);line(ctx,p,q,color,2);const a=map(p),b=map(q),angle=Math.atan2(b[1]-a[1],b[0]-a[0]);ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(...b);ctx.lineTo(b[0]-7*Math.cos(angle-.45),b[1]-7*Math.sin(angle-.45));ctx.lineTo(b[0]-7*Math.cos(angle+.45),b[1]-7*Math.sin(angle+.45));ctx.fill();}
  function update(){
