@@ -8,14 +8,14 @@
  * Dependencies: noise-model.js (the weather and its rendering); the contract in core/experiment.js.
  */
 import { defaults, createWeather, step, sampleFields, renderWeather, airborneRain, pooledRain,
-  createRainLayer, updateRainLayer, startCloud } from "./noise-model.js";
+  createRainLayer, startCloud } from "./noise-model.js";
 import { sunLight } from "./core/sun-light.js";
 
 // The model ticks 20 times a clock second while playing.
 export const TICKS_PER_SECOND = 20;
 const slider = (key, min, max, stepSize, help, group) => ({ key, kind: "range", min, max, step: stepSize, default: defaults[key], help, group });
 const legends = {
-  sunset: "Sunset: clouds lit toward the sun's side (peach while it is low, whiter when high) and grey-violet where thick; smooth grey curtain under a cloud base and thin streaks = rain falling from a raining cloud; blue floor = puddles.",
+  sunset: "Sunset: clouds lit toward the sun's side (peach while it is low, whiter when high) and grey-violet where thick; smooth grey curtain under a cloud base and thin pale streaks = rain falling from a raining cloud; blue floor = puddles.",
   water: "Cloud and rain: white = stored cloud water, gold tint = dense, lasting cloud that is raining, pale blue = rain in the air.",
   relative: "Cloud forcing: relative humidity × the cloud-layer band; brighter = closer to forming, orange = cloud condenses here now.",
   humidity: "Humidity: dark = dry, blue = moist.",
@@ -24,7 +24,9 @@ const legends = {
 };
 const SKY = "Sky", LAYER = "Cloud layer", RAIN = "Rain";
 const ruleKeys = ["cloudiness", "featureSize", "texture", "changeSpeed", "wind", "layerHeight", "layerThickness", "layerAsymmetry", "persistence", "rainAmount", "fallSpeed"];
-const rulesOf = params => ({ ...defaults, ...Object.fromEntries(ruleKeys.map(key => [key, params[key]])) });
+// Settings that only change how the rain is drawn: they never reset the run.
+const drawKeys = ["rainSlant"];
+const rulesOf = params => ({ ...defaults, ...Object.fromEntries([...ruleKeys, ...drawKeys].map(key => [key, params[key]])) });
 
 export const noise = {
   id: "noise",
@@ -53,6 +55,7 @@ export const noise = {
     slider("persistence", 0.5, 1.5, 0.05, "How long clouds linger once the noise stops feeding them; they shrink from the edges in. 0.5 fade within several seconds, 1 linger for tens of seconds, 1.5 about a minute.", LAYER),
     slider("rainAmount", 0, 0.015, 0.0005, "How much rain dense, lasting clouds drop (and how fast that thins them).", RAIN),
     slider("fallSpeed", 0.05, 1, 0.01, "Pixels per tick the rain falls.", RAIN),
+    slider("rainSlant", 0, 5, 0.1, "How far the rain streaks lean with the wind: 0 falls straight down, 1 leans true to the wind, higher exaggerates it.", RAIN),
     // Seeds only make a run reproducible; behavior should look alike on any seed.
     { key: "seed", kind: "seed", default: 1, random: true, hidden: true }
   ],
@@ -72,7 +75,7 @@ export const noise = {
         startCloud(instance.simulation);
         carry = 0;
       },
-      tick() { const rules = rulesOf(current); step(instance.simulation, rules); updateRainLayer(instance.rain, instance.simulation, rules); },
+      tick() { const rules = rulesOf(current); step(instance.simulation, rules); },
       update(next, { playing = false } = {}) {
         const previous = current; current = next;
         if (next.seed !== previous.seed) return instance.restart();

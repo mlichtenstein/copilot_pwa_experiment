@@ -38,7 +38,7 @@ const EXPECTED = {
   sunset: ["extinction", "slabDepth", "albedo", "g", "airOpticalDepth", "ambient", "exposure"],
   horizon: ["cloudAltitude", "altitudeSpread", "distanceScale", "airDensity", "aerosol", "exposure"],
   shafts: ["cloudOpacity", "haze", "cloudSharpness", "sourceRadius", "edgeFeather"],
-  noise: ["cloudiness", "featureSize", "texture", "changeSpeed", "wind", "layerHeight", "layerThickness", "layerAsymmetry", "persistence", "rainAmount", "fallSpeed"],
+  noise: ["cloudiness", "featureSize", "texture", "changeSpeed", "wind", "layerHeight", "layerThickness", "layerAsymmetry", "persistence", "rainAmount", "fallSpeed", "rainSlant"],
   convection: ["inversionHeight", "lclHeight", "buoyancy", "viscosity", "heating", "cooling", "latentHeat", "expansion", "evaporation", "autoconversion", "fallSpeed", "flicker"],
   valley: ["textureBlend", "wind", "formationSpeed", "cloudY", "bandWidth", "coverage", "maskSoftness", "windwardClearance", "leewardClearance", "textureScale", "opacity", "noiseScale", "noiseDrift"],
   lightning: ["fieldBias", "roughness", "branchChance", "leaderSpeed", "flashDuration", "flashStrength", "haze", "chargeRate", "chargeBias", "breakdownGradient"]

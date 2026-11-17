@@ -41,7 +41,10 @@ export const defaults = {
   // moving on, 1 = it lingers for tens of seconds, 1.5 = about a minute (see dissipation).
   persistence: 1,
   // Rain: rain made per tick by charged cloud (× density), and fall speed in pixels per tick.
-  rainAmount: 0.003, fallSpeed: 0.25
+  rainAmount: 0.003, fallSpeed: 0.25,
+  // Drawing only: how far the rain streaks lean with the wind (0 straight down, 1 true to the
+  // wind and their own speed, more exaggerates it).
+  rainSlant: 3
 };
 
 // Fixed rules.
@@ -172,7 +175,8 @@ export function createWeather({ width = 128, height = 96, seed = 1 } = {}) {
     puddle: new Array(width).fill(0), rained: 0, fallen: 0, evaporated: 0,
     // Accumulated wind scroll and field time, so slider changes never jump the view;
     // `shifted` is how many whole pixels the stored cloud fields have been carried.
-    scroll: 0, shifted: 0, time: 0, band: new Array(height).fill(1) };
+    // `fallClock` is the fall so far (the sum of fallSpeed), which the rain streaks are drawn from.
+    scroll: 0, shifted: 0, fallClock: 0, time: 0, band: new Array(height).fill(1) };
   sampleFields(simulation, defaults);
   startCloud(simulation);
   return simulation;
@@ -294,6 +298,7 @@ export function step(simulation, options = {}) {
   simulation.tick++;
   simulation.time += rules.changeSpeed;
   simulation.scroll += rules.wind;
+  simulation.fallClock = (simulation.fallClock ?? 0) + Math.max(0, Math.min(1, rules.fallSpeed));
   const fall = Math.max(0, Math.min(1, rules.fallSpeed));
   // Cloud water and its charge drift with the wind, whole pixels at a time.
   const shift = Math.round(simulation.scroll) - simulation.shifted;
@@ -352,20 +357,32 @@ export const pooledRain = simulation => simulation.puddle.reduce((sum, value) =>
 // raining cloud, where the rain is made, smooths the cloud's lower part, and runs down to
 // the floor with no fade at its foot; once a cloud stops raining the sheet's top lets go and
 // falls away.
-// Streaks: thin streaks born anywhere there is rain, at a random sub-pixel x and a random
-// tick; birth is likelier where rain is heavier and where a slow, wind-carried clumping noise
-// is high, so streaks gather into uneven shafts. Lengths are heavy-tailed (truncated power
-// law, 3 to 30 px: mostly short, a few long), and each streak gets its own speed (±20%),
-// strength and, sometimes, a second pixel of width. A streak fades in and out over its life,
-// never reaches above the row it was born on, and dims where the rain around it thins.
-export const STREAK = { length: [3, 30], lengthPower: 0.7, life: [40, 170], speed: [0.8, 1.2],
-  alpha: 0.6, wide: 0.15, spawnTries: 80, max: 300, scale: 0.03, clumpSize: 9, follow: 0.2 };
+// Streaks: crisp, pale pixel streaks that are pure functions of the seed, the stored rain and
+// two clocks the simulation already keeps (`scroll`, the wind so far, and `fallClock`, the
+// fall so far). Nothing about them is stored and no random generator runs. Each of a plane's
+// `lanes` falls from above the sky, again and again; every fall (a "cycle") hashes its own x,
+// length, speed, strength and visibility threshold from (seed, plane, lane, cycle). A streak is
+// drawn only where the rain around it is heavy enough for its threshold, so heavy rain shows
+// most streaks, thin rain a few, and they appear out of the cloud base where the rain starts
+// and run to the floor. Three depth planes give parallax: far streaks are many, short, slow
+// and faint; near ones are few, long, fast and bright. Streaks are carried by the wind with
+// the air, lean with it (`rainSlant` exaggerates the lean), and bunch into uneven shafts where
+// a slow, wind-carried noise is high. Lengths are heavy-tailed. A streak is bright at its head
+// and fades toward its tail; drawn opacity is stepped (two levels, ordered-dithered), never
+// blended across columns, like the rest of the pixel art.
+export const STREAK = { scale: 0.03, clumpSize: 9, fall: 4, lengthPower: 0.7, lean: 1.5,
+  planes: [
+    { lanes: 900, speed: 0.55, length: [3, 7], alpha: 0.8, wide: 0 },
+    { lanes: 600, speed: 1, length: [4, 12], alpha: 1, wide: 0 },
+    { lanes: 260, speed: 1.6, length: [8, 20], alpha: 1.1, wide: 0.15 }] };
+// Drawn opacity of the two steps, and the cap on what a heavy shower adds up to.
+const STREAK_STEPS = [0.4, 0.8];
 // Curtain: opacity CURTAIN.alpha × clamp(rain / scale)^power.
 export const CURTAIN = { alpha: 0.5, scale: 0.06, power: 0.7 };
+// The rain layer holds only what cannot be recomputed: nothing but the seed. `clump` (a
+// function, so it stays out of JSON) is rebuilt from it.
 export function createRainLayer(seed = 1) {
-  let state = (seed ^ 0x5bd1e995) >>> 0;
-  const random = () => (state = (Math.imul(1664525, state) + 1013904223) >>> 0) / 4294967296;
-  return { streaks: [], random, clump: createNoise3((seed ^ 0x2545f491) >>> 0) };
+  return { seed: seed >>> 0, clump: createNoise3((seed ^ 0x2545f491) >>> 0) };
 }
 
 // Lowest cloud row in each column (−1 if the column is clear).
@@ -375,49 +392,33 @@ export function cloudBases(simulation) {
   return bases;
 }
 
-// Rain around a point, in streak units (1 = plenty): the mean over the pixel's row and the
-// rows just above and below.
-function rainNear(simulation, x, y) {
-  const { width, height, rain } = simulation, column = ((Math.floor(x) % width) + width) % width;
-  let total = 0, rows = 0;
-  for (let row = Math.floor(y) - 1; row <= Math.floor(y) + 1; row++) {
-    if (row < 0 || row >= height) continue;
-    total += rain[row * width + column]; rows++;
+// A number in [0, 1) from any number of integers: the same inputs always give the same value,
+// different inputs are unrelated.
+export function hash(...ints) {
+  let h = 0x9e3779b9;
+  for (const n of ints) {
+    h = Math.imul(h ^ (n | 0), 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
   }
-  return rows ? total / rows / STREAK.scale : 0;
+  return (h >>> 0) / 4294967296;
+}
+const smoothstep = (low, high, value) => { const t = clip01((value - low) / (high - low)); return t * t * (3 - 2 * t); };
+
+// Rain in streak units (0 to 1, 1 = plenty) at every pixel: the mean over the pixel's row and
+// the rows just above and below.
+function rainDensity(simulation) {
+  const { width, height, rain } = simulation, density = new Float32Array(width * height);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    let total = 0, rows = 0;
+    for (let row = Math.max(0, y - 1); row <= Math.min(height - 1, y + 1); row++) { total += rain[row * width + x]; rows++; }
+    density[y * width + x] = Math.min(1, total / rows / STREAK.scale);
+  }
+  return density;
 }
 
 // Truncated power law on [shortest, longest]: inverse-CDF sample of p(L) ∝ L^−(1 + power).
-function streakLength(u) {
-  const [shortest, longest] = STREAK.length, a = STREAK.lengthPower;
-  const low = Math.pow(shortest, -a), high = Math.pow(longest, -a);
+function streakLength(u, [shortest, longest]) {
+  const a = STREAK.lengthPower, low = Math.pow(shortest, -a), high = Math.pow(longest, -a);
   return Math.pow(low - u * (low - high), -1 / a);
-}
-
-export function updateRainLayer(layer, simulation, options = {}) {
-  const rules = { ...defaults, ...options };
-  const { width, height } = simulation, random = layer.random, clump = layer.clump ?? (() => 0);
-  for (const streak of layer.streaks) {
-    streak.age++; streak.y += rules.fallSpeed * streak.speed; streak.x += rules.wind;
-    // Its brightness eases toward the rain around its head, so it never shows in dry air.
-    const target = Math.min(1, rainNear(simulation, streak.x, streak.y));
-    streak.fade = (streak.fade ?? target) + (target - (streak.fade ?? target)) * STREAK.follow;
-  }
-  layer.streaks = layer.streaks.filter(streak => streak.age < streak.life && streak.y - streak.length < height && (streak.age < 5 || (streak.fade ?? 1) > 0.02));
-  for (let k = 0; k < STREAK.spawnTries && layer.streaks.length < STREAK.max; k++) {
-    const x = random() * width, y = random() * height, amount = rainNear(simulation, x, y);
-    if (amount <= 0.01) continue;
-    // Clumping: slow noise carried by the wind; squared so gaps open between shafts.
-    const gather = Math.max(0, Math.min(1, 0.5 + 1.2 * clump((x - simulation.scroll) / STREAK.clumpSize, 0.5, simulation.tick * 0.015)));
-    // Squared, so heavy rain gets most streaks and thin rain few.
-    if (random() >= Math.min(1, amount * amount) * (0.1 + 1.2 * gather * gather)) continue;
-    const [briefest, longestLife] = STREAK.life, [slow, fast] = STREAK.speed;
-    layer.streaks.push({ x, y, top: y, age: 0, length: streakLength(random()),
-      life: briefest + random() * (longestLife - briefest), speed: slow + random() * (fast - slow),
-      strength: (0.45 + 0.55 * random()) * (0.6 + 0.4 * Math.min(1, amount)), wide: random() < STREAK.wide,
-      fade: Math.min(1, amount) });
-  }
-  return layer;
 }
 
 // Curtain opacity per pixel (0 where there is no rain): CURTAIN.alpha × clamp(rain /
@@ -433,31 +434,48 @@ export function curtainAlpha(layer, simulation) {
   return alpha;
 }
 
-// Opacity of each pixel from the streaks: lifetime envelope sin(π age/life) times a
-// sin(π t) profile along the streak (t = 0 tail, 1 head), antialiased across the two
-// nearest columns (plus a fainter third for wide streaks), and cut off above the row the
-// streak was born on. Capped so heavy rain stays a veil.
+// Opacity of each pixel from the streaks, 0 or one of two steps (see STREAK). A pure function
+// of `layer.seed`, `simulation` (tick, scroll, fallClock, rain) and the wind, fall speed and
+// `rainSlant` in `options`: it advances nothing and uses no random generator, so a layer made
+// fresh from the seed draws exactly what one that has been there all along draws.
 export function rainAlpha(layer, simulation, options = {}) {
   const rules = { ...defaults, ...options };
-  const { width, height } = simulation, alpha = new Float32Array(width * height);
-  for (const streak of layer.streaks) {
-    const life = Math.sin(Math.PI * Math.min(1, streak.age / streak.life)) * (streak.fade ?? 1);
-    if (life <= 0) continue;
-    // Lean = wind / fall speed (the streak points along its motion), capped so slow rain in
-    // strong wind does not lie flat.
-    const speed = rules.fallSpeed * (streak.speed ?? 1);
-    const lean = speed > 0 ? Math.max(-1.5, Math.min(1.5, rules.wind / speed)) : 0;
-    const top = Math.max(Math.ceil(streak.y - streak.length), Math.ceil(streak.top ?? -Infinity)), bottom = Math.floor(streak.y);
-    for (let row = Math.max(0, top); row <= Math.min(height - 1, bottom); row++) {
-      const t = 1 - (streak.y - row) / streak.length;
-      const value = STREAK.alpha * streak.strength * life * Math.sin(Math.PI * Math.max(0, Math.min(1, t)));
-      const column = streak.x - lean * (streak.y - row), left = Math.floor(column), frac = column - left;
-      alpha[row * width + ((left % width) + width) % width] += value * (1 - frac);
-      alpha[row * width + (((left + 1) % width) + width) % width] += value * frac;
-      if (streak.wide) alpha[row * width + (((left + 2) % width) + width) % width] += 0.5 * value * frac + 0.3 * value * (1 - frac);
+  const { width, height, scroll, tick } = simulation, fallClock = simulation.fallClock ?? 0;
+  const alpha = new Float32Array(width * height), density = rainDensity(simulation), { seed } = layer;
+  const slant = Math.max(0, rules.rainSlant) * rules.wind / Math.max(0.05, rules.fallSpeed * STREAK.fall);
+  STREAK.planes.forEach((plane, p) => {
+    const fallen = fallClock * STREAK.fall * plane.speed, [, longest] = plane.length;
+    const lanes = Math.round(plane.lanes * width / 128);
+    for (let lane = 0; lane < lanes; lane++) {
+      // Each lane repeats on its own period, from its own phase; every repeat is a new streak.
+      const period = (height + longest) * (1 + 1.2 * hash(seed, p, lane, 1)), phase = hash(seed, p, lane, 2) * period;
+      const cycle = Math.floor((fallen + phase) / period), within = fallen + phase - cycle * period;
+      const faster = 0.8 + 0.45 * hash(seed, p, lane, cycle, 3), head = within * faster - longest;
+      if (head < 0 || head > height + longest) continue;
+      const length = streakLength(hash(seed, p, lane, cycle, 4), plane.length);
+      const strength = 0.5 + 0.5 * hash(seed, p, lane, cycle, 5), threshold = hash(seed, p, lane, cycle, 6);
+      const wide = hash(seed, p, lane, cycle, 7) < plane.wide;
+      const airX = hash(seed, p, lane, cycle, 8) * width;
+      const lean = Math.max(-STREAK.lean, Math.min(STREAK.lean, slant / (plane.speed * faster)));
+      const gather = airX / STREAK.clumpSize;
+      for (let row = Math.max(0, Math.ceil(head - length)); row <= Math.min(height - 1, Math.floor(head)); row++) {
+        const column = (((Math.round(airX + scroll - lean * (head - row))) % width) + width) % width;
+        const amount = density[row * width + column];
+        if (amount <= 0.01) continue;
+        // Clumping: slow noise carried by the wind, so gaps open between shafts.
+        const bunch = clip01(0.5 + 1.2 * (layer.clump ? layer.clump(gather, 0.5, tick * 0.015) : 0));
+        const shown = smoothstep(threshold * 0.7, threshold * 0.7 + 0.35, amount * (0.3 + 0.9 * bunch * bunch));
+        if (shown <= 0) continue;
+        const value = plane.alpha * strength * shown * (0.55 + 0.45 * (1 - (head - row) / length));
+        alpha[row * width + column] += value;
+        if (wide) alpha[row * width + (column + 1) % width] += 0.5 * value;
+      }
     }
+  });
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const i = y * width + x, level = Math.floor(Math.min(1, alpha[i]) * 2 + BAYER[(y % 4) * 4 + (x % 4)]);
+    alpha[i] = level > 0 ? STREAK_STEPS[level - 1] : 0;
   }
-  for (let i = 0; i < alpha.length; i++) alpha[i] = Math.min(0.7, alpha[i]);
   return alpha;
 }
 
@@ -477,7 +495,7 @@ const DAY_CLOUD = [[112, 118, 140], [160, 166, 184], [216, 220, 230], [252, 252,
 // is down (light.strength 0), NIGHT_SKY how bright the sky stays.
 export const BAKED_LIGHT = fixedLight(1, 1, 0.35);
 const NIGHT_LIGHT = 0.3, NIGHT_SKY = 0.5;
-const RAIN = [150, 210, 236], RAIN_GREY = [168, 162, 178], CURTAIN_GREY = [132, 112, 142], PUDDLE = [76, 120, 168];
+const RAIN = [150, 210, 236], RAIN_STREAK = [206, 232, 250], CURTAIN_GREY = [132, 112, 142], PUDDLE = [76, 120, 168];
 // 4×4 ordered dither so bands and opacities break into chunky pixel patterns.
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
 const clip01 = value => Math.max(0, Math.min(1, value));
@@ -550,7 +568,7 @@ export function renderWeather(simulation, view = "sunset", options = {}, layer =
         const level = Math.min(1, Math.floor((density > dither * 0.6 ? 1.4 : 1) * sheet * 4 + dither) / 4);
         rgb = mix(rgb, mix(CURTAIN_GREY, skyColor(altitude, 0.5, day), 0.25), level);
       }
-      if (streaks && streaks[i] > 0.005) rgb = mix(rgb, mix(RAIN_GREY, skyColor(altitude, 0.5, day), 0.3), streaks[i] * (1 - 0.7 * density));
+      if (streaks && streaks[i] > 0.005) rgb = mix(rgb, mix(RAIN_STREAK, skyColor(altitude, 0.5, day), 0.12), streaks[i] * (1 - 0.7 * density));
     }
     if (y === height - 1 && puddle[x] > 0.02 + dither * 0.2) rgb = PUDDLE;
     pixels.set([rgb[0], rgb[1], rgb[2], 255], i * 4);
