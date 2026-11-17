@@ -63,7 +63,7 @@ export function sideSilhouettes(scene){
  return masks;
 }
 // A separate angular inset avoids implying a finite source inside the world plot.
-export const SOURCE_DIAL={x:570,y:112,radius:65};
+export const SOURCE_DIAL={x:570,y:99,radius:48};
 export function sideLightMarker(sun){
  const l=lightDirection(sun),projected=Math.hypot(l[2],l[1]);
  if(projected<1e-6)return {...SOURCE_DIAL,outOfPlane:true,towardX:l[0]>0};
