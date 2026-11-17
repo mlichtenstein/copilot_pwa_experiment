@@ -12,7 +12,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createNoise3, fractal, createWeather, step, sampleFields, renderWeather, airborneRain,
-  pooledRain, defaults, RULES, FIELDS, layerBand, altitudeOf, createRainLayer, hash,
+  pooledRain, defaults, RULES, FIELDS, layerBand, altitudeOf, createRainLayer, hash, rainLean,
   rainAlpha, curtainAlpha, cloudBases, formRain, textureShape, condense, dissipation, startCloud,
   exposure } from "./noise-model.js";
 import { testSeeds } from "./core/test-seeds.js";
@@ -128,8 +128,10 @@ test("at defaults the cloud sits in a clear horizontal layer with clear sky abov
   assert.ok(c - Math.min(...cloudy) < Math.max(...cloudy) - c);
 });
 
-test("all rain moves fallSpeed down and wind sideways per tick, nothing lost", () => {
-  for (const [fallSpeed, wind] of [[0.25, 0.1], [0.4, -0.2], [1, 0]]) {
+test("all rain moves fallSpeed down and trails its cloud sideways, nothing lost", () => {
+  // The rain falls through air that is not moving with its cloud, so it keeps none of the wind
+  // (the lean wind / fall takes all of it) until the lean hits its cap, past which it keeps the rest.
+  for (const [fallSpeed, wind] of [[0.25, 0.1], [0.4, -0.2], [1, 0], [0.1, 0.5], [0.1, -0.5]]) {
     const simulation = createWeather({ width: 48, height: 40, seed: seeds(1)[0] });
     // No cloud, so no new rain, and nothing reaches the puddles.
     const options = { cloudiness: -1, fallSpeed, wind };
@@ -145,10 +147,19 @@ test("all rain moves fallSpeed down and wind sideways per tick, nothing lost", (
     for (let k = 0; k < 20; k++) step(simulation, options);
     const [x1, y1, mass] = centre();
     assert.ok(Math.abs(y1 - y0 - 20 * fallSpeed) < 1e-6, `fall ${fallSpeed}`);
-    // Carried in whole pixels with the cloud, so within half a pixel of the wind's path.
-    assert.ok(Math.abs(x1 - x0 - (simulation.shifted)) < 1e-6 && Math.abs(x1 - x0 - 20 * wind) <= 0.5 + 1e-9, `wind ${wind}`);
+    const drift = wind - rainLean(wind, fallSpeed) * fallSpeed;
+    // Carried in whole pixels, so within half a pixel of its path.
+    assert.ok(Math.abs(x1 - x0 - simulation.rainShifted) < 1e-6 && Math.abs(x1 - x0 - 20 * drift) <= 0.5 + 1e-9, `wind ${wind}, fall ${fallSpeed}: moved ${(x1 - x0).toFixed(2)}, expected ${(20 * drift).toFixed(2)}`);
     assert.ok(Math.abs(mass - 1.5) < 1e-9 && simulation.evaporated === 0);
   }
+});
+
+test("a rain shaft leans by wind / fall (tan of the angle), at most 60° from the vertical", () => {
+  assert.equal(rainLean(0, 0.25), 0);
+  assert.ok(Math.abs(rainLean(0.1, 0.25) - 0.4) < 1e-12 && Math.abs(rainLean(-0.1, 0.25) + 0.4) < 1e-12);
+  assert.ok(Math.abs(rainLean(0.25, 0.25) - 1) < 1e-12, "wind as fast as the fall: 45°");
+  assert.ok(Math.abs(rainLean(0.5, 0.05) - Math.sqrt(3)) < 1e-12 && Math.abs(rainLean(-0.5, 0.05) + Math.sqrt(3)) < 1e-12, "capped at 60°");
+  assert.equal(rainLean(0.3, 0), 0);
 });
 
 test("rain never dries in the air: it fills puddles and is conserved overall", () => {
@@ -203,16 +214,16 @@ test("a rain shaft reaches the floor under its cloud, spreading only a little si
   // A 3 px wide shaft just under a cloud base, falling the whole height.
   for (let x = 63; x <= 65; x++) simulation.rain[20 * width + x] = 1;
   const start = columnSpread(simulation.rain);
-  // Where the wind had carried the shaft when each part of it landed (puddles stay put).
+  // Where the rain had been carried sideways when each part of it landed (puddles stay put).
   let carriedSum = 0;
   for (let k = 0; k < (height - 20) / defaults.fallSpeed + 40; k++) {
     const before = simulation.fallen;
     step(simulation, options);
-    carriedSum += (simulation.fallen - before) * simulation.shifted;
+    carriedSum += (simulation.fallen - before) * simulation.rainShifted;
   }
   const landed = columnSpread(simulation.puddle);
   assert.ok(landed.mass > 2.2, `most of the shaft has landed (puddles dry a little) (${landed.mass.toFixed(2)})`);
-  // It landed where the wind carried it, and is at most a few pixels wider than it started.
+  // It landed where it had been carried, and is at most a few pixels wider than it started.
   const carried = 64 + carriedSum / simulation.fallen;
   assert.ok(Math.abs(landed.mean - carried) < 1.5, `landed at ${landed.mean.toFixed(1)}, carried to ${carried.toFixed(1)}`);
   assert.ok(landed.sd < start.sd + 2.5, `spread from ${start.sd.toFixed(2)} to ${landed.sd.toFixed(2)} px`);
@@ -309,42 +320,46 @@ test("rain streaks follow the falling rain, from the cloud base to the floor, an
   assert.ok(rainAlpha(layer, simulation, options).every(value => value === 0));
 });
 
-// How far a picture leans, in columns per row: for every lit pixel, the offset of the nearest lit
-// pixel in the next row down (within two columns), averaged. 0 is straight down.
+// How far a picture leans, in columns per row: compare each row with the one four rows down,
+// find how far sideways the lit pixels line up best, and divide by four. 0 is straight down.
 function leanOf(values, width, height) {
-  let total = 0, count = 0;
-  for (let y = 0; y < height - 1; y++) for (let x = 0; x < width; x++) {
+  const gap = 4, reach = 8, overlap = new Array(2 * reach + 1).fill(0);
+  for (let y = 0; y < height - gap; y++) for (let x = 0; x < width; x++) {
     if (!(values[y * width + x] > 0)) continue;
-    for (const d of [0, 1, -1, 2, -2]) if (values[(y + 1) * width + (x + d + width) % width] > 0) { total += d; count++; break; }
+    for (let d = -reach; d <= reach; d++) if (values[(y + gap) * width + (x + d + width) % width] > 0) overlap[d + reach]++;
   }
-  return count ? total / count : 0;
+  const best = Math.max(...overlap);
+  return best ? (overlap.indexOf(best) - reach) / gap : 0;
 }
 
-test("rain streaks fall straight down, in line with the rain region, in every wind, and the wind carries them", () => {
+test("rain streaks lean exactly as the rain region does, at every wind", () => {
   const seed = seeds(1)[0], layer = createRainLayer(seed), width = 128, height = 96;
-  for (const wind of [-0.5, -0.25, 0, 0.25, 0.5]) {
+  for (const wind of [-0.5, -0.25, 0, 0.1, 0.25, 0.5]) {
     // A cloud kept fed where the wind has carried it, raining steadily: the region it rains in.
     const options = { cloudiness: -1, wind, fallSpeed: 0.25 }, simulation = createWeather({ width, height, seed });
     sampleFields(simulation, options); startCloud(simulation);
-    for (let k = 0; k < 150; k++) {
+    for (let k = 0; k < 200; k++) {
       for (let y = 20; y < 26; y++) for (let x = 0; x < width; x++) { const c = (x - simulation.shifted + 2 * width) % width; if (c >= 50 && c < 70) { simulation.cloud[y * width + x] = 1; simulation.charge[y * width + x] = 1; } }
       step(simulation, options);
     }
-    // The region's lean: how far its rain, row by row, sits from the cloud that made it.
-    const centre = (60 + simulation.shifted) % width, offsets = [];
-    for (let y = 32; y < height - 4; y += 6) {
+    // The region's lean in columns per row: how the rain, row by row, sits against its cloud.
+    const centre = (60 + simulation.shifted) % width, rows = [], offsets = [];
+    for (let y = 30; y <= 46; y += 4) {
       let sumX = 0, sumRain = 0;
       for (let x = 0; x < width; x++) { const d = ((x - centre + 1.5 * width) % width) - width / 2; sumX += d * simulation.rain[y * width + x]; sumRain += simulation.rain[y * width + x]; }
       assert.ok(sumRain > 0, `wind ${wind}: rain at row ${y}`);
-      offsets.push(sumX / sumRain);
+      rows.push(y); offsets.push(sumX / sumRain);
     }
-    const regionLean = (offsets.at(-1) - offsets[0]) / (32 + 6 * (offsets.length - 1) - 32);
+    const regionLean = (offsets.at(-1) - offsets[0]) / (rows.at(-1) - rows[0]);
+    // Trailing behind the cloud: rain further down sits further against the wind.
+    const expected = -rainLean(wind, 0.25);
+    assert.ok(Math.abs(regionLean - expected) < 0.2, `wind ${wind}: region leans ${regionLean.toFixed(3)} columns per row, expected ${expected.toFixed(3)}`);
     // The streaks' lean, over many frames.
     let streakLean = 0, frames = 0;
-    for (let k = 0; k < 30; k++) { simulation.fallClock = k * 1.3; const lean = leanOf(rainAlpha(layer, simulation), width, height); if (lean !== 0 || k === 0) { streakLean += lean; frames++; } }
+    for (let k = 0; k < 30; k++) { simulation.fallClock = k * 1.3; const lean = leanOf(rainAlpha(layer, simulation), width, height); streakLean += lean; frames++; }
     streakLean /= frames;
-    assert.ok(Math.abs(regionLean) < 0.05, `wind ${wind}: the rain region does not lean (${regionLean.toFixed(3)} columns per row)`);
-    assert.ok(Math.abs(streakLean - regionLean) < 0.1, `wind ${wind}: streaks lean ${streakLean.toFixed(3)}, region ${regionLean.toFixed(3)} columns per row`);
+    assert.ok(Math.abs(streakLean - regionLean) < 0.2, `wind ${wind}: streaks lean ${streakLean.toFixed(3)}, region ${regionLean.toFixed(3)} columns per row`);
+    if (Math.abs(wind) >= 0.1) assert.ok(Math.sign(streakLean) === Math.sign(regionLean) && Math.abs(streakLean) > 0.25, `wind ${wind}: the lean is not flat (${streakLean.toFixed(3)})`);
   }
 });
 
@@ -365,7 +380,7 @@ test("rain streaks fall, carried by the wind", () => {
   assert.ok(start.every((value, i) => value === moved[Math.floor(i / 96) * 96 + (i % 96 + 8) % 96]), "scrolled picture is the same picture, shifted");
 });
 
-test("rain streaks vary: short and long, uneven spacing, crisp pixels, a few faint opacity steps", () => {
+test("rain streaks vary: short and long, uneven spacing, crisp pixels, five faint opacity steps at most", () => {
   const seed = seeds(1)[0], options = { cloudiness: -1, wind: 0 };
   const simulation = downpour(96, 60, seed, options), layer = createRainLayer(seed);
   const runs = [], strips = new Array(12).fill(0), levels = new Set();
@@ -384,7 +399,7 @@ test("rain streaks vary: short and long, uneven spacing, crisp pixels, a few fai
   assert.ok(runs.length > 300, `${runs.length} streak runs`);
   assert.ok(runs[0] <= 2 && runs.at(-1) >= 12, `runs from ${runs[0]} to ${runs.at(-1)} px`);
   assert.ok(runs[runs.length >> 1] < sum(runs) / runs.length, "heavy tail: mean above median");
-  assert.ok(levels.size <= 3 && Math.max(...levels) <= 0.5, `opacity has at most three faint steps: ${[...levels].join(", ")}`);
+  assert.ok(levels.size <= 5 && Math.max(...levels) <= 0.4 + 1e-6, `opacity has at most five faint steps: ${[...levels].join(", ")}`);
   const stripMean = sum(strips) / 12, spread = Math.sqrt(sum(strips.map(c => (c - stripMean) ** 2)) / 12);
   assert.ok(spread / stripMean > 0.05, `clumped: strip counts ${strips.join(",")}`);
   // Heavier rain draws more of them.
