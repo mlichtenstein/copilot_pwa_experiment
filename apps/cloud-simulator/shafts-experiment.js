@@ -11,7 +11,9 @@ import { defaults, createScene, createLayer, buildLightMaps, renderShafts } from
 import { buildVisibility, renderVisibility, buildLayeredVisibility, visibilityDefaults } from "./visibility-model.js";
 
 const all = { ...defaults, ...visibilityDefaults };
-const slider = (key, min, max, step, help, more = {}) => ({ key, kind: "range", min, max, step, default: all[key], help, ...more });
+// affects: how far a change reaches (core/experiment.js). The cloud pictures are rebuilt when a
+// pattern seed changes; every other setting only changes how the shafts are lit.
+const slider = (key, min, max, step, help, more = {}) => ({ key, kind: "range", min, max, step, default: all[key], help, affects: "lighting", ...more });
 const polygons = params => params.strategy !== "geometric";
 const now = () => globalThis.performance?.now() ?? Date.now();
 // The scene follows the shared sun's full elevation range: below the horizon the disc is
@@ -35,7 +37,7 @@ const modeName = params => params.strategy === "layered" ? "layered visibility" 
 // New middlePattern and New farPattern buttons (named for their keys, like New seed) step one.
 const sceneSeeds = createScene().layers.map(layer => layer.seed);
 const patternKeys = ["nearPattern", "middlePattern", "farPattern"];
-const pattern = (key, i, name) => ({ key, kind: "seed", default: sceneSeeds[i], hidden: true, next: seed => seed + 1, buttonsIn: "pattern-buttons",
+const pattern = (key, i, name) => ({ key, kind: "seed", affects: "fields", default: sceneSeeds[i], hidden: true, next: seed => seed + 1, buttonsIn: "pattern-buttons",
   newLabel: `New ${key}`, newTitle: `Change the ${name} cloud picture` });
 
 export const shafts = {
@@ -47,7 +49,7 @@ export const shafts = {
   sun: true,
   frameInterval: 160,
   params: [
-    { key: "strategy", kind: "select", display: "radio", group: "Lighting strategy", default: "layered",
+    { key: "strategy", kind: "select", affects: "lighting", display: "radio", group: "Lighting strategy", default: "layered",
       help: "How lit air and shadows are drawn.",
       options: [["visibility", "Visibility polygons"], ["layered", "Layered visibility polygons"], ["geometric", "Geometric shadows"]] },
     slider("cloudOpacity", 0, 3, 0.1, "How strongly droplets block sunlight and the background; 0 makes clouds transparent."),
