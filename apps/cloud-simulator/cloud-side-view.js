@@ -28,10 +28,12 @@ export function mountCloudSideView({doc,root,canvas:front,instance,help,render})
   }
   buttons.forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===selected)));
   // Same palette and coordinate function as the renderer; low opacity keeps geometry readable.
-  for(let y=0;y<SIDE.height;y+=2)for(let x=0;x<SIDE.width;x+=2){
-   const color=spatialGradientColor(sidePoint((x+1)/SIDE.width,(y+1)/SIDE.height),data.params,sun).map(v=>Math.round(255*Math.pow(Math.max(0,Math.min(1,v)),1/2.2)));
-   ctx.fillStyle=`rgba(${color.join(',')},0.32)`;ctx.fillRect(plot.x+x*plot.width/SIDE.width,plot.y+y*plot.height/SIDE.height,2*plot.width/SIDE.width,2*plot.height/SIDE.height);
+  const fieldCanvas=make('canvas',{width:120,height:65}),fieldCtx=fieldCanvas.getContext('2d'),fieldImage=fieldCtx.createImageData(120,65);
+  for(let y=0;y<65;y++)for(let x=0;x<120;x++){
+   const color=spatialGradientColor(sidePoint((x+.5)/120,(y+.5)/65),data.params,sun).map(v=>Math.round(255*Math.pow(Math.max(0,Math.min(1,v)),1/2.2)));
+   fieldImage.data.set([...color,82],(y*120+x)*4);
   }
+  fieldCtx.putImageData(fieldImage,0,0);ctx.drawImage(fieldCanvas,plot.x,plot.y,plot.width,plot.height);
   ctx.font='14px sans-serif';ctx.fillStyle='#c1cce0';
   for(let z=0;z<=40;z+=10){line(ctx,[0,-4,z],[0,22,z],'#29394e');ctx.fillText(`${z}`,map([0,0,z])[0]-4,359);}
   for(let y=0;y<=20;y+=4){line(ctx,[0,y,-3],[0,y,49],'#29394e');ctx.fillText(`${y}`,12,map([0,y,0])[1]+4);}
@@ -48,16 +50,16 @@ export function mountCloudSideView({doc,root,canvas:front,instance,help,render})
   const camera=map(scene.camera.position);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(...camera,4,0,Math.PI*2);ctx.fill();ctx.fillText('camera',camera[0]+8,camera[1]-6);
   const marker=sideLightMarker(sun),moon=data.source==='moon',color=moon?'#d7e6ff':'#ffdc83';
   const dial=SOURCE_DIAL;
-  ctx.fillStyle='#111c30';ctx.fillRect(470,22,220,185);
+  ctx.fillStyle='#111c30';ctx.fillRect(470,22,220,155);
   ctx.strokeStyle='#7286a5';ctx.lineWidth=1;ctx.beginPath();ctx.arc(dial.x,dial.y,dial.radius,0,Math.PI*2);ctx.stroke();
   ctx.beginPath();ctx.moveTo(dial.x-82,dial.y);ctx.lineTo(dial.x+82,dial.y);ctx.stroke();
   ctx.fillStyle='#c1cce0';ctx.font='12px sans-serif';ctx.fillText('source direction · angular inset',478,37);ctx.fillText('horizon',638,128);
   if(!marker.outOfPlane){ctx.strokeStyle=color;ctx.beginPath();ctx.moveTo(dial.x,dial.y);ctx.lineTo(marker.x,marker.y);ctx.stroke();}
   ctx.fillStyle=color;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(marker.x,marker.y,10,0,Math.PI*2);ctx.fill();
   if(!moon)for(let a=0;a<Math.PI*2;a+=Math.PI/4){ctx.beginPath();ctx.moveTo(marker.x+14*Math.cos(a),marker.y+14*Math.sin(a));ctx.lineTo(marker.x+19*Math.cos(a),marker.y+19*Math.sin(a));ctx.stroke();}
-  ctx.font='bold 14px sans-serif';const labelX=480,labelY=197;
+  ctx.font='bold 14px sans-serif';const labelX=480,labelY=168;
   ctx.fillText(`${moon?'Moon':'Sun'} · ∞`,labelX,labelY);
-  if(marker.outOfPlane){ctx.font='13px sans-serif';ctx.fillText(`out of plane (${marker.towardX?'+':'−'}X)`,570,197);}
+  if(marker.outOfPlane){ctx.font='13px sans-serif';ctx.fillText(`out of plane (${marker.towardX?'+':'−'}X)`,570,168);}
   ctx.font='14px sans-serif';ctx.fillStyle=color;ctx.fillText(`elevation ${sun.elevation.toFixed(1)}° · azimuth ${sun.azimuth.toFixed(1)}°`,170,17);
   canvas.setAttribute('aria-label',`Side elevation. ${moon?'Moon':'Sun'} at infinity: elevation ${sun.elevation.toFixed(1)} degrees, azimuth ${sun.azimuth.toFixed(1)} degrees. Rotating solar color field at X=0. Source shown on a separate angular inset. Selected ${selected}: ${cloud.shapeName}.`);
   instance.highlightCloud?.(selected);
