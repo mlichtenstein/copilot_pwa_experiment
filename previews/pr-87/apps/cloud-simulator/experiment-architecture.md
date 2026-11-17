@@ -1,8 +1,9 @@
-<!-- Purpose: Define the next-round experiment contract and its first test case.
-     Consumers: experiment authors and reviewers. Dependencies: experiment-session.js, lightning-experiment.js, core/host.js and lightning-model.js. -->
+<!-- Purpose: Point to the shared experiment contract (core/experiment.js), summarise its rules, and record its first test case.
+     Consumers: experiment authors and reviewers. Dependencies: core/experiment.js (the contract), core/host.js, core/sun-path.js, core/moon-path.js,
+     docs/cloud-simulator-combined.md, experiment-session.js, lightning-experiment.js and lightning-model.js. -->
 # A scene module and a browser host
 
-The first library explored effects with independent page controllers. Round two tests a small module contract, beginning with Lightning. This is separate from #68's integration/player work: existing experiments are not migrated in this PR.
+The first library explored effects with independent page controllers. Round two tested a small module contract, beginning with Lightning. Every experiment now runs on the shared core host under one contract, below.
 
 ## Design principles
 
@@ -14,19 +15,14 @@ The first library explored effects with independent page controllers. Round two 
 
 ## Contract
 
-| Member | Responsibility |
-| --- | --- |
-| `id`, `title`, `width`, `height`, `dt` | Scene identity, native image size and fixed simulation step in seconds |
-| `parameters[]` | Numeric parameter schema with nearby control descriptions |
-| `create({seed, params, start}) → state` | Reproducible JSON-serializable initial scene |
-| `step(state, dt, params)` | Advance scene dynamics; no DOM or rendering |
-| `render(state, params) → Uint8ClampedArray` | Read-only RGBA, exactly width × height × 4 bytes |
-| `starts[]`, `defaultStart` (optional) | Named paused starting points; lightning-experiment.js turns them into buttons in the experiment's own section, each preparing a fresh setup on a new seed |
-| `actions[]` (optional) | Named scene commands; description, `run(state,params)` and optional explicit playback on click |
+Every experiment, Lightning included, now follows one contract: the experiment module and instance described at the top of [`core/experiment.js`](core/experiment.js), which `validateExperiment` and `validateInstance` check and [`core/host.js`](core/host.js) runs. That comment is the reference; this file does not repeat it. Its words (fields, rules, render passes, lights, evolve then draw) are defined in [the cloud simulator common language](../../docs/cloud-simulator-combined.md) (added in #80). In short:
 
-`experiment-session.js` is a DOM-free coordinator. Lightning first had its own browser host (`experiment-host.js`); it now runs on the shared core host (`core/host.js`) like every other experiment, so it gets the common panel (Play, Step, Randomize, Drift, New seed), the rating bar and `?p=` links. `lightning-experiment.js` is the adapter: it turns `parameters[]` into core range params, keeps the seed and starting mode as hidden params, maps `starts[]` to the experiment's own buttons, drives the session from the shared clock (Play advances it in fixed `dt` steps; Step is one step) and converts old `{version: 1, seed, params, start}` ratings and links (`migrate`). `lightning.js` only mounts it. Session tests include a tiny counter-field scene with another resolution, schema and action. This tests decoupling, not broad physics reuse.
+- **The frame carries the sky lights.** `step(dt, frame)` and `render(frame)` get `frame = { time, sun, moon }`, all on the shared clock (`core/sun-path.js`, `core/moon-path.js`). Experiments light from these and never work out their own sun or moon.
+- **Scene lights report their brightness.** An instance that draws its own light (a lightning flash) returns it from `selfLight()`, so the host's night step spares it.
+- **Evolve, then draw.** `step` is the only place the simulation changes or draws random numbers, from the seed; `render` reads state and the frame. The same seed and steps give the same picture.
+- **Params are declared once.** The params schema drives controls, Randomize, Drift, ratings and `?p=` links. A param may declare `affects` (`fields`, `lighting` or `draw`), and the experiment's caches follow `paramsAffecting` instead of hand-kept key lists.
 
-Ratings and `?p=` links now store the core host's flat params (the ten sliders, `seed`, `start`, Drift); the session's `getParams`/`applyParams` shape (`{version: 1, seed, params, start}`) is still accepted when loading. Presets store the internal seed, parameters and starting mode and restart that mode; they do not capture the exact current animation frame. Full-state continuation is verified at model level but has no save/load UI yet. Rating backend availability is independent of scene playback.
+Lightning keeps a smaller scene/session contract inside its adapter: `lightning-model.js` provides `create({seed, params, start}) → state`, `step(state, dt, params)`, a read-only `render(state, params)`, a `parameters[]` schema and optional `starts[]`/`actions[]`. `experiment-session.js` is the DOM-free coordinator, and `lightning-experiment.js` adapts it to the core contract: parameters become core range params, the seed and starting mode are hidden params, starts become buttons in the experiment's own section, the session advances in fixed `dt` steps on the shared clock, and the flash is reported through `selfLight()`. Old `{version: 1, seed, params, start}` ratings and links still load (`migrate`). Presets restart the starting mode; they do not capture the exact animation frame. Full-state continuation is verified at model level but has no save/load UI yet.
 
 ### Named weather states
 
@@ -45,4 +41,4 @@ Charge is a normalized artistic potential proxy; no Poisson solve, charge conser
 - Shared composition across different effect modules; Lightning currently owns its three internal depth passes.
 - State migrations/versioning beyond parameter preset version 1.
 - A richer parameter schema (enums, vectors, multiple resolutions) when a second real effect needs it.
-- Shared lighting inputs and stable composition with the older Horizon/Shafts studies.
+- Stable composition with the older Horizon/Shafts studies. Shared sky lights (`frame.sun`, `frame.moon`) are in place.
