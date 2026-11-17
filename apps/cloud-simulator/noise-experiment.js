@@ -8,14 +8,14 @@
  * Dependencies: noise-model.js (the weather and its rendering); the contract in core/experiment.js.
  */
 import { defaults, createWeather, step, sampleFields, renderWeather, airborneRain, pooledRain,
-  createRainLayer, updateRainLayer, startCloud } from "./noise-model.js";
+  createRainLayer, startCloud } from "./noise-model.js";
 import { sunLight } from "./core/sun-light.js";
 
 // The model ticks 20 times a clock second while playing.
 export const TICKS_PER_SECOND = 20;
 const slider = (key, min, max, stepSize, help, group) => ({ key, kind: "range", min, max, step: stepSize, default: defaults[key], help, group });
 const legends = {
-  sunset: "Sunset: clouds lit toward the sun's side (peach while it is low, whiter when high) and grey-violet where thick; smooth grey curtain under a cloud base and thin streaks = rain falling from a raining cloud; blue floor = puddles.",
+  sunset: "Sunset: clouds lit toward the sun's side (peach while it is low, whiter when high) and grey-violet where thick; smooth grey curtain under a cloud base and thin pale streaks = rain falling from a raining cloud; blue floor = puddles.",
   water: "Cloud and rain: white = stored cloud water, gold tint = dense, lasting cloud that is raining, pale blue = rain in the air.",
   relative: "Cloud forcing: relative humidity × the cloud-layer band; brighter = closer to forming, orange = cloud condenses here now.",
   humidity: "Humidity: dark = dry, blue = moist.",
@@ -72,7 +72,7 @@ export const noise = {
         startCloud(instance.simulation);
         carry = 0;
       },
-      tick() { const rules = rulesOf(current); step(instance.simulation, rules); updateRainLayer(instance.rain, instance.simulation, rules); },
+      tick() { const rules = rulesOf(current); step(instance.simulation, rules); },
       update(next, { playing = false } = {}) {
         const previous = current; current = next;
         if (next.seed !== previous.seed) return instance.restart();
@@ -89,7 +89,8 @@ export const noise = {
         while (carry >= 1 - 1e-9) { instance.tick(); carry -= 1; changed = true; }
         return changed;
       },
-      render: frame => renderWeather(instance.simulation, current.view, rulesOf(current), instance.rain, sunLight(frame.sun)),
+      // `carry` is how far into the next tick we are, so streaks glide between the 20 Hz ticks.
+      render: frame => renderWeather(instance.simulation, current.view, rulesOf(current), instance.rain, sunLight(frame.sun), { phase: carry }),
       dispose() {}
     };
     instance.restart();
