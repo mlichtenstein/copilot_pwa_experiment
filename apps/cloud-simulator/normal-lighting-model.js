@@ -27,7 +27,7 @@ export function shadeCloud(asset,params={}){
   const {azimuth=-40,elevation=25,model="lambert",wrap=.4,heightInfluence=1,broadNormalInfluence=.35,detailShadingStrength=1,gradientStrength=1,diffusionAmount=.25,diffusionDistance=3}=params;
   const moon=params.lightSource==='moon',brightness=moon?(params.nightBrightness??.45):1,saturation=moon?(params.nightSaturation??.45):1;
   const sunlight=clamp((elevation+6)/10)*brightness;
-  const a=azimuth*Math.PI/180,e=elevation*Math.PI/180,l=[Math.sin(a)*Math.cos(e),Math.sin(e),Math.cos(a)*Math.cos(e)];
+  const a=azimuth*Math.PI/180,e=elevation*Math.PI/180,l=[Math.sin(a)*Math.cos(e),Math.sin(e),-Math.cos(a)*Math.cos(e)];
   const fields={colorCoordinate:new Float32Array(count),incoming:new Float32Array(count*3),facing:new Float32Array(count),visibility:new Float32Array(count),direct:new Float32Array(count*3),diffusion:new Float32Array(count*3),sky:new Float32Array(count*3),ambient:new Float32Array(count*3),ambientPass:new Float32Array(count*3),directPass:new Float32Array(count*3),directAdded:new Float32Array(count*3),diffusionAdded:new Float32Array(count*3),scene:new Float32Array(count*3)};
   for(let i=0;i<count;i++){
     const x=i%width,y=Math.floor(i/width);

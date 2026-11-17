@@ -1,10 +1,11 @@
 /* Purpose: Exercise shared-field composition, deterministic dynamics, controls and snapshot continuation.
- * Consumers: Node test runner. Dependencies: weather modules, core host/fake DOM, node:test/assert/crypto. */
+ * Consumers: Node test runner. Dependencies: weather modules, core moon path, core host/fake DOM, node:test/assert/crypto. */
 import test from "node:test";import assert from "node:assert/strict";import {randomInt} from "node:crypto";
 import {defaults,createWeather,stepWeather,refreshFields,weatherSun} from "./weather-fields.js";
-import {buildWeatherLighting,renderWeather,projectionLayers,renderOrder,interpolateRGB,weatherMoon} from "./weather-model.js";
+import {buildWeatherLighting,renderWeather,projectionLayers,renderOrder,interpolateRGB,flashPower,weatherSelfLight} from "./weather-model.js";
+import {moonAtPhase} from "./core/moon-path.js";
 import {weather} from "./weather-experiment.js";
-import {defaultParams,validateExperiment} from "./core/experiment.js";
+import {defaultParams,validateExperiment,paramsAffecting} from "./core/experiment.js";
 import {mountExperiment} from "./core/host.js";
 import {fakeDocument,fakeCanvas,manualFrames,descendants} from "./core/fake-dom.js";
 const seeds=Array.from({length:3},()=>randomInt(0,4294967296));
@@ -89,14 +90,14 @@ test("lighting modes preserve fields and share sharp output-resolution visibilit
 
 test("moon ellipse covers most night, with a dark evening and sunrise overlap",async()=>{
   const {sunAtPhase,phaseForTimeOfDay}=await import("./core/sun-path.js");
-  const at=hour=>{const phase=phaseForTimeOfDay(hour);return {moon:weatherMoon(phase),sun:sunAtPhase(phase)};};
+  const at=hour=>{const phase=phaseForTimeOfDay(hour);return {moon:moonAtPhase(phase),sun:sunAtPhase(phase)};};
   assert.ok(at(19).sun.elevation<0&&at(19).moon.elevation<0);
   for(const hour of [20,22,0,2,4,6])assert.ok(at(hour).moon.elevation>0);
   assert.ok(at(7).sun.elevation>0&&at(7).moon.elevation>0);
   assert.ok(at(12).moon.elevation<0);
-  assert.ok(Math.abs(weatherMoon(.57).azimuth+22)<1e-10);
-  assert.ok(Math.abs(weatherMoon(.82).elevation-24)<1e-10);
-  assert.ok(Math.abs(weatherMoon(.57).azimuth-weatherMoon(1.57).azimuth)<1e-10);
+  assert.ok(Math.abs(moonAtPhase(.57).azimuth+22)<1e-10);
+  assert.ok(Math.abs(moonAtPhase(.82).elevation-24)<1e-10);
+  assert.ok(Math.abs(moonAtPhase(.57).azimuth-moonAtPhase(1.57).azimuth)<1e-10);
 });
 test("moon survives either optical grid, is part of sky, and is occluded by cloud and terrain",async()=>{
   const {sunAtPhase}=await import("./core/sun-path.js");
@@ -179,4 +180,33 @@ test("terrain moonlight is local and favors slopes facing the moon",async()=>{
   const right={...maps,moonDirection:[.4,.4,100]},left={...maps,moonDirection:[-.4,.4,100]};
   const a=moonTerrainHighlight(layer,right,.5,terrainY(layer,.5)),b=moonTerrainHighlight(layer,left,.5,terrainY(layer,.5));
   assert.ok(slope>0?a<b:a>b,"ridge normal favors the light-facing slope");
+});
+
+test("the moon is a sky light from the frame: a different frame.moon moves it, the default matches the shared moon",async()=>{
+  const {sunAtPhase}=await import("./core/sun-path.js");const {moonAt,moonAtPhase}=await import("./core/moon-path.js");
+  const p={...defaultParams(weather),coverage:0,rainAmount:0,storminess:0},state=createWeather(7,p),sun=sunAtPhase(.82);
+  const draw=moon=>Buffer.from(renderWeather(state,p,buildWeatherLighting(state,p,sun,64,40,moon),64,40)).toString("base64");
+  assert.equal(draw(undefined),draw(moonAtPhase(.82)));
+  assert.notEqual(draw(moonAtPhase(.82)),draw({phase:.82,azimuth:15,elevation:12}));
+  const instance=weather.create({width:64,height:40,params:p}),time=40;
+  assert.deepEqual(instance.render({time,sun:sunAtPhase(.82),moon:moonAt(time)}).length,64*40*4);
+});
+
+test("Weather reports its lightning as a scene light, so night dimming spares a flash",()=>{
+  const p={...defaultParams(weather),storminess:1},state=createWeather(3,p);
+  for(const layer of state.layers)layer.lightning.phase="quiet";
+  assert.equal(weatherSelfLight(state,p),0);
+  state.layers[0].lightning.phase="flash";state.layers[0].lightning.age=0;
+  assert.ok(Math.abs(flashPower(state.layers[0],p)-.65)<1e-12);
+  assert.equal(weatherSelfLight(state,p),1);
+  assert.equal(weatherSelfLight(state,{...p,[state.layers[0].name]:false}),0,"a hidden layer does not light the scene");
+  assert.equal(weatherSelfLight(state,{...p,storminess:0}),0);
+  state.layers[0].lightning.phase="leader";assert.ok(Math.abs(weatherSelfLight(state,p)-.18)<1e-12);
+  const instance=weather.create({width:32,height:20,params:p});assert.equal(typeof instance.selfLight(),"number");
+});
+
+test("Weather's caches follow its params' affects declarations, the same keys as the old hand-kept lists",()=>{
+  assert.deepEqual(paramsAffecting(weather,"fields"),["cloudAltitude","altitudeSpread","coverage","textureMix"]);
+  const legacy=["lightingMode","cloudAltitude","altitudeSpread","coverage","textureMix","airDensity","aerosol","cloudOpacity","cloudSharpness","haze","shaftStrength","edgeFeather","near","middle","far"];
+  assert.deepEqual(new Set(paramsAffecting(weather,"fields","lighting")),new Set(legacy));
 });
