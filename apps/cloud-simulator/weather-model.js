@@ -1,7 +1,7 @@
 /* Purpose: Interpret shared weather fields as atmospheric colors, layered visibility, and explicit render passes.
  * Consumers: weather-experiment.js, weather-inspection.js and weather tests.
  * Dependencies: weather-fields.js, atmosphere/visibility/shafts models, lightning terrain helpers, and the shared sun clock and moon (core/sun-path.js, core/moon-path.js). */
-import {SCALE,CAMERA_LIFT,clamp,enabled,cloudAltitude,terrainY,weatherSun} from "./weather-fields.js";
+import {SCALE,CAMERA_LIFT,clamp,enabled,cloudAltitude,terrainY} from "./weather-fields.js";
 import {skyRadiance,sunDirection,pointAtAltitude,directSunlight,viewTransmission,EARTH_RADIUS,CAMERA_HEIGHT,earthBlocks,dot} from "./atmosphere-model.js";
 import {buildLayeredVisibility,combinedCoverage} from "./visibility-model.js";
 import {sampleCloud} from "./shafts-model.js";
@@ -52,8 +52,10 @@ export function interpolateRGB(grid,width,height,u,v,key){
 }
 export const lightingIndex=(maps,u,v)=>Math.min(maps.height-1,Math.floor(v*maps.height))*maps.width+Math.min(maps.width-1,Math.floor(u*maps.width));
 // The moon is a sky light from the frame (frame.moon); without one, the shared moon at the sun's phase.
-export function buildWeatherLighting(state,p,sunOverride,width=160,height=100,moonOverride){
-  const sun=sunOverride??weatherSun(state,p),direction=sunDirection(sun.elevation,sun.azimuth),layers=projectionLayers(state,p),full=p.lightingMode==="full";
+// The sun is the frame's (frame.sun, from core/sun-path.js): Weather has no sun of its own.
+export function buildWeatherLighting(state,p,sun,width=160,height=100,moonOverride){
+  if(!sun)throw new Error("buildWeatherLighting needs the sun from the frame");
+  const direction=sunDirection(sun.elevation,sun.azimuth),layers=projectionLayers(state,p),full=p.lightingMode==="full";
   const skyWidth=full?width:32,skyHeight=full?height:20,colorWidth=full?width:12,colorHeight=full?height:8;
   const {lightingMode,...visibilityParams}=p;
   const options={...visibilityParams,sunElevation:Math.atan(Math.tan(sun.elevation*Math.PI/180)-CAMERA_LIFT*Math.cos(sun.azimuth*Math.PI/180))*180/Math.PI,sunAzimuth:sun.azimuth,sourceRadius:6};

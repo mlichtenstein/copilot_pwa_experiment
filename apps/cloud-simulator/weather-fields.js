@@ -6,7 +6,7 @@ import {perlin3} from "./valley-noise.js";
 import {createLightning,stepLightning,parameters as boltParameters} from "./lightning-model.js";
 import {createTerrainObjects} from "./lightning-terrain.js";
 export const SCALE=Math.tan(58*Math.PI/360),CAMERA_LIFT=Math.tan(8*Math.PI/180),WIDTH=160,HEIGHT=100;
-export const defaults={lightingMode:"interpolated",sunElevation:1.5,sunAzimuth:-18,sunSpeed:.4,cloudAltitude:5,altitudeSpread:1,coverage:1.2,textureMix:.7,wind:.035,formationSpeed:.2,cloudOpacity:2,cloudSharpness:4,airDensity:1,aerosol:.2,exposure:2,haze:.5,shaftStrength:.6,edgeFeather:4,rainAmount:.45,storminess:.4,chargeBias:.2,near:true,middle:true,far:true,view:"scene",inspectLayer:"near",seed:42};
+export const defaults={lightingMode:"interpolated",cloudAltitude:5,altitudeSpread:1,coverage:1.2,textureMix:.7,wind:.035,formationSpeed:.2,cloudOpacity:2,cloudSharpness:4,airDensity:1,aerosol:.2,exposure:2,haze:.5,shaftStrength:.6,edgeFeather:4,rainAmount:.45,storminess:.4,chargeBias:.2,near:true,middle:true,far:true,view:"scene",inspectLayer:"near",seed:42};
 export const clamp=v=>Math.max(0,Math.min(1,v));
 export const enabled=(layer,p)=>p[layer.name]!==false;
 export function cloudAltitude(layer,p){return Math.max(.25,p.cloudAltitude+[-2.3,-.6,2.8][layer.index]*p.altitudeSpread);}
@@ -14,7 +14,6 @@ export function terrainY(layer,x){
   const ridge=[.8,2.6,6][layer.index]*(.55+.27*Math.sin(x*9+layer.index*1.7)+.18*Math.sin(x*21+layer.index));
   return .5-((ridge-.15-layer.distance**2/(2*6371))/layer.distance-CAMERA_LIFT)/(2*SCALE);
 }
-export function weatherSun(state,p){const phase=state.time*p.sunSpeed*.02;return {elevation:p.sunElevation+5*(Math.cos(phase)-1),azimuth:p.sunAzimuth+20*Math.sin(phase*.5)};}
 export function boltSettings(p){return {...Object.fromEntries(boltParameters.map(v=>[v.key,v.default])),chargeRate:p.storminess,chargeBias:p.chargeBias};}
 function sampleBitmap(bitmap,u,v){if(v<0||v>=1)return 0;u=((u%1)+1)%1;return bitmap.alpha[Math.floor(v*bitmap.height)*bitmap.width+Math.floor(u*bitmap.width)]/255;}
 // One canonical supplier sample, also used by the read-only inspector.
