@@ -89,7 +89,8 @@ export const noise = {
         while (carry >= 1 - 1e-9) { instance.tick(); carry -= 1; changed = true; }
         return changed;
       },
-      render: frame => renderWeather(instance.simulation, current.view, rulesOf(current), instance.rain, sunLight(frame.sun)),
+      // `carry` is how far into the next tick we are, so streaks glide between the 20 Hz ticks.
+      render: frame => renderWeather(instance.simulation, current.view, rulesOf(current), instance.rain, sunLight(frame.sun), { phase: carry }),
       dispose() {}
     };
     instance.restart();
