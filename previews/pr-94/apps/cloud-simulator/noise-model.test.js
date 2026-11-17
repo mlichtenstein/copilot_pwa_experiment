@@ -13,7 +13,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createNoise3, fractal, createWeather, step, sampleFields, renderWeather, airborneRain,
   pooledRain, defaults, RULES, FIELDS, layerBand, altitudeOf, createRainLayer, hash, rainLean,
-  rainAlpha, curtainAlpha, cloudBases, formRain, textureShape, condense, dissipation, startCloud,
+  rainAlpha, STREAK, curtainAlpha, cloudBases, formRain, textureShape, condense, dissipation, startCloud,
   exposure } from "./noise-model.js";
 import { testSeeds } from "./core/test-seeds.js";
 
@@ -297,6 +297,73 @@ function downpour(width, height, seed, options) {
   return simulation;
 }
 
+// One lane of one plane, drawn over rain heavy everywhere, so the picture is a single streak.
+function lone(plane, seed, wind, fall) {
+  const simulation = createWeather({ width: 128, height: 96, seed });
+  simulation.rain.fill(0.05); simulation.rainLean = rainLean(wind, fall);
+  const layer = { seed, clump: () => 0.6 }, planes = STREAK.planes.map((p, k) => ({ ...p, lanes: k === plane ? 1 : 0 }));
+  return { simulation, layer, planes, wind, fall,
+    // The picture `frames / perTick` ticks after the start: the state moves on only at ticks, as
+    // it does in the app, and `phase` says how far into the next tick the frame is.
+    draw(frames, perTick) {
+      const ticks = Math.floor(frames / perTick), phase = (frames % perTick) / perTick;
+      simulation.tick = ticks; simulation.scroll = wind * ticks; simulation.fallClock = fall * ticks;
+      return rainAlpha(layer, simulation, { phase, fall, wind, planes });
+    } };
+}
+const centreOf = alpha => { let mass = 0, row = 0; for (let i = 0; i < alpha.length; i++) { mass += alpha[i]; row += alpha[i] * Math.floor(i / 128); } return { mass, row: mass ? row / mass : NaN }; };
+
+test("a streak falls the same distance on every frame, however slow, at 3 frames to a tick or an uneven 2, 4", () => {
+  const seed = 1; // an isolated streak must be one the rain lets show; hashes are fixed, so this one always does
+  for (const [plane, fall] of [[0, 0.25], [1, 0.25], [1, 0.1], [2, 0.5]]) {
+    const scene = lone(plane, seed, 0, fall);
+    for (const cadence of [[3], [2, 4]]) {
+      // Frame k's place in time: every `cadence` pattern step is one tick, frames in between get phases.
+      let frames = [], ticks = 0;
+      for (let tick = 0; tick < 300; tick++) { const per = cadence[tick % cadence.length]; for (let f = 0; f < per; f++) frames.push(tick + f / per); }
+      const rows = frames.map(time => {
+        scene.simulation.tick = Math.floor(time); scene.simulation.scroll = 0; scene.simulation.fallClock = fall * Math.floor(time);
+        return centreOf(rainAlpha(scene.layer, scene.simulation, { phase: time % 1, fall, planes: scene.planes }));
+      });
+      const inside = k => rows[k].mass > 0 && rows[k].row > 26 && rows[k].row < 68, moves = [];
+      for (let k = 1; k < rows.length; k++) if (inside(k) && inside(k - 1)) moves.push({ index: k, dt: frames[k] - frames[k - 1], rows: rows[k].row - rows[k - 1].row });
+      assert.ok(moves.length > 40, `plane ${plane}: ${moves.length} steps`);
+      // Steady: a frame's fall is the last frame's speed times the time since then, to within a
+      // tenth of a row (the old drawing hopped 0, 1 or 2 rows, a whole row off).
+      let worst = 0;
+      for (let k = 1; k < moves.length; k++) if (moves[k].index === moves[k - 1].index + 1)
+        worst = Math.max(worst, Math.abs(moves[k].rows - moves[k - 1].rows / moves[k - 1].dt * moves[k].dt));
+      assert.ok(worst < 0.1, `plane ${plane}, fall ${fall}, cadence ${cadence}: a frame off by up to ${worst.toFixed(3)} rows`);
+    }
+  }
+});
+
+test("a streak does not wobble: its rows keep their columns while it falls and the wind carries it", () => {
+  const seed = 1;
+  for (const wind of [0.4, -0.4, 0.15]) for (const plane of [0, 1, 2]) {
+    const scene = lone(plane, seed, wind, 0.25), columns = alpha => { const at = new Array(96).fill(null); for (let y = 0; y < 96; y++) { let best = 0; for (let x = 0; x < 128; x++) if (alpha[y * 128 + x] > best) { best = alpha[y * 128 + x]; at[y] = x; } } return at; };
+    let previous = null, worst = 0, compared = 0;
+    for (let frame = 0; frame < 240; frame++) {
+      const now = columns(scene.draw(frame, 3));
+      if (previous) {
+        // How each row moved sideways since the last frame, less the hop the whole streak made.
+        const moves = [];
+        for (let y = 0; y < 96; y++) if (now[y] !== null && previous[y] !== null) moves.push(((now[y] - previous[y] + 192) % 128) - 64);
+        if (moves.length >= 3) { const middle = moves.slice().sort((a, b) => a - b)[moves.length >> 1]; worst = Math.max(worst, ...moves.map(m => Math.abs(m - middle))); compared++; }
+      }
+      previous = now;
+    }
+    assert.ok(compared > 50 && worst === 0, `wind ${wind}, plane ${plane}: a row moved ${worst} columns against the rest`);
+  }
+});
+
+test("a frame part-way into a tick is the picture that fraction of a tick later", () => {
+  const seed = seeds(1)[0], options = { cloudiness: -1, wind: 0, fallSpeed: 0.3 }, simulation = downpour(96, 60, seed, options), layer = createRainLayer(seed);
+  const ahead = JSON.parse(JSON.stringify(simulation)); ahead.fallClock = simulation.fallClock + 0.3 * 0.5;
+  assert.deepEqual(rainAlpha(layer, simulation, { phase: 0.5, fall: 0.3 }), rainAlpha(layer, { ...simulation, fallClock: ahead.fallClock, tick: simulation.tick + 0.5 }));
+  assert.deepEqual(rainAlpha(layer, simulation, { phase: 0, fall: 0.3 }), rainAlpha(layer, simulation), "phase 0 draws the tick itself");
+});
+
 test("rain streaks follow the falling rain, from the cloud base to the floor, and vanish once the rain has passed", () => {
   const seed = seeds(1)[0], options = { cloudiness: -1, wind: 0.2, fallSpeed: 0.25 };
   const simulation = createWeather({ width: 48, height: 40, seed }), layer = createRainLayer(seed);
@@ -380,7 +447,7 @@ test("rain streaks fall, carried by the wind", () => {
   assert.ok(start.every((value, i) => value === moved[Math.floor(i / 96) * 96 + (i % 96 + 8) % 96]), "scrolled picture is the same picture, shifted");
 });
 
-test("rain streaks vary: short and long, uneven spacing, crisp pixels, five faint opacity steps at most", () => {
+test("rain streaks vary: short and long, uneven spacing, crisp pixels, always faint", () => {
   const seed = seeds(1)[0], options = { cloudiness: -1, wind: 0 };
   const simulation = downpour(96, 60, seed, options), layer = createRainLayer(seed);
   const runs = [], strips = new Array(12).fill(0), levels = new Set();
@@ -391,7 +458,7 @@ test("rain streaks vary: short and long, uneven spacing, crisp pixels, five fain
       let run = 0;
       for (let y = 0; y <= 60; y++) {
         const value = y < 60 ? alpha[y * 96 + x] : 0;
-        if (value > 0) { run++; levels.add(value); strips[Math.floor(x / 8)]++; } else if (run) { runs.push(run); run = 0; }
+        if (value > 0) { run++; levels.add(value); if (value > 0.04) strips[Math.floor(x / 8)]++; } else if (run) { runs.push(run); run = 0; }
       }
     }
   }
@@ -399,13 +466,14 @@ test("rain streaks vary: short and long, uneven spacing, crisp pixels, five fain
   assert.ok(runs.length > 300, `${runs.length} streak runs`);
   assert.ok(runs[0] <= 2 && runs.at(-1) >= 12, `runs from ${runs[0]} to ${runs.at(-1)} px`);
   assert.ok(runs[runs.length >> 1] < sum(runs) / runs.length, "heavy tail: mean above median");
-  assert.ok(levels.size <= 5 && Math.max(...levels) <= 0.4 + 1e-6, `opacity has at most five faint steps: ${[...levels].join(", ")}`);
+  const strongest = [...levels].reduce((a, b) => Math.max(a, b), 0);
+  assert.ok(strongest <= 0.4 + 1e-6, `streaks are faint: highest ${strongest.toFixed(2)}`);
   const stripMean = sum(strips) / 12, spread = Math.sqrt(sum(strips.map(c => (c - stripMean) ** 2)) / 12);
   assert.ok(spread / stripMean > 0.05, `clumped: strip counts ${strips.join(",")}`);
   // Heavier rain draws more of them.
   const heavy = downpour(96, 60, seed, options), light = downpour(96, 60, seed, options);
   light.rain = light.rain.map(value => value * 0.025);
-  const count = state => { let total = 0; for (let k = 0; k < 10; k++) { state.fallClock = k * 3; total += rainAlpha(layer, state, options).filter(value => value > 0).length; } return total; };
+  const count = state => { let total = 0; for (let k = 0; k < 10; k++) { state.fallClock = k * 3; total += rainAlpha(layer, state, options).filter(value => value > 0.02).length; } return total; };
   assert.ok(count(heavy) > 3 * count(light), "heavy rain shows more streaks than thin rain");
 });
 
