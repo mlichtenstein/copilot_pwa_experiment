@@ -7,7 +7,9 @@
  */
 import { defaults, renderHorizon, cloudCenters } from "./horizon-model.js";
 
-const slider = (key, min, max, step, help) => ({ key, kind: "range", min, max, step, default: defaults[key], help });
+// affects: how far a change reaches (core/experiment.js). Geometry rebuilds the layers' places,
+// the air settings relight them, and exposure only redraws.
+const slider = (key, min, max, step, help, affects) => ({ key, kind: "range", min, max, step, default: defaults[key], help, affects });
 const now = () => globalThis.performance?.now() ?? Date.now();
 // The model's settings for these params and this frame's sun.
 const settings = (params, frame) => ({ ...params, sunElevation: frame.sun.elevation, sunAzimuth: frame.sun.azimuth });
@@ -22,12 +24,12 @@ export const horizon = {
   // A frame takes tens of milliseconds, so redraw five times a second while the sun moves.
   frameInterval: 200,
   params: [
-    slider("cloudAltitude", 0.3, 8, 0.1, "Central altitude of the cloud layers above sea level, km."),
-    slider("altitudeSpread", 0, 5, 0.1, "Vertical separation of cloud centers and thickness of their bitmap bands, km."),
-    slider("distanceScale", 0.5, 2, 0.1, "Multiplier for the distances of all six scene layers."),
-    slider("airDensity", 0.2, 2, 0.1, "Atmospheric scattering/extinction multiplier."),
-    slider("aerosol", 0, 1, 0.05, "Low-altitude haze strength; approximately neutral extinction."),
-    slider("exposure", 0.5, 4, 0.1, "Camera exposure multiplier before tone mapping.")
+    slider("cloudAltitude", 0.3, 8, 0.1, "Central altitude of the cloud layers above sea level, km.", "fields"),
+    slider("altitudeSpread", 0, 5, 0.1, "Vertical separation of cloud centers and thickness of their bitmap bands, km.", "fields"),
+    slider("distanceScale", 0.5, 2, 0.1, "Multiplier for the distances of all six scene layers.", "fields"),
+    slider("airDensity", 0.2, 2, 0.1, "Atmospheric scattering/extinction multiplier.", "lighting"),
+    slider("aerosol", 0, 1, 0.05, "Low-altitude haze strength; approximately neutral extinction.", "lighting"),
+    slider("exposure", 0.5, 4, 0.1, "Camera exposure multiplier before tone mapping.", "draw")
   ],
   readouts: {
     "cloud-status": (params, frame) => cloudCenters(settings(params, frame)).map((layer, i) =>

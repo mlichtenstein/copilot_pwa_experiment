@@ -79,8 +79,9 @@
 
 // Every kind takes { key, help?, group?, enabled?(params), hidden?, wide?, randomize?, affects? }:
 // affects says what a change to it invalidates (AFFECTS): "fields" (rebuild derived fields,
-// then lighting), "lighting" (rebuild lighting) or "draw" (only redraw); leave it out when the
-// experiment does not cache by it. paramsAffecting lists the keys for a level, so caches
+// then lighting), "lighting" (rebuild lighting) or "draw" (only redraw: a setting that just
+// steers the ticks that follow counts here too). Seed and size params leave it out, since
+// changing them rebuilds the instance. paramsAffecting lists the keys for a level, so caches
 // follow the declarations instead of hand-kept lists;
 // randomize: false leaves it out of the common Randomize (a playback speed, a start mode, or an inspection/display setting);
 // wide spans the

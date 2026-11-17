@@ -85,7 +85,7 @@ On every animation frame the host runs two phases: evolve, then maybe draw.
 ## Decisions
 
 - **Field and rule declarations stay inside each experiment** until two experiments share them. Only then do they move into a shared module.
-- **Params declare what they invalidate**: the fields to rebuild, lighting, or only the draw, so caching can be generic. This will need an optional param member in `core/experiment.js`. That change belongs in a later code PR, not this doc.
+- **Params declare what they invalidate**: the fields to rebuild, lighting, or only the draw, so caching can be generic. This is the optional `affects` member in `core/experiment.js` (`fields`, `lighting` or `draw`). Weather and Noise use it to decide what to rebuild; the other experiments declare it for when they cache.
 - **No cross-layer dynamics for now.** This is a deliberate constraint. Light crossing layers in rendering is still allowed, and that includes a flash lighting a layer behind it.
 
 ## How existing experiments map onto this

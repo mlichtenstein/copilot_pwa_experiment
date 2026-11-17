@@ -11,6 +11,8 @@ import { flashPower, lightningScene, parameters } from "./lightning-model.js";
 import { createSession } from "./experiment-session.js";
 
 const randomSeed = () => globalThis.crypto.getRandomValues(new Uint32Array(1))[0];
+// The sliders that set how bright the flash looks, not how the storm behaves.
+const lit = ["flashStrength", "haze"];
 const sceneParams = params => Object.fromEntries(parameters.map(p => [p.key, params[p.key]]));
 
 // The scene has one fixed size (160×100, as on the page); a canvas of another size (tests)
@@ -38,7 +40,10 @@ export const lightning = {
   seed: "seed",
   stepSeconds: lightningScene.dt,
   params: [
-    ...parameters.map(p => ({ key: p.key, kind: "range", min: p.min, max: p.max, step: p.step, default: p.default, help: p.description })),
+    // affects: how far a change reaches (core/experiment.js). The scene caches nothing, so the
+    // flash's brightness and haze only change how it is lit ("lighting") and every other
+    // setting steers the steps that follow ("draw"). The seed and start restart the strike.
+    ...parameters.map(p => ({ key: p.key, kind: "range", min: p.min, max: p.max, step: p.step, default: p.default, help: p.description, affects: lit.includes(p.key) ? "lighting" : "draw" })),
     { key: "seed", kind: "seed", default: 42, random: true, hidden: true },
     // Which moment a fresh strike is prepared at: set by the two start buttons.
     { key: "start", kind: "select", hidden: true, randomize: false, default: lightningScene.defaultStart,
