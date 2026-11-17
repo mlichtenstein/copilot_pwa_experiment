@@ -10,10 +10,13 @@
 import { defaults, createWeather, step, sampleFields, renderWeather, airborneRain, pooledRain,
   createRainLayer, startCloud } from "./noise-model.js";
 import { sunLight } from "./core/sun-light.js";
+import { paramsAffecting } from "./core/experiment.js";
 
 // The model ticks 20 times a clock second while playing.
 export const TICKS_PER_SECOND = 20;
-const slider = (key, min, max, stepSize, help, group) => ({ key, kind: "range", min, max, step: stepSize, default: defaults[key], help, group });
+// Every slider is a rule of the weather: changing one resamples the forcing fields at once
+// (affects "fields"); the view only redraws.
+const slider = (key, min, max, stepSize, help, group) => ({ key, kind: "range", min, max, step: stepSize, default: defaults[key], help, group, affects: "fields" });
 const legends = {
   sunset: "Sunset: clouds lit toward the sun's side (peach while it is low, whiter when high) and grey-violet where thick; smooth grey curtain under a cloud base and thin pale streaks = rain falling from a raining cloud; blue floor = puddles.",
   water: "Cloud and rain: white = stored cloud water, gold tint = dense, lasting cloud that is raining, pale blue = rain in the air.",
@@ -23,8 +26,10 @@ const legends = {
   pressure: "Pressure: purple = low (more cloud), yellow = high (clearer)."
 };
 const SKY = "Sky", LAYER = "Cloud layer", RAIN = "Rain";
-const ruleKeys = ["cloudiness", "featureSize", "texture", "changeSpeed", "wind", "layerHeight", "layerThickness", "layerAsymmetry", "persistence", "rainAmount", "fallSpeed"];
-const rulesOf = params => ({ ...defaults, ...Object.fromEntries(ruleKeys.map(key => [key, params[key]])) });
+// The rule keys are the params that declare "fields", not a second list to keep in step.
+let ruleKeyList;
+const ruleKeys = () => ruleKeyList ??= paramsAffecting(noise, "fields");
+const rulesOf = params => ({ ...defaults, ...Object.fromEntries(ruleKeys().map(key => [key, params[key]])) });
 
 export const noise = {
   id: "noise",
@@ -40,7 +45,7 @@ export const noise = {
   stepSeconds: 1 / TICKS_PER_SECOND,
   groupNotes: { [SKY]: "", [LAYER]: "Clouds form only in this band of height.", [RAIN]: "" },
   params: [
-    { key: "view", randomize: false, kind: "select", wide: true, default: "sunset",
+    { key: "view", randomize: false, kind: "select", affects: "draw", wide: true, default: "sunset",
       options: [["sunset", "Sunset"], ["water", "Cloud and rain"], ["relative", "Cloud forcing"], ["humidity", "Humidity"], ["temperature", "Temperature"], ["pressure", "Pressure"]] },
     slider("cloudiness", 0.2, 0.7, 0.01, "More moisture: more and bigger clouds.", SKY),
     slider("featureSize", 8, 96, 1, "Size of cloud clumps, in pixels.", SKY),
@@ -78,7 +83,7 @@ export const noise = {
         if (next.seed !== previous.seed) return instance.restart();
         // Rule changes show at once: the forcing always, and while paused the cloud is reset
         // to it (playing, the stored cloud follows at its own pace).
-        if (ruleKeys.some(key => next[key] !== previous[key])) {
+        if (ruleKeys().some(key => next[key] !== previous[key])) {
           sampleFields(instance.simulation, rulesOf(current));
           if (!playing) startCloud(instance.simulation);
         }
