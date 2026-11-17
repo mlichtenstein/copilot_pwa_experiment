@@ -2,8 +2,8 @@
  * Consumers: Node test runner. Dependencies: cloud-geometry and normal-lighting models. */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {CAMERA,createCloudScene,cameraRay,projectDirection,lightDirection,intersectEllipsoid,surfaceNormal,opticalDepth,pickCloud,renderCloudScene,dot} from './cloud-geometry.js';
-import {shadeCloud} from './normal-lighting-model.js';
+import {CAMERA,createCloudScene,cameraRay,projectDirection,lightDirection,intersectEllipsoid,surfaceNormal,opticalDepth,pickCloud,renderCloudScene,dot,gradientAxis,gradientCoordinate,spatialGradientColor} from './cloud-geometry.js';
+import {shadeCloud,gradientColor} from './normal-lighting-model.js';
 const sphere={id:'test',center:[0,0,6],radii:[2,2,2]};
 const scene={camera:{...CAMERA,position:[0,0,0],pitch:0},clouds:[sphere]};
 test('ray intervals and normals describe the same closed body',()=>{
@@ -46,4 +46,18 @@ test('contributions add exactly, controls stay independent and sun motion leaves
  for(let i=0;i<a.scene.length;i++){assert.ok(Math.abs(a.scene[i]-a.ambientPass[i]-a.directAdded[i]-a.diffusionAdded[i])<1e-6);assert.ok(Math.abs(a.scene[i]-b.scene[i]-a.diffusionAdded[i])<1e-6);}
  assert.deepEqual(a.visibility,c.visibility);assert.deepEqual(a.facing,c.facing);assert.deepEqual(a.transmission,c.transmission);assert.notDeepEqual(a.incoming,c.incoming);
  const d=renderCloudScene(world,{}, {azimuth:-15,elevation:40},24,15);assert.deepEqual(a.depth,d.depth);assert.deepEqual(a.coverage,d.coverage);
+});
+
+test('equal-altitude layers encounter a rotating spatial ramp without normal offsets',()=>{
+ const clouds=createCloudScene().clouds,params={broadNormalInfluence:0};
+ assert.deepEqual(clouds.map(c=>c.center[1]),[6,6,6]);
+ const horizon={azimuth:0,elevation:0},raised={azimuth:0,elevation:25};
+ assert.equal(gradientCoordinate(clouds[0].center,params,horizon),gradientCoordinate(clouds[2].center,params,horizon));
+ assert.notEqual(gradientCoordinate(clouds[0].center,params,raised),gradientCoordinate(clouds[2].center,params,raised));
+ for(const elevation of [-30,0,30,90]){
+  const sun={azimuth:35,elevation};assert.ok(Math.abs(dot(gradientAxis(sun),lightDirection(sun)))<1e-12);
+  const p=clouds[1].center;const actual=spatialGradientColor(p,params,sun),expected=gradientColor(gradientCoordinate(p,params,sun),params);actual.forEach((v,i)=>assert.ok(Math.abs(v-expected[i])<1e-12));
+ }
+ const scene=createCloudScene(),a=renderCloudScene(scene,params,horizon,48,30),b=renderCloudScene(scene,params,raised,48,30);
+ assert.deepEqual(a.coverage,b.coverage);assert.notDeepEqual(a.colorCoordinate,b.colorCoordinate);
 });

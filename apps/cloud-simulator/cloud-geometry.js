@@ -13,9 +13,9 @@ export function lightDirection({azimuth=15,elevation=15}={}){
 export function createCloudScene(params={},shapes=ANALYTIC_SHAPES){
  const thickness=params.cloudThickness??1,spacing=params.layerSpacing??1;
  return {camera:CAMERA,clouds:[
-  {id:'near',center:[-2,2.5,9*spacing],radii:[3.1,.85*thickness,1.8],color:'#89d9ef'},
-  {id:'middle',center:[2.8,7,18*spacing],radii:[5,1.15*thickness,2.5],color:'#f3bb83'},
-  {id:'far',center:[-2,16,32*spacing],radii:[8,1.5*thickness,3.5],color:'#bfadf6'}].map(cloud=>({...cloud,shapeName:params[`${cloud.id}Shape`]??'ellipsoid',shape:shapes[params[`${cloud.id}Shape`]??'ellipsoid'],yaw:(params[`${cloud.id}Yaw`]??0)*Math.PI/180}))};
+  {id:'near',center:[-2,6,9*spacing],radii:[3.1,.85*thickness,1.8],color:'#89d9ef'},
+  {id:'middle',center:[2.8,6,18*spacing],radii:[5,1.15*thickness,2.5],color:'#f3bb83'},
+  {id:'far',center:[-2,6,32*spacing],radii:[8,1.5*thickness,3.5],color:'#bfadf6'}].map(cloud=>({...cloud,shapeName:params[`${cloud.id}Shape`]??'ellipsoid',shape:shapes[params[`${cloud.id}Shape`]??'ellipsoid'],yaw:(params[`${cloud.id}Yaw`]??0)*Math.PI/180}))};
 }
 export function cameraRay(u,v,camera=CAMERA){
  const y=(1-2*v)*camera.tanHalfFov,z=1,s=Math.sin(camera.pitch),c=Math.cos(camera.pitch);
@@ -62,15 +62,25 @@ export function sideSilhouettes(scene){
  }
  return masks;
 }
-// Direction-only marker at the diagram boundary; never a finite point light.
+// A separate angular inset avoids implying a finite source inside the world plot.
+export const SOURCE_DIAL={x:570,y:112,radius:65};
 export function sideLightMarker(sun){
- const l=lightDirection(sun),dx=l[2],dy=-l[1],projected=Math.hypot(dx,dy);
- if(projected<1e-6)return {x:670,y:35,outOfPlane:true,towardX:l[0]>0};
- const [cx,cy]=sidePixel(CAMERA.position);
- const tx=Math.abs(dx)<1e-12?Infinity:((dx>0?695:25)-cx)/dx;
- const ty=Math.abs(dy)<1e-12?Infinity:((dy>0?350:30)-cy)/dy;
- const scale=Math.min(tx,ty);
- return {x:cx+dx*scale,y:cy+dy*scale,outOfPlane:false,towardX:l[0]>0};
+ const l=lightDirection(sun),projected=Math.hypot(l[2],l[1]);
+ if(projected<1e-6)return {...SOURCE_DIAL,outOfPlane:true,towardX:l[0]>0};
+ return {x:SOURCE_DIAL.x+SOURCE_DIAL.radius*l[2]/projected,y:SOURCE_DIAL.y-SOURCE_DIAL.radius*l[1]/projected,outOfPlane:false,towardX:l[0]>0};
+}
+// Local artistic solar frame: bands rotate with the light about the cloud region.
+// The axis is perpendicular to the source, so equal-color planes run along its rays.
+export function gradientAxis({azimuth=15,elevation=15}={}){
+ const a=azimuth*Math.PI/180,e=elevation*Math.PI/180;
+ return [-Math.sin(a)*Math.sin(e),Math.cos(e),-Math.cos(a)*Math.sin(e)];
+}
+export function gradientCoordinate(p,params={},sun={},normal=[0,0,0]){
+ const offset=p.map((v,i)=>v-[0,6,20][i]);
+ return .5+(params.heightInfluence??1)*dot(offset,gradientAxis(sun))/18+(params.broadNormalInfluence??.35)*dot(normal,lightDirection(sun));
+}
+export function spatialGradientColor(p,params={},sun={}){
+ return gradientColor(gradientCoordinate(p,params,sun),params).map(v=>1+(v-1)*(params.gradientStrength??1));
 }
 const cameraCache=new WeakMap();
 function cameraSamples(scene,width,height){
@@ -100,7 +110,7 @@ export function renderCloudScene(scene,params={},sun={},width=96,height=60){
    // Small tangent perturbation changes detail normals, never body boundaries or broad colors.
    const noise=[Math.sin(p[0]*9+p[2]*3),Math.sin(p[2]*8-p[1]*5),Math.sin(p[1]*11+p[0]*4)];
    const normalNoise=dot(noise,n),fine=unit(n.map((v,c)=>v+.12*(noise[c]-normalNoise*v)));
-   const coordinate=.5+(params.heightInfluence??1)*(p[1]/18-.5)+(params.broadNormalInfluence??.35)*dot(n,l);
+   const coordinate=gradientCoordinate(p,params,sun,n);
    const color=gradientColor(coordinate,params).map(v=>light*(1+(v-1)*(params.gradientStrength??1)));
    const mu=facing(dot(fine,l),params.lightingModel??'lambert',params.wrap??.4);
    const surfaceFacing=1-(params.detailShadingStrength??1)+(params.detailShadingStrength??1)*mu;
