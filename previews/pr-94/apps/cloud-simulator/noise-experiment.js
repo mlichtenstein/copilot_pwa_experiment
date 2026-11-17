@@ -24,9 +24,7 @@ const legends = {
 };
 const SKY = "Sky", LAYER = "Cloud layer", RAIN = "Rain";
 const ruleKeys = ["cloudiness", "featureSize", "texture", "changeSpeed", "wind", "layerHeight", "layerThickness", "layerAsymmetry", "persistence", "rainAmount", "fallSpeed"];
-// Settings that only change how the rain is drawn: they never reset the run.
-const drawKeys = ["rainSlant"];
-const rulesOf = params => ({ ...defaults, ...Object.fromEntries([...ruleKeys, ...drawKeys].map(key => [key, params[key]])) });
+const rulesOf = params => ({ ...defaults, ...Object.fromEntries(ruleKeys.map(key => [key, params[key]])) });
 
 export const noise = {
   id: "noise",
@@ -55,7 +53,6 @@ export const noise = {
     slider("persistence", 0.5, 1.5, 0.05, "How long clouds linger once the noise stops feeding them; they shrink from the edges in. 0.5 fade within several seconds, 1 linger for tens of seconds, 1.5 about a minute.", LAYER),
     slider("rainAmount", 0, 0.015, 0.0005, "How much rain dense, lasting clouds drop (and how fast that thins them).", RAIN),
     slider("fallSpeed", 0.05, 1, 0.01, "Pixels per tick the rain falls.", RAIN),
-    slider("rainSlant", 0, 5, 0.1, "How far the rain streaks lean with the wind: 0 falls straight down, 1 leans true to the wind, higher exaggerates it.", RAIN),
     // Seeds only make a run reproducible; behavior should look alike on any seed.
     { key: "seed", kind: "seed", default: 1, random: true, hidden: true }
   ],
