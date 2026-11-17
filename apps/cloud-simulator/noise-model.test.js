@@ -309,28 +309,50 @@ test("rain streaks follow the falling rain, from the cloud base to the floor, an
   assert.ok(rainAlpha(layer, simulation, options).every(value => value === 0));
 });
 
-test("rain streaks fall, carried by the wind, and lean with it as much as rainSlant says", () => {
+// How far a picture leans, in columns per row: for every lit pixel, the offset of the nearest lit
+// pixel in the next row down (within two columns), averaged. 0 is straight down.
+function leanOf(values, width, height) {
+  let total = 0, count = 0;
+  for (let y = 0; y < height - 1; y++) for (let x = 0; x < width; x++) {
+    if (!(values[y * width + x] > 0)) continue;
+    for (const d of [0, 1, -1, 2, -2]) if (values[(y + 1) * width + (x + d + width) % width] > 0) { total += d; count++; break; }
+  }
+  return count ? total / count : 0;
+}
+
+test("rain streaks fall straight down, in line with the rain region, in every wind, and the wind carries them", () => {
+  const seed = seeds(1)[0], layer = createRainLayer(seed), width = 128, height = 96;
+  for (const wind of [-0.5, -0.25, 0, 0.25, 0.5]) {
+    // A cloud kept fed where the wind has carried it, raining steadily: the region it rains in.
+    const options = { cloudiness: -1, wind, fallSpeed: 0.25 }, simulation = createWeather({ width, height, seed });
+    sampleFields(simulation, options); startCloud(simulation);
+    for (let k = 0; k < 150; k++) {
+      for (let y = 20; y < 26; y++) for (let x = 0; x < width; x++) { const c = (x - simulation.shifted + 2 * width) % width; if (c >= 50 && c < 70) { simulation.cloud[y * width + x] = 1; simulation.charge[y * width + x] = 1; } }
+      step(simulation, options);
+    }
+    // The region's lean: how far its rain, row by row, sits from the cloud that made it.
+    const centre = (60 + simulation.shifted) % width, offsets = [];
+    for (let y = 32; y < height - 4; y += 6) {
+      let sumX = 0, sumRain = 0;
+      for (let x = 0; x < width; x++) { const d = ((x - centre + 1.5 * width) % width) - width / 2; sumX += d * simulation.rain[y * width + x]; sumRain += simulation.rain[y * width + x]; }
+      assert.ok(sumRain > 0, `wind ${wind}: rain at row ${y}`);
+      offsets.push(sumX / sumRain);
+    }
+    const regionLean = (offsets.at(-1) - offsets[0]) / (32 + 6 * (offsets.length - 1) - 32);
+    // The streaks' lean, over many frames.
+    let streakLean = 0, frames = 0;
+    for (let k = 0; k < 30; k++) { simulation.fallClock = k * 1.3; const lean = leanOf(rainAlpha(layer, simulation), width, height); if (lean !== 0 || k === 0) { streakLean += lean; frames++; } }
+    streakLean /= frames;
+    assert.ok(Math.abs(regionLean) < 0.05, `wind ${wind}: the rain region does not lean (${regionLean.toFixed(3)} columns per row)`);
+    assert.ok(Math.abs(streakLean - regionLean) < 0.1, `wind ${wind}: streaks lean ${streakLean.toFixed(3)}, region ${regionLean.toFixed(3)} columns per row`);
+  }
+});
+
+test("rain streaks fall, carried by the wind", () => {
   const seed = seeds(1)[0], layer = createRainLayer(seed);
   const alphaAt = (simulation, options, clock, scroll = simulation.scroll) => { simulation.fallClock = clock; simulation.scroll = scroll; return rainAlpha(layer, simulation, options); };
-  // Each pixel with a lit pixel one row below it, `across` columns to the right: the streak's lean.
-  const pairs = (alpha, width, height, across) => {
-    let total = 0;
-    for (let y = 0; y < height - 1; y++) for (let x = 0; x < width; x++) if (alpha[y * width + x] > 0 && alpha[(y + 1) * width + (x + across + width) % width] > 0) total++;
-    return total;
-  };
-  const lean = (wind, rainSlant) => {
-    const options = { cloudiness: -1, wind, fallSpeed: 0.25, rainSlant }, simulation = downpour(96, 60, seed, options);
-    let right = 0, left = 0;
-    for (let k = 0; k < 20; k++) { const alpha = alphaAt(simulation, options, k * 3); right += pairs(alpha, 96, 60, 1); left += pairs(alpha, 96, 60, -1); }
-    return { right, left };
-  };
-  const east = lean(0.2, 3), west = lean(-0.2, 3), calm = lean(0, 3), straight = lean(0.2, 0);
-  assert.ok(east.right > 1.4 * east.left, `wind to the right leans right: ${east.right} vs ${east.left}`);
-  assert.ok(west.left > 1.4 * west.right, `wind to the left leans left: ${west.left} vs ${west.right}`);
-  assert.ok(Math.abs(calm.right - calm.left) < 0.3 * (calm.right + calm.left), "no wind, no lean");
-  assert.ok(Math.abs(straight.right - straight.left) < 0.3 * (straight.right + straight.left), "rainSlant 0 falls straight down");
   // Streaks fall: advancing the fall clock moves the picture down, never up.
-  const options = { cloudiness: -1, wind: 0, fallSpeed: 0.25, rainSlant: 0 }, simulation = downpour(96, 60, seed, options);
+  const options = { cloudiness: -1, wind: 0, fallSpeed: 0.25 }, simulation = downpour(96, 60, seed, options);
   const before = alphaAt(simulation, options, 40), after = alphaAt(simulation, options, 40.5);
   const overlap = dy => { let total = 0; for (let y = 0; y < 60; y++) for (let x = 0; x < 96; x++) if (y + dy >= 0 && y + dy < 60) total += before[y * 96 + x] * after[(y + dy) * 96 + x]; return total; };
   const down = sum([1, 2, 3, 4].map(overlap)), up = sum([-1, -2, -3, -4].map(overlap));
@@ -343,8 +365,8 @@ test("rain streaks fall, carried by the wind, and lean with it as much as rainSl
   assert.ok(start.every((value, i) => value === moved[Math.floor(i / 96) * 96 + (i % 96 + 8) % 96]), "scrolled picture is the same picture, shifted");
 });
 
-test("rain streaks vary: short and long, uneven spacing, crisp pixels, a few opacity steps", () => {
-  const seed = seeds(1)[0], options = { cloudiness: -1, wind: 0, rainSlant: 0 };
+test("rain streaks vary: short and long, uneven spacing, crisp pixels, a few faint opacity steps", () => {
+  const seed = seeds(1)[0], options = { cloudiness: -1, wind: 0 };
   const simulation = downpour(96, 60, seed, options), layer = createRainLayer(seed);
   const runs = [], strips = new Array(12).fill(0), levels = new Set();
   for (let k = 0; k < 40; k++) {
@@ -362,7 +384,7 @@ test("rain streaks vary: short and long, uneven spacing, crisp pixels, a few opa
   assert.ok(runs.length > 300, `${runs.length} streak runs`);
   assert.ok(runs[0] <= 2 && runs.at(-1) >= 12, `runs from ${runs[0]} to ${runs.at(-1)} px`);
   assert.ok(runs[runs.length >> 1] < sum(runs) / runs.length, "heavy tail: mean above median");
-  assert.ok(levels.size <= 2, `opacity has at most two steps: ${[...levels].join(", ")}`);
+  assert.ok(levels.size <= 3 && Math.max(...levels) <= 0.5, `opacity has at most three faint steps: ${[...levels].join(", ")}`);
   const stripMean = sum(strips) / 12, spread = Math.sqrt(sum(strips.map(c => (c - stripMean) ** 2)) / 12);
   assert.ok(spread / stripMean > 0.05, `clumped: strip counts ${strips.join(",")}`);
   // Heavier rain draws more of them.
