@@ -10,7 +10,7 @@ test('gradient changes colors without changing orientation or visibility',()=>{c
 import {normalLighting} from './normal-lighting-experiment.js';
 test('every layer chooses its own shape, with no competing scene mode',()=>{
  assert.equal(normalLighting.params.some(p=>p.key==='cloudShape'),false);
- for(const layer of ['near','middle','far'])assert.deepEqual(normalLighting.params.find(p=>p.key===`${layer}Shape`).options.map(o=>o[0]),['ellipsoid','cluster','wisps','teardrop','image']);
+ for(const layer of ['near','nearMiddle','middle','farMiddle','far'])assert.deepEqual(normalLighting.params.find(p=>p.key===`${layer}Shape`).options.map(o=>o[0]),['ellipsoid','cluster','wisps','teardrop','image']);
 });
 
 import {gradientColor} from './normal-lighting-model.js';

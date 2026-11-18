@@ -1,7 +1,7 @@
 /* Purpose: Compare independently placed cloud solids in a lighting workbench.
  * Consumers: normal-lighting.js and registry. Dependencies: cloud-geometry, cloud-shapes, palette helpers, browser Image/canvas, shared host. */
 import {ANALYTIC_SHAPES,SHAPE_NAMES,imageReliefShape} from './cloud-shapes.js';
-import {createCloudScene,renderCloudScene,hueColor} from './cloud-geometry.js';
+import {createCloudScene,renderCloudScene,hueColor,CLOUD_LAYERS,DEFAULT_LAYER_SHAPES} from './cloud-geometry.js';
 import {clamp} from './normal-lighting-model.js';
 export const nodes=['earthLight','transmission','coverage','normals','broadNormals','colorCoordinate','depth','thickness','incoming','directIncident','facing','visibility','direct','diffusion'].map(id=>({id,label:id,description:{directIncident:'Direct source illumination reaching the cloud after Earth shadow and cloud obstruction, before surface-facing reflection or scattering.',earthLight:'Earth-shadow intensity at the visible surface, independent of hue and cloud obstruction.',transmission:'Single-scattered light surviving the paths from the source and to the camera for each selected shape.',normals:'Unit world normals: +X right, +Y up, +Z away from camera.',broadNormals:'Smooth shape normals select colors independently of fine shading.',colorCoordinate:'Solar-frame position plus broad-normal color offset, clamped for display before ramp warping.',incoming:'Hue multiplied by Earth-shadow intensity, before cloud obstruction and fine shading.',visibility:'Sunlight surviving the same cloud solids shown in both views.'}[id]??id}));
 export const passes=['sky','ambientPass','directPass','scene'].map((view,index)=>({view,index,label:['Sky','Ambient cloud','Direct illumination','Transmission / final'][index],contribution:['sky','ambient','directAdded','diffusionAdded'][index],toggle:[null,null,'directEnabled','diffusionEnabled'][index]}));
@@ -9,16 +9,16 @@ const range=(key,min,max,step,value,help)=>({key,kind:'range',min,max,step,defau
 const choice=(key,values,value,help)=>({key,kind:'select',display:'radio',options:values.map(v=>[v,v]),default:value,help});
 export function migrateLayerShapes(given){
  if(!given||typeof given!=='object')return given;
- const next={...given};if(given.cloudShape){const shape=given.cloudShape==='layers'?'ellipsoid':given.cloudShape;for(const layer of ['near','middle','far'])next[`${layer}Shape`]??=SHAPE_NAMES.includes(shape)?shape:'ellipsoid';}
+ const next={...given};if(given.cloudShape){const shape=given.cloudShape==='layers'?'ellipsoid':given.cloudShape;for(const layer of CLOUD_LAYERS)next[`${layer}Shape`]??=SHAPE_NAMES.includes(shape)?shape:'ellipsoid';}
  delete next.gradientKind;delete next.cloudShape;return next;
 }
 export const normalLighting={id:'normal-lighting',title:'Normal lighting',app:'cloud-simulator/normal-lighting',width:160,height:100,migrate:migrateLayerShapes,sun:true,sunShape:{sunPathWidth:60,sunPathHeight:50,sunPathX:-15,sunPathY:5},frameInterval:150,
- params:[choice('lightSource',['sun','moon'],'sun','Choose the sole light source; time controls its position, never switches sources.'),...['near','middle','far'].flatMap((layer,i)=>[{...choice(`${layer}Shape`,SHAPE_NAMES,['cluster','wisps','teardrop'][i],`Choose the ${layer} layer's solid shape; both views and sunlight use this geometry.`),display:undefined}, {...range(`${layer}Yaw`,-90,90,5,0,`Rotate the ${layer} body about the vertical axis without moving its layer.`),drift:false}]),
+ params:[choice('lightSource',['sun','moon'],'sun','Choose the sole light source; time controls its position, never switches sources.'),...CLOUD_LAYERS.flatMap((layer,i)=>[{...choice(`${layer}Shape`,SHAPE_NAMES,DEFAULT_LAYER_SHAPES[i],`Choose the ${layer} layer's solid shape; both views and sunlight use this geometry.`),display:undefined}, {...range(`${layer}Yaw`,-90,90,5,0,`Rotate the ${layer} body about the vertical axis without moving its layer.`),drift:false}]),
  range('gradientStart',0,1,.01,0,'Start of the selected color ramp.'),range('gradientEnd',0,1,.01,1,'End of the selected ramp; reverse start/end to reverse colors.'),range('gradientWarp',.2,5,.05,1,'Bunch transitions toward either end; 1 keeps their spacing uniform.'),range('nightBrightness',.05,1,.05,.45,'Moon mode illumination brightness.'),range('nightSaturation',0,1,.05,.45,'Moon mode color saturation; zero is grayscale.'),
  {key:'directEnabled',kind:'toggle',default:true,help:'Include direct light in accumulated images.'},{key:'diffusionEnabled',kind:'toggle',default:true,help:'Include scattered fill in accumulated images.'},
 
  range('shadowHeight',-10,20,.25,0,'Height of the Earth-shadow boundary in the solar frame.'),range('shadowSoftness',.25,12,.25,4,'Width of the dark-to-light Earth-shadow transition.'),range('shadowFloor',0,.2,.01,.03,'Residual source intensity below the Earth-shadow boundary.'),
- range('cloudThickness',.3,2,.05,1,'Vertical radius multiplier for the three world cloud bodies.'),range('layerSpacing',.7,1.2,.05,1,'Distance multiplier for world cloud layers.'),range('cloudDensity',.1,2,.05,.7,'Extinction per world unit; controls cloud opacity and light penetration.'),range('transmissionStrength',0,4,.05,1.8,'Strength of light scattered through the cloud volume.'),{...choice('lightingModel',['lambert','wrapped','ramp'],'lambert','Hold each mode for an explanation of its visible effect.'),optionHelp:{lambert:'Faces aimed at the light are brightest. Illumination falls to zero as a surface turns away.',wrapped:'Light reaches farther around curved surfaces, softening the transition into shadow.',ramp:'Solar-frame position and broad shape select the color; only geometric shadows darken it, leaving fine facing shading out.'}},
+ range('cloudThickness',.3,2,.05,1,'Vertical radius multiplier for the cloud bodies in all five layers.'),range('layerSpacing',.7,1.2,.05,1,'Distance multiplier for world cloud layers.'),range('cloudDensity',.1,2,.05,.7,'Extinction per world unit; controls cloud opacity and light penetration.'),range('transmissionStrength',0,4,.05,1.8,'Strength of light scattered through the cloud volume.'),{...choice('lightingModel',['lambert','wrapped','ramp'],'lambert','Hold each mode for an explanation of its visible effect.'),optionHelp:{lambert:'Faces aimed at the light are brightest. Illumination falls to zero as a surface turns away.',wrapped:'Light reaches farther around curved surfaces, softening the transition into shadow.',ramp:'Solar-frame position and broad shape select the color; only geometric shadows darken it, leaving fine facing shading out.'}},
  range('heightInfluence',0,2,.05,1,'How strongly distance along the rays selects hue; farther from the source is redder in the sunlight palette.'),range('broadNormalInfluence',-1,1,.05,.35,'How strongly broad shape orientation toward the light shifts the ramp sample; zero restores spatial-field-only colors.'),range('detailShadingStrength',0,1,.05,1,'Fine-normal brightness shading; zero leaves only the existing geometric shadows.'),
  range('gradientPosition',0,1,.01,.5,'Center of the color transition in the rotating solar frame.'),range('gradientCompression',.1,10,.1,3,'Compress the sunlight transition into a narrower band.'),range('gradientStrength',0,1,.01,1,'Mix white sunlight toward the sunset palette.'),range('wrap',0,1,.01,.4,'Wrap diffuse illumination around the apparent surface.'),
  {key:'view',kind:'select',hidden:true,randomize:false,default:'scene',options:[...nodes.map(n=>[n.id,n.label]),...passes.map(p=>[p.view,p.label]),...['ambient','directAdded','diffusionAdded'].map(v=>[v,v])],help:'Inspect a field or accumulated rendering stage.'}],
@@ -27,9 +27,9 @@ export const normalLighting={id:'normal-lighting',title:'Normal lighting',app:'c
   return params=>{const stops=Array.from({length:33},(_,i)=>{const color=hueColor(i/32,params).map(v=>Math.round(255*clamp(1.055*Math.pow(v,1/2.4)-.055)));return `rgb(${color.join(',')}) ${i/32*100}%`;});strip.setAttribute('style',`height:20px;width:100%;background:linear-gradient(to right,${stops.join(',')})`);};
  },
  create({params,width=160,height=100,doc=globalThis.document}){
-  let current=params,fields=null,world=null,selectedCloud='near',sun={azimuth:15,elevation:23},disposed=false;
+  let current=params,fields=null,world=null,sun={azimuth:15,elevation:23},disposed=false;
   const shapes={...ANALYTIC_SHAPES};
-  const geometryKeys=['cloudThickness','layerSpacing',...['near','middle','far'].flatMap(id=>[`${id}Shape`,`${id}Yaw`])];
+  const geometryKeys=['cloudThickness','layerSpacing',...CLOUD_LAYERS.flatMap(id=>[`${id}Shape`,`${id}Yaw`])];
   const scene=()=>world??=createCloudScene(current,shapes);
   const loadImage=async()=>{
    const img=new Image();img.src=new URL('normal-assets/image-geometry.png',import.meta.url).href;await img.decode();
@@ -42,7 +42,6 @@ export const normalLighting={id:'normal-lighting',title:'Normal lighting',app:'c
    ready:loadImage(),
    selfLight(){return 1;}, // Spatial Earth shadow owns source dimming; avoid a second global night multiplier.
    geometry(){return {scene:scene(),sun,params:current,source:current.lightSource};},
-   highlightCloud(id){selectedCloud=id;},
    update(next){if(geometryKeys.some(k=>next[k]!==current[k]))world=null;if(Object.keys(next).some(k=>k!=='view'&&next[k]!==current[k]))fields=null;current=next;},
    step(){return false;},
    preview(view,layer,w=32,h=20){
@@ -55,10 +54,6 @@ export const normalLighting={id:'normal-lighting',title:'Normal lighting',app:'c
       if(view==='depth')v/=50;if(view==='thickness')v/=10;
       pixels[(y*w+x)*4+c]=255*clamp(data?v:v<=.0031308?12.92*v:1.055*Math.pow(v,1/2.4)-.055);
      }pixels[(y*w+x)*4+3]=255;
-    }
-    if(view==='scene'&&w===width&&selectedCloud){
-     const selected=scene().clouds.findIndex(c=>c.id===selectedCloud),ids=fields.layerIndex;
-     for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x;if(ids[i]===selected&&[i-1,i+1,i-w,i+w].some(j=>ids[j]!==selected))pixels.set([175,215,235,255],i*4);}
     }
     return pixels;
    },

@@ -2,7 +2,7 @@
 Consumers: contributors and reviewers. Dependencies: cloud-shapes.js, cloud-geometry.js, cloud-side-view.js, normal-lighting experiment. -->
 # Cloud layers and shapes
 
-The world has three layer records: near, middle and far. Each owns a centre, nonuniform scale, yaw and a reference to a reusable local-space solid. Shape is independent of placement: `nearShape`, `middleShape` and `farShape` each choose ellipsoid, cluster, wisps, teardrop or image. `nearYaw`, `middleYaw` and `farYaw` rotate their own bodies about the vertical axis. Fresh scenes use cluster / wisps / teardrop. No shape disables the side view or uses a separate renderer.
+The world has five layer records: near, nearMiddle, middle, farMiddle and far. Each layer holds two distinct cloud bodies, for ten clouds total. Each owns a centre, nonuniform scale, yaw and a reference to a reusable local-space solid. Shape is independent of placement: `nearShape`, `middleShape` and `farShape` each choose ellipsoid, cluster, wisps, teardrop or image. `nearYaw`, `middleYaw` and `farYaw` rotate their own bodies about the vertical axis. Fresh scenes use cluster / teardrop / wisps / cluster / teardrop. Each layer has its own Shape and Yaw controls; both clouds inherit those settings. No shape disables the side view or uses a separate renderer.
 
 `cloud-shapes.js` owns local-space solids and ray intervals. `cloud-geometry.js` transforms rays/normals, shades the world and projects the very same solids for inspection. `cloud-side-view.js` only draws those projections and handles selection. Scene records are treated as immutable: changing geometry creates a new scene, while lighting/color changes reuse it. Camera intersections and side silhouettes are cached against scene identity.
 
@@ -16,13 +16,13 @@ The world has three layer records: near, middle and far. Each owns a centre, non
 
 Meshes use a bounding-volume hierarchy for ray queries. Entry normals interpolate mesh vertex normals for broad color/shading; geometric face normals offset shadow rays away from the surface. Fine normals add a small tangent perturbation independently of geometry. Shape meshes and source data are shared; layers hold independent transforms.
 
-World units are illustrative, not kilometres. +X is right, +Y up, +Z away from the camera. The camera is at (0,1,0), pitched up 12°, vertical field of view 58°, aspect 1.6. `cloudThickness` scales vertical radii, `layerSpacing` scales distances, `cloudDensity` controls extinction and `transmissionStrength` scales scattered light. All apply to every shape. Yaw is saved/randomizable but does not Drift. Old links with `cloudShape=layers` migrate to three ellipsoids; other old global shapes migrate to that shape on all layers. Explicit per-layer choices take precedence. Removed screen-space diffusion sliders are ignored when loading old links.
+World units are illustrative, not kilometres. +X is right, +Y up, +Z away from the camera. The camera is at (0,1,0), pitched up 12°, vertical field of view 58°, aspect 1.6. `cloudThickness` scales vertical radii, `layerSpacing` scales distances, `cloudDensity` controls extinction and `transmissionStrength` scales scattered light. All apply to every shape. Yaw is saved/randomizable but does not Drift. Old links with `cloudShape=layers` migrate to five ellipsoid layers; other old global shapes migrate to that shape on all layers. Explicit per-layer choices take precedence. Removed screen-space diffusion sliders are ignored when loading old links.
 
 ## Two views, one geometry
 
-The side inspector is an elevation with X collapsed, not an X=0 planar slice. It projects each solid using rays along X and uses the same ray queries for side picking. Distance/altitude axes have equal scale. Front picking, side picking, camera depth, normals, obstruction and transmission all query the same solids. Select with a tap or near/middle/far buttons; the front scene outlines the selected visible body and the side view emphasizes its silhouette. Inspection selection and collapsed panels do not randomize.
+The side inspector is an elevation with X collapsed, not an X=0 planar slice. It projects each solid using rays along X and uses the same ray queries for side picking. Distance/altitude axes have equal scale. Front picking, side picking, camera depth, normals, obstruction and transmission all query the same solids. Select individual clouds with a tap in either view, or select the first cloud in a layer with its button. Selection outlines appear only in the side view; the final rendered scene contains no inspection overlay. Inspection selection and collapsed panels do not randomize.
 
-All three cloud centres are at altitude 6, with depth and lateral separation. Perspective alone determines their screen heights.
+All ten cloud centres are at altitude 6, with depth and lateral separation. Two clouds per layer have staggered horizontal positions and slightly offset depths; their widths leave sky gaps. Perspective alone determines their screen heights.
 
 The lighting field has two independent perpendicular gradients, both rotating with the source:
 
@@ -47,7 +47,7 @@ These are homogeneous solids with a fixed camera, flat ground and stylized color
 
 `node --test apps/cloud-simulator/cloud-shapes.test.js apps/cloud-simulator/cloud-geometry.test.js apps/cloud-simulator/normal-lighting-model.test.js apps/cloud-simulator/sw.test.js`
 
-Tests cover closed volumes from front/side/inside, cluster-union thickness, independent layer choices/transforms, yaw-aware picking and obstruction, distinct side silhouettes including image relief, legacy-link migration, finite mixed-shape fields and source-marker edge cases. Browser review: mix three shapes, rotate one, select from either view, change thickness/spacing, move the source and switch Sun/Moon, inspect fields, then reload a shared link. Also check phone layout and offline reload after worker activation.
+Tests cover closed volumes from front/side/inside, cluster-union thickness, independent layer choices/transforms, yaw-aware picking and obstruction, distinct side silhouettes including image relief, legacy-link migration, finite mixed-shape fields and source-marker edge cases. Browser review: mix five layer shapes, rotate one, select from either view, change thickness/spacing, move the source and switch Sun/Moon, inspect fields, then reload a shared link. Also check phone layout and offline reload after worker activation.
 
 ## Direct illumination in the side view
 

@@ -1,15 +1,15 @@
 /* Purpose: Linked side elevation of the renderer's solids, camera and distant source.
  * Consumers: normal-lighting.js. Dependencies: cloud-geometry, canvas, shared hold help. */
-import {lightDirection,cameraRay,rayCloud,along,pickCloud,localToWorld,sideSurfaceSamples,directIlluminationAt,sideCloudAt,sideLightMarker,SIDE,SIDE_PLOT,sidePixel,sidePoint,spatialGradientColor,earthLightAt,SOURCE_DIAL} from './cloud-geometry.js';
+import {lightDirection,cameraRay,rayCloud,along,pickCloud,localToWorld,sideSurfaceSamples,directIlluminationAt,sideCloudAt,sideLightMarker,SIDE,SIDE_PLOT,sidePixel,sidePoint,spatialGradientColor,earthLightAt,SOURCE_DIAL,CLOUD_LAYERS} from './cloud-geometry.js';
 export function mountCloudSideView({doc,root,canvas:front,instance,help,render}){
  const make=(tag,props={})=>Object.assign(doc.createElement(tag),props);
  const heading=make('summary',{textContent:'Side view · world geometry'}),canvas=make('canvas',{width:720,height:390});
  canvas.setAttribute('aria-label','Side elevation of cloud solids, camera rays, surface normal and a labelled distant sun or moon.');canvas.setAttribute('role','img');
  const controls=make('div',{className:'geometry-selection'}),label=make('span',{textContent:'selectedCloud'}),buttons=[];
  controls.append(label);
- for(const id of ['near','middle','far']){
+ for(const id of CLOUD_LAYERS){
   const button=make('button',{type:'button',textContent:id});button.addEventListener('click',()=>{selected=id;sample=null;update();render?.();});
-  help?.attach(button,`Highlight the ${id} cloud in both views.`,button);buttons.push(button);controls.append(button);
+  help?.attach(button,`Select the first cloud in the ${id} layer for side inspection.`,button);buttons.push(button);controls.append(button);
  }
  const fieldControls=make('div',{className:'geometry-selection'}),fieldButtons=[];fieldControls.append(make('span',{textContent:'sideField'}));
  for(const mode of ['combined','earthLight','hue']){
@@ -29,7 +29,7 @@ export function mountCloudSideView({doc,root,canvas:front,instance,help,render})
   if(lastScene!==scene){
    lastScene=scene;surfaces=sideSurfaceSamples(scene);
   }
-  buttons.forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===selected)));
+  buttons.forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===scene.clouds.find(c=>c.id===selected)?.layerId)));
   fieldButtons.forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===fieldMode)));
   // Same palette and coordinate function as the renderer; low opacity keeps geometry readable.
   const fieldCanvas=make('canvas',{width:120,height:65}),fieldCtx=fieldCanvas.getContext('2d'),fieldImage=fieldCtx.createImageData(120,65);
@@ -45,7 +45,8 @@ export function mountCloudSideView({doc,root,canvas:front,instance,help,render})
   ctx.fillText('altitude',8,17);ctx.fillText('distance → (world units)',475,380);line(ctx,[0,0,-3],[0,0,49],'#698470');
   ctx.save();ctx.beginPath();ctx.rect(plot.x,plot.y,plot.width,plot.height);ctx.clip();
   ctx.setLineDash([5,5]);for(const v of [0,1])line(ctx,scene.camera.position,along(scene.camera.position,cameraRay(.5,v),60),'#7286a5');ctx.setLineDash([]);
-  scene.clouds.forEach((cloud,k)=>{
+  // Paint the selected surface last so its outline survives overlapping side projections.
+  scene.clouds.map((cloud,k)=>({cloud,k})).sort((a,b)=>(a.cloud.id===selected)-(b.cloud.id===selected)).forEach(({cloud,k})=>{
    const off=make('canvas',{width:SIDE.width,height:SIDE.height}),context=off.getContext('2d'),image=context.createImageData(SIDE.width,SIDE.height),samples=surfaces[k];
    samples.forEach((sample,i)=>{if(!sample)return;
     const light=directIlluminationAt(scene,sample.point,sample.normal,sample.geometricNormal,data.params,sun).color;
@@ -59,7 +60,7 @@ export function mountCloudSideView({doc,root,canvas:front,instance,help,render})
   if(hit){const p=along(scene.camera.position,ray,hit.start);line(ctx,scene.camera.position,p,'#e5f6ff',2);arrow(ctx,p,hit.normal,2,'#65f0bd');}
   const l=lightDirection(sun),incoming=l.map(v=>-v);
   for(const z of [14,26,38])arrow(ctx,[0,19,z],incoming,5,'#ffdc83');ctx.restore();
-  for(const cloud of scene.clouds){const [x,y]=map(cloud.center);ctx.fillStyle=cloud.color;ctx.fillText(`${cloud.id} · ${cloud.shapeName}`,Math.min(550,Math.max(60,x-30)),Math.max(52,y-cloud.radii[1]*12-12));}
+  for(const layer of scene.layers){const [x,y]=map([0,6,layer.depth]);ctx.fillStyle=layer.color;ctx.font='12px sans-serif';ctx.fillText(layer.id,x-28,y-30);}
   const camera=map(scene.camera.position);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(...camera,4,0,Math.PI*2);ctx.fill();ctx.fillText('camera',camera[0]+8,camera[1]-6);
   const marker=sideLightMarker(sun),moon=data.source==='moon',color=moon?'#d7e6ff':'#ffdc83';
   const dial=SOURCE_DIAL;
@@ -75,7 +76,6 @@ export function mountCloudSideView({doc,root,canvas:front,instance,help,render})
   if(marker.outOfPlane){ctx.font='13px sans-serif';ctx.fillText(`out of plane (${marker.towardX?'+':'−'}X)`,570,168);}
   ctx.font='14px sans-serif';ctx.fillStyle=color;ctx.fillText(`elevation ${sun.elevation.toFixed(1)}° · azimuth ${sun.azimuth.toFixed(1)}°`,170,17);
   canvas.setAttribute('aria-label',`Side elevation. ${moon?'Moon':'Sun'} at infinity: elevation ${sun.elevation.toFixed(1)} degrees, azimuth ${sun.azimuth.toFixed(1)} degrees. ${fieldMode} field at X=0: independent Earth-shadow intensity and perpendicular hue gradient. Source shown on a separate angular inset. Selected ${selected}: ${cloud.shapeName}.`);
-  instance.highlightCloud?.(selected);
  }
  canvas.addEventListener('click',event=>{if(!scene)return;const r=canvas.getBoundingClientRect(),x=(event.clientX-r.left)*720/r.width,y=(event.clientY-r.top)*390/r.height,u=(x-plot.x)/plot.width,v=(y-plot.y)/plot.height;if(u<0||u>1||v<0||v>1)return;const id=sideCloudAt(scene,u,v);if(id){selected=id;sample=null;update();render?.();}});
  front.addEventListener('click',event=>{if(!scene)return;const r=front.getBoundingClientRect(),u=(event.clientX-r.left)/r.width,v=(event.clientY-r.top)/r.height,id=pickCloud(scene,u,v);if(id){selected=id;sample=cameraRay(u,v);update();render?.();}});
