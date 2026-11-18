@@ -1,6 +1,6 @@
 /* Purpose: Linked side elevation of the renderer's solids, camera and distant source.
  * Consumers: normal-lighting.js. Dependencies: cloud-geometry, canvas, shared hold help. */
-import {lightDirection,cameraRay,rayCloud,along,pickCloud,localToWorld,sideSilhouettes,sideCloudAt,sideLightMarker,SIDE,SIDE_PLOT,sidePixel,sidePoint,spatialGradientColor,SOURCE_DIAL} from './cloud-geometry.js';
+import {lightDirection,cameraRay,rayCloud,along,pickCloud,localToWorld,sideSilhouettes,sideCloudAt,sideLightMarker,SIDE,SIDE_PLOT,sidePixel,sidePoint,spatialGradientColor,earthLightAt,SOURCE_DIAL} from './cloud-geometry.js';
 export function mountCloudSideView({doc,root,canvas:front,instance,help,render}){
  const make=(tag,props={})=>Object.assign(doc.createElement(tag),props);
  const heading=make('summary',{textContent:'Side view · world geometry'}),canvas=make('canvas',{width:720,height:390});
@@ -11,9 +11,14 @@ export function mountCloudSideView({doc,root,canvas:front,instance,help,render})
   const button=make('button',{type:'button',textContent:id});button.addEventListener('click',()=>{selected=id;sample=null;update();render?.();});
   help?.attach(button,`Highlight the ${id} cloud in both views.`,button);buttons.push(button);controls.append(button);
  }
- const note=make('p',{className:'geometry-note',textContent:'X collapsed. White: viewing ray. Green: surface normal. Tint: solar color field at X=0, before normal offsets and shading. Sun/Moon inset: direction only, not world position. Tap a cloud in either view.'});
- root.append(heading,canvas,controls,note);
- let selected='near',sample=null,scene=null,lastScene=null,silhouettes=[];
+ const fieldControls=make('div',{className:'geometry-selection'}),fieldButtons=[];fieldControls.append(make('span',{textContent:'sideField'}));
+ for(const mode of ['combined','earthLight','hue']){
+  const button=make('button',{type:'button',textContent:mode});button.addEventListener('click',()=>{fieldMode=mode;update();});
+  help?.attach(button,`Inspect ${mode==='combined'?'hue multiplied by Earth-shadow intensity':mode==='earthLight'?'Earth-shadow intensity alone':'hue alone, without Earth-shadow dimming'} at X=0.`,button);fieldButtons.push(button);fieldControls.append(button);
+ }
+ const note=make('p',{className:'geometry-note',textContent:'X collapsed. White: viewing ray. Green: surface normal. Tint: selected field at X=0. earthLight brightens above the shadow; hue reddens away from the source. Sun/Moon inset: direction only, not world position. Tap a cloud in either view.'});
+ root.append(heading,canvas,fieldControls,controls,note);
+ let fieldMode='combined',selected='near',sample=null,scene=null,lastScene=null,silhouettes=[];
  const plot=SIDE_PLOT,map=sidePixel; // Shared equal-scale projection, including the source marker.
  const line=(ctx,a,b,color,width=1)=>{ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(...map(a));ctx.lineTo(...map(b));ctx.stroke();};
  function arrow(ctx,p,d,length,color){const q=along(p,d,length);line(ctx,p,q,color,2);const a=map(p),b=map(q),angle=Math.atan2(b[1]-a[1],b[0]-a[0]);ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(...b);ctx.lineTo(b[0]-7*Math.cos(angle-.45),b[1]-7*Math.sin(angle-.45));ctx.lineTo(b[0]-7*Math.cos(angle+.45),b[1]-7*Math.sin(angle+.45));ctx.fill();}
@@ -27,11 +32,13 @@ export function mountCloudSideView({doc,root,canvas:front,instance,help,render})
     for(let i=0;i<mask.length;i++)if(mask[i])image.data.set([...color,200],i*4);context.putImageData(image,0,0);return off;});
   }
   buttons.forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===selected)));
+  fieldButtons.forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===fieldMode)));
   // Same palette and coordinate function as the renderer; low opacity keeps geometry readable.
   const fieldCanvas=make('canvas',{width:120,height:65}),fieldCtx=fieldCanvas.getContext('2d'),fieldImage=fieldCtx.createImageData(120,65);
   for(let y=0;y<65;y++)for(let x=0;x<120;x++){
-   const color=spatialGradientColor(sidePoint((x+.5)/120,(y+.5)/65),data.params,sun).map(v=>Math.round(255*Math.pow(Math.max(0,Math.min(1,v)),1/2.2)));
-   fieldImage.data.set([...color,82],(y*120+x)*4);
+   const p=sidePoint((x+.5)/120,(y+.5)/65),value=earthLightAt(p,data.params,sun),hue=spatialGradientColor(p,data.params,sun);
+   const color=(fieldMode==='earthLight'?[value,value,value]:hue.map(v=>v*(fieldMode==='combined'?value:1))).map(v=>Math.round(255*Math.pow(Math.max(0,Math.min(1,v)),1/2.2)));
+   fieldImage.data.set([...color,130],(y*120+x)*4);
   }
   fieldCtx.putImageData(fieldImage,0,0);ctx.drawImage(fieldCanvas,plot.x,plot.y,plot.width,plot.height);
   ctx.font='14px sans-serif';ctx.fillStyle='#c1cce0';
@@ -61,7 +68,7 @@ export function mountCloudSideView({doc,root,canvas:front,instance,help,render})
   ctx.fillText(`${moon?'Moon':'Sun'} · ∞`,labelX,labelY);
   if(marker.outOfPlane){ctx.font='13px sans-serif';ctx.fillText(`out of plane (${marker.towardX?'+':'−'}X)`,570,168);}
   ctx.font='14px sans-serif';ctx.fillStyle=color;ctx.fillText(`elevation ${sun.elevation.toFixed(1)}° · azimuth ${sun.azimuth.toFixed(1)}°`,170,17);
-  canvas.setAttribute('aria-label',`Side elevation. ${moon?'Moon':'Sun'} at infinity: elevation ${sun.elevation.toFixed(1)} degrees, azimuth ${sun.azimuth.toFixed(1)} degrees. Rotating solar color field at X=0. Source shown on a separate angular inset. Selected ${selected}: ${cloud.shapeName}.`);
+  canvas.setAttribute('aria-label',`Side elevation. ${moon?'Moon':'Sun'} at infinity: elevation ${sun.elevation.toFixed(1)} degrees, azimuth ${sun.azimuth.toFixed(1)} degrees. ${fieldMode} field at X=0: independent Earth-shadow intensity and perpendicular hue gradient. Source shown on a separate angular inset. Selected ${selected}: ${cloud.shapeName}.`);
   instance.highlightCloud?.(selected);
  }
  canvas.addEventListener('click',event=>{if(!scene)return;const r=canvas.getBoundingClientRect(),x=(event.clientX-r.left)*720/r.width,y=(event.clientY-r.top)*390/r.height,u=(x-plot.x)/plot.width,v=(y-plot.y)/plot.height;if(u<0||u>1||v<0||v>1)return;const id=sideCloudAt(scene,u,v);if(id){selected=id;sample=null;update();render?.();}});

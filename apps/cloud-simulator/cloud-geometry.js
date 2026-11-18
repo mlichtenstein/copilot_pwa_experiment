@@ -69,18 +69,35 @@ export function sideLightMarker(sun){
  if(projected<1e-6)return {...SOURCE_DIAL,outOfPlane:true,towardX:l[0]>0};
  return {x:SOURCE_DIAL.x+SOURCE_DIAL.radius*l[2]/projected,y:SOURCE_DIAL.y-SOURCE_DIAL.radius*l[1]/projected,outOfPlane:false,towardX:l[0]>0};
 }
-// Local artistic solar frame: bands rotate with the light about the cloud region.
-// The axis is perpendicular to the source, so equal-color planes run along its rays.
+// Local Earth-shadow axis across the rays; hue varies on the perpendicular, ray-aligned axis.
 export function gradientAxis({azimuth=15,elevation=15}={}){
  const a=azimuth*Math.PI/180,e=elevation*Math.PI/180;
  return [-Math.sin(a)*Math.sin(e),Math.cos(e),-Math.cos(a)*Math.sin(e)];
 }
 export function gradientCoordinate(p,params={},sun={},normal=[0,0,0]){
  const offset=p.map((v,i)=>v-[0,6,20][i]);
- return .5+(params.heightInfluence??1)*dot(offset,gradientAxis(sun))/18+(params.broadNormalInfluence??.35)*dot(normal,lightDirection(sun));
+ return .5+(params.heightInfluence??1)*dot(offset,lightDirection(sun))/40+(params.broadNormalInfluence??.35)*dot(normal,lightDirection(sun));
+}
+export function hueColor(coordinate,params={}){
+ const paletteParams={...params,gradientKind:!params.gradientKind||params.gradientKind==='auto'?(params.lightSource==='moon'?'moon':'sunlight'):params.gradientKind};
+ const color=gradientColor(coordinate,paletteParams),value=Math.max(...color)||1;
+ // Normalize HSV value: hue controls must not introduce a second brightness gradient.
+ return color.map(v=>1+(v/value-1)*(params.gradientStrength??1));
+}
+export function earthLightAt(p,params={},sun={}){
+ // Ground reference on the sunward edge. Tilting this plane lifts the shadow over
+ // nearby clouds at dusk while farther/upper clouds can still receive sunlight.
+ const distance=dot(p.map((v,i)=>v-[0,0,50][i]),gradientAxis(sun))-(params.shadowHeight??0);
+ const t=clamp(.5+distance/Math.max(.01,params.shadowSoftness??4));
+ const floor=params.shadowFloor??.03;
+ return floor+(1-floor)*t*t*(3-2*t);
 }
 export function spatialGradientColor(p,params={},sun={}){
- return gradientColor(gradientCoordinate(p,params,sun),params).map(v=>1+(v-1)*(params.gradientStrength??1));
+ return hueColor(gradientCoordinate(p,params,sun),params);
+}
+export function illuminationAt(p,params={},sun={},normal=[0,0,0]){
+ const earthLight=earthLightAt(p,params,sun),source=params.lightSource==='moon'?(params.nightBrightness??.45):1;
+ return hueColor(gradientCoordinate(p,params,sun,normal),params).map(v=>v*earthLight*source);
 }
 const cameraCache=new WeakMap();
 function cameraSamples(scene,width,height){
@@ -88,7 +105,7 @@ function cameraSamples(scene,width,height){
  const samples=[];for(let y=0;y<height;y++)for(let x=0;x<width;x++){const ray=cameraRay((x+.5)/width,(y+.5)/height,scene.camera),ground=ray[1]<0?-scene.camera.position[1]/ray[1]:Infinity;samples.push({ray,ground,hits:sceneIntervals(scene,scene.camera.position,ray).filter(hit=>hit.start<ground)});}
  cameraCache.set(scene,{width,height,samples});return samples;
 }
-const scalar=['coverage','colorCoordinate','depth','thickness','facing','visibility','transmission'];
+const scalar=['coverage','earthLight','colorCoordinate','depth','thickness','facing','visibility','transmission'];
 const rgb=['normals','broadNormals','incoming','direct','diffusion','sky','ambient','ambientPass','directPass','directAdded','diffusionAdded','scene'];
 // Homogeneous participating solids: shared ray intervals, six midpoint samples for
 // single scattering. Surface and broad-normal color remain artistic controls.
@@ -111,28 +128,30 @@ export function renderCloudScene(scene,params={},sun={},width=96,height=60){
    const noise=[Math.sin(p[0]*9+p[2]*3),Math.sin(p[2]*8-p[1]*5),Math.sin(p[1]*11+p[0]*4)];
    const normalNoise=dot(noise,n),fine=unit(n.map((v,c)=>v+.12*(noise[c]-normalNoise*v)));
    const coordinate=gradientCoordinate(p,params,sun,n);
-   const color=gradientColor(coordinate,params).map(v=>light*(1+(v-1)*(params.gradientStrength??1)));
+   const color=illuminationAt(p,params,sun,n);
    const mu=facing(dot(fine,l),params.lightingModel??'lambert',params.wrap??.4);
    const surfaceFacing=1-(params.detailShadingStrength??1)+(params.detailShadingStrength??1)*mu;
    const visibility=Math.exp(-opticalDepth(scene,along(p,geometricNormal,.001),l,density));
    const opacity=1-Math.exp(-density*length),weight=cameraTransmission*opacity;
-   let transmission=0;
+   let transmission=0,scatteredColor=[0,0,0];
    const ds=length/6;
    for(let step=0;step<6;step++){
     const t=(step+.5)*ds,point=along(p,ray,t);
-    transmission+=Math.exp(-density*t-opticalDepth(scene,point,l,density))*density*ds;
+    const transport=Math.exp(-density*t-opticalDepth(scene,point,l,density))*density*ds;
+    transmission+=transport;const incoming=illuminationAt(point,params,sun,n);
+    for(let c=0;c<3;c++)scatteredColor[c]+=incoming[c]*transport;
    }
    // Modest forward bias; an artistic single-scattering approximation, not a phase solver.
-   transmission*=.3+.7*Math.max(0,dot(ray,l))**6;
+   const phase=.3+.7*Math.max(0,dot(ray,l))**6;transmission*=phase;
    if(cameraTransmission===1){
     fields.layerIndex[i]=scene.clouds.indexOf(hit.cloud);fields.depth[i]=start;fields.thickness[i]=length;fields.colorCoordinate[i]=clamp(coordinate);
-    fields.facing[i]=surfaceFacing;fields.visibility[i]=visibility;fields.transmission[i]=transmission;
+    fields.earthLight[i]=earthLightAt(p,params,sun);fields.facing[i]=surfaceFacing;fields.visibility[i]=visibility;fields.transmission[i]=transmission;
     fields.normals.set(fine,i*3);fields.broadNormals.set(n,i*3);fields.incoming.set(color,i*3);
    }
    for(let c=0;c<3;c++){
     ambient[c]+=weight*[.055,.065,.10][c]*ambientLight;
     direct[c]+=weight*color[c]*visibility*(params.lightingModel==='ramp'?1:surfaceFacing);
-    scatter[c]+=cameraTransmission*color[c]*transmission*(params.transmissionStrength??1.8);
+    scatter[c]+=cameraTransmission*scatteredColor[c]*phase*(params.transmissionStrength??1.8);
    }
    cameraTransmission*=1-opacity;
   }
