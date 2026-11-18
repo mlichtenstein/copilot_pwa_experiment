@@ -37,7 +37,7 @@ test('occluders attenuate sunlight along full world-space paths',()=>{
 test('nearest cloud selection agrees with geometry and all inspector values stay finite',()=>{
  assert.equal(pickCloud(scene,.5,.5),'test');
  const world=createCloudScene();
- for(const cloud of world.clouds){const uv=projectDirection(cloud.center.map((v,i)=>v-world.camera.position[i]));assert.equal(pickCloud(world,...uv),cloud.id);}
+ for(const cloud of world.clouds){const uv=projectDirection(cloud.center.map((v,i)=>v-world.camera.position[i]));assert.equal(pickCloud({...world,clouds:[cloud]},...uv),cloud.id);}
  for(const elevation of [-15,0,25,90]){const f=renderCloudScene(world,{}, {azimuth:20,elevation},24,15);for(const field of Object.values(f))assert.ok(field.every(Number.isFinite));}
 });
 test('contributions add exactly, controls stay independent and sun motion leaves geometry fixed',()=>{
@@ -59,7 +59,7 @@ test('perpendicular hue and Earth-shadow fields vary independently',()=>{
  assert.ok(gradientCoordinate(toward,params,sun)>gradientCoordinate(away,params,sun));
  const red=hueColor(.1),yellow=hueColor(.9);assert.ok(red[1]<yellow[1]);assert.equal(Math.max(...red),Math.max(...yellow));
  const c=spatialGradientColor(p,params,sun),lit=illuminationAt(p,params,sun);c.forEach((v,i)=>assert.ok(Math.abs(lit[i]-v*earthLightAt(p,params,sun))<1e-12));
- assert.deepEqual(createCloudScene().clouds.map(c=>c.center[1]),[6,6,6]);
+ assert.deepEqual(createCloudScene().clouds.map(c=>c.center[1]),Array(10).fill(6));
 });
 test('Earth-shadow intensity modulates direct and volume light independently of hue',()=>{
  const sun={azimuth:180,elevation:5},base={broadNormalInfluence:0,shadowHeight:-100},dark={...base,shadowHeight:100,shadowFloor:0};
@@ -90,4 +90,13 @@ test('side samples use real surfaces and direct incident light excludes reflecte
  });
  const f=renderCloudScene(scene,{shadowHeight:-100},{azimuth:0,elevation:0},1,1);
  assert.equal(f.facing[0],0);assert.ok(f.directIncident.some(v=>v>0));assert.ok(f.directAdded.every(v=>v===0));
+});
+
+test('five layers contain two distinct clouds with open sky in the default composition',()=>{
+ const world=createCloudScene();assert.equal(world.layers.length,5);assert.equal(world.clouds.length,10);
+ assert.equal(new Set(world.clouds.map(c=>c.id)).size,10);
+ for(const layer of world.layers){const clouds=world.clouds.filter(c=>c.layerId===layer.id);assert.equal(clouds.length,2);assert.notEqual(clouds[0].center[0],clouds[1].center[0]);}
+ let sky=0,cloud=0;const visible=new Set();
+ for(let y=0;y<50;y++)for(let x=0;x<80;x++){const id=pickCloud(world,(x+.5)/80,(y+.5)/50);if(id){cloud++;visible.add(id);}else sky++;}
+ assert.ok(sky>cloud,'retain more sky than solid coverage');assert.ok(cloud>100,'clouds visibly populate the scene');assert.equal(visible.size,10);
 });

@@ -22,7 +22,7 @@ test('layer shape changes preserve placements and other shapes',()=>{
  const before=createCloudScene({nearShape:'cluster',middleShape:'wisps',farShape:'image'},shapes);
  const after=createCloudScene({nearShape:'teardrop',middleShape:'wisps',farShape:'image'},shapes);
  assert.deepEqual(before.clouds.map(c=>[c.center,c.radii,c.yaw]),after.clouds.map(c=>[c.center,c.radii,c.yaw]));
- assert.equal(before.clouds[1].shape,after.clouds[1].shape);assert.equal(before.clouds[2].shape,after.clouds[2].shape);assert.notEqual(before.clouds[0].shape,after.clouds[0].shape);
+ for(let i=2;i<before.clouds.length;i++)assert.equal(before.clouds[i].shape,after.clouds[i].shape);assert.notEqual(before.clouds[1].shape,after.clouds[1].shape);assert.notEqual(before.clouds[0].shape,after.clouds[0].shape);
 });
 test('yaw transforms geometry consistently for intersections, picking and obstruction',()=>{
  for(const shapeName of Object.keys(shapes))for(const yaw of [-60,0,60]){
@@ -46,8 +46,8 @@ test('mixed shapes produce finite fields and transmitted light',()=>{
  for(const field of Object.values(fields))assert.ok(field.every(Number.isFinite));assert.ok(fields.transmission.some(v=>v>0));
 });
 test('legacy global shapes migrate without overriding new independent choices',()=>{
- assert.deepEqual(migrateLayerShapes({cloudShape:'image',nearShape:'wisps'}),{nearShape:'wisps',middleShape:'image',farShape:'image'});
- assert.deepEqual(migrateLayerShapes({cloudShape:'layers'}),{nearShape:'ellipsoid',middleShape:'ellipsoid',farShape:'ellipsoid'});
+ assert.deepEqual(migrateLayerShapes({cloudShape:'image',nearShape:'wisps'}),{nearShape:'wisps',nearMiddleShape:'image',middleShape:'image',farMiddleShape:'image',farShape:'image'});
+ assert.deepEqual(migrateLayerShapes({cloudShape:'layers'}),{nearShape:'ellipsoid',nearMiddleShape:'ellipsoid',middleShape:'ellipsoid',farMiddleShape:'ellipsoid',farShape:'ellipsoid'});
  assert.deepEqual(migrateLayerShapes({nearShape:'cluster',middleShape:'teardrop'}),{nearShape:'cluster',middleShape:'teardrop'});
 });
 test('sun marker keeps fixed angular radius and the true projected angle',()=>{

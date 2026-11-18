@@ -10,12 +10,20 @@ export function lightDirection({azimuth=15,elevation=15}={}){
  const a=azimuth*Math.PI/180,e=elevation*Math.PI/180;
  return [Math.sin(a)*Math.cos(e),Math.sin(e),Math.cos(a)*Math.cos(e)];
 }
+export const CLOUD_LAYERS=['near','nearMiddle','middle','farMiddle','far'];
+export const DEFAULT_LAYER_SHAPES=['cluster','teardrop','wisps','cluster','teardrop'];
 export function createCloudScene(params={},shapes=ANALYTIC_SHAPES){
  const thickness=params.cloudThickness??1,spacing=params.layerSpacing??1;
- return {camera:CAMERA,clouds:[
-  {id:'near',center:[-2,6,9*spacing],radii:[3.1,.85*thickness,1.8],color:'#89d9ef'},
-  {id:'middle',center:[2.8,6,18*spacing],radii:[5,1.15*thickness,2.5],color:'#f3bb83'},
-  {id:'far',center:[-2,6,32*spacing],radii:[8,1.5*thickness,3.5],color:'#bfadf6'}].map(cloud=>({...cloud,shapeName:params[`${cloud.id}Shape`]??'ellipsoid',shape:shapes[params[`${cloud.id}Shape`]??'ellipsoid'],yaw:(params[`${cloud.id}Yaw`]??0)*Math.PI/180}))};
+ const colors=['#89d9ef','#91d9b2','#f3bb83','#e9a8ca','#bfadf6'];
+ const layers=CLOUD_LAYERS.map((id,i)=>({id,depth:(10+i*7)*spacing,shapeName:params[`${id}Shape`]??'ellipsoid',yaw:(params[`${id}Yaw`]??0)*Math.PI/180,color:colors[i]}));
+ const clouds=layers.flatMap((layer,i)=>[-1,1].map((side,j)=>{
+  const z=10+i*7,shift=[-.06,.1,-.1,.08,-.02][i];
+  return {id:j?`${layer.id}-2`:layer.id,layerId:layer.id,
+   center:[z*(side*.36+shift),6,(z+side*1.1)*spacing],
+   radii:[z*(j?.22:.25),(1+i*.08)*(j?.9:1)*thickness,1+i*.1],
+   color:layer.color,shapeName:layer.shapeName,shape:shapes[layer.shapeName],yaw:layer.yaw};
+ }));
+ return {camera:CAMERA,layers,clouds};
 }
 export function cameraRay(u,v,camera=CAMERA){
  const y=(1-2*v)*camera.tanHalfFov,z=1,s=Math.sin(camera.pitch),c=Math.cos(camera.pitch);
