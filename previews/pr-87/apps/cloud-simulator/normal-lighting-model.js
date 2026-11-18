@@ -2,7 +2,7 @@
  * Consumers: normal-lighting experiment and tests. Dependencies: decoded RGB normal/RGBA geometry arrays. */
 export const clamp=x=>Math.max(0,Math.min(1,x));
 // Linear-light control palettes; interpolation happens before display encoding.
-export const palettes={sunlight:[[1,.025,.005],[1,.25,.025],[1,.9,.65]],sunset:[[.16,.015,.4],[.65,.015,.4],[1,.015,.03],[1,.2,.01],[1,.85,.12]],spectrum:[[.3,.01,.6],[.02,.06,1],[0,.7,.9],[.03,.7,.06],[1,.9,.03],[1,.22,.01],[1,.01,.02]],bicolor:[[1,.035,.02],[1,.485,.2]],moon:[[.035,.015,.1],[.12,.18,.32],[.6,.7,.85]]};
+export const palettes={cloudSunset:[[1,.015,.03],[.65,.015,.4],[.16,.015,.4],[.06,.04,.65]],sunlight:[[1,.025,.005],[1,.25,.025],[1,.9,.65]],sunset:[[.16,.015,.4],[.65,.015,.4],[1,.015,.03],[1,.2,.01],[1,.85,.12]],spectrum:[[.3,.01,.6],[.02,.06,1],[0,.7,.9],[.03,.7,.06],[1,.9,.03],[1,.22,.01],[1,.01,.02]],bicolor:[[1,.035,.02],[1,.485,.2]],moon:[[.035,.015,.1],[.12,.18,.32],[.6,.7,.85]]};
 export function gradientColor(position,params={}){
  const {gradientKind='sunset',gradientStart=0,gradientEnd=1,gradientWarp=1,gradientPosition=.5,gradientCompression=3,lightSource='sun'}=params;
  const palette=palettes[gradientKind==='auto'?(lightSource==='moon'?'moon':'sunset'):gradientKind]??palettes.sunset;

@@ -2,7 +2,7 @@
  * Consumers: Node test runner. Dependencies: cloud-geometry and normal-lighting models. */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {CAMERA,createCloudScene,cameraRay,projectDirection,lightDirection,intersectEllipsoid,surfaceNormal,opticalDepth,pickCloud,renderCloudScene,dot,gradientAxis,gradientCoordinate,spatialGradientColor,hueColor,earthLightAt,illuminationAt,along} from './cloud-geometry.js';
+import {CAMERA,createCloudScene,cameraRay,projectDirection,lightDirection,intersectEllipsoid,surfaceNormal,opticalDepth,pickCloud,renderCloudScene,dot,gradientAxis,gradientCoordinate,spatialGradientColor,hueColor,earthLightAt,illuminationAt,along,directIlluminationAt,sideSurfaceSamples,rayCloud} from './cloud-geometry.js';
 import {shadeCloud,gradientColor} from './normal-lighting-model.js';
 const sphere={id:'test',center:[0,0,6],radii:[2,2,2]};
 const scene={camera:{...CAMERA,position:[0,0,0],pitch:0},clouds:[sphere]};
@@ -73,4 +73,21 @@ test('at dusk upper and sunward clouds retain light after lower near clouds ente
  assert.ok(earthLightAt([0,6,40],{},sun)>earthLightAt([0,6,9],{},sun));
  assert.ok(earthLightAt([0,15,9],{},sun)>earthLightAt([0,1,9],{},sun));
  assert.ok(illuminationAt([0,15,9],{},sun).some(v=>v>.5));
+});
+
+test('single sunset ramp is red away from the source and blue-purple toward it',()=>{
+ const away=hueColor(0),near=hueColor(1);
+ assert.ok(away[0]>away[2]*10);assert.ok(near[2]>near[0]*5);
+ assert.deepEqual(hueColor(.4,{gradientKind:'moon'}),hueColor(.4,{gradientKind:'spectrum'}));
+});
+test('side samples use real surfaces and direct incident light excludes reflected facing',()=>{
+ const world=createCloudScene(),samples=sideSurfaceSamples(world),sun={azimuth:0,elevation:15},params={};
+ samples.forEach((layer,k)=>{const sample=layer.find(Boolean);assert.ok(sample);const cloud=world.clouds[k];
+  assert.ok(rayCloud(cloud,along(sample.point,sample.geometricNormal,.01),sample.geometricNormal.map(v=>-v)).length);
+  const result=directIlluminationAt(world,sample.point,sample.normal,sample.geometricNormal,params,sun);
+  result.color.forEach((v,c)=>assert.ok(Math.abs(v-result.incoming[c]*result.visibility)<1e-12));
+  assert.deepEqual(result,directIlluminationAt(world,sample.point,sample.normal,sample.geometricNormal,{detailShadingStrength:0},sun));
+ });
+ const f=renderCloudScene(scene,{shadowHeight:-100},{azimuth:0,elevation:0},1,1);
+ assert.equal(f.facing[0],0);assert.ok(f.directIncident.some(v=>v>0));assert.ok(f.directAdded.every(v=>v===0));
 });

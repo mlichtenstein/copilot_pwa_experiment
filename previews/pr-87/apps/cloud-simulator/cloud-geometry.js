@@ -79,7 +79,7 @@ export function gradientCoordinate(p,params={},sun={},normal=[0,0,0]){
  return .5+(params.heightInfluence??1)*dot(offset,lightDirection(sun))/40+(params.broadNormalInfluence??.35)*dot(normal,lightDirection(sun));
 }
 export function hueColor(coordinate,params={}){
- const paletteParams={...params,gradientKind:!params.gradientKind||params.gradientKind==='auto'?(params.lightSource==='moon'?'moon':'sunlight'):params.gradientKind};
+ const paletteParams={...params,gradientKind:'cloudSunset'};
  const color=gradientColor(coordinate,paletteParams),value=Math.max(...color)||1;
  // Normalize HSV value: hue controls must not introduce a second brightness gradient.
  return color.map(v=>1+(v/value-1)*(params.gradientStrength??1));
@@ -99,6 +99,19 @@ export function illuminationAt(p,params={},sun={},normal=[0,0,0]){
  const earthLight=earthLightAt(p,params,sun),source=params.lightSource==='moon'?(params.nightBrightness??.45):1;
  return hueColor(gradientCoordinate(p,params,sun,normal),params).map(v=>v*earthLight*source);
 }
+// Direct incident light arriving at a surface, before normal-facing reflection or scattering.
+export function directIlluminationAt(scene,p,normal,geometricNormal,params={},sun={}){
+ const incoming=illuminationAt(p,params,sun,normal);
+ const visibility=Math.exp(-opticalDepth(scene,along(p,geometricNormal,.001),lightDirection(sun),params.cloudDensity??.7));
+ return {incoming,visibility,color:incoming.map(v=>v*visibility)};
+}
+export function sideSurfaceSamples(scene){
+ const {width,height}=SIDE;
+ return scene.clouds.map(cloud=>Array.from({length:width*height},(_,i)=>{
+  const p=sidePoint((i%width+.5)/width,(Math.floor(i/width)+.5)/height),origin=[-50,p[1],p[2]],hit=rayCloud(cloud,origin,[1,0,0])[0];
+  return hit?{point:along(origin,[1,0,0],hit.start),normal:hit.normal,geometricNormal:hit.geometricNormal}:null;
+ }));
+}
 const cameraCache=new WeakMap();
 function cameraSamples(scene,width,height){
  const cached=cameraCache.get(scene);if(cached?.width===width&&cached.height===height)return cached.samples;
@@ -106,7 +119,7 @@ function cameraSamples(scene,width,height){
  cameraCache.set(scene,{width,height,samples});return samples;
 }
 const scalar=['coverage','earthLight','colorCoordinate','depth','thickness','facing','visibility','transmission'];
-const rgb=['normals','broadNormals','incoming','direct','diffusion','sky','ambient','ambientPass','directPass','directAdded','diffusionAdded','scene'];
+const rgb=['normals','broadNormals','incoming','directIncident','direct','diffusion','sky','ambient','ambientPass','directPass','directAdded','diffusionAdded','scene'];
 // Homogeneous participating solids: shared ray intervals, six midpoint samples for
 // single scattering. Surface and broad-normal color remain artistic controls.
 export function renderCloudScene(scene,params={},sun={},width=96,height=60){
@@ -128,10 +141,10 @@ export function renderCloudScene(scene,params={},sun={},width=96,height=60){
    const noise=[Math.sin(p[0]*9+p[2]*3),Math.sin(p[2]*8-p[1]*5),Math.sin(p[1]*11+p[0]*4)];
    const normalNoise=dot(noise,n),fine=unit(n.map((v,c)=>v+.12*(noise[c]-normalNoise*v)));
    const coordinate=gradientCoordinate(p,params,sun,n);
-   const color=illuminationAt(p,params,sun,n);
+   const incident=directIlluminationAt(scene,p,n,geometricNormal,params,sun),color=incident.incoming;
    const mu=facing(dot(fine,l),params.lightingModel??'lambert',params.wrap??.4);
    const surfaceFacing=1-(params.detailShadingStrength??1)+(params.detailShadingStrength??1)*mu;
-   const visibility=Math.exp(-opticalDepth(scene,along(p,geometricNormal,.001),l,density));
+   const visibility=incident.visibility;
    const opacity=1-Math.exp(-density*length),weight=cameraTransmission*opacity;
    let transmission=0,scatteredColor=[0,0,0];
    const ds=length/6;
@@ -146,7 +159,7 @@ export function renderCloudScene(scene,params={},sun={},width=96,height=60){
    if(cameraTransmission===1){
     fields.layerIndex[i]=scene.clouds.indexOf(hit.cloud);fields.depth[i]=start;fields.thickness[i]=length;fields.colorCoordinate[i]=clamp(coordinate);
     fields.earthLight[i]=earthLightAt(p,params,sun);fields.facing[i]=surfaceFacing;fields.visibility[i]=visibility;fields.transmission[i]=transmission;
-    fields.normals.set(fine,i*3);fields.broadNormals.set(n,i*3);fields.incoming.set(color,i*3);
+    fields.normals.set(fine,i*3);fields.broadNormals.set(n,i*3);fields.incoming.set(color,i*3);fields.directIncident.set(incident.color,i*3);
    }
    for(let c=0;c<3;c++){
     ambient[c]+=weight*[.055,.065,.10][c]*ambientLight;
