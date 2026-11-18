@@ -1,0 +1,84 @@
+/* Purpose: Linked side elevation of the renderer's solids, camera and distant source.
+ * Consumers: normal-lighting.js. Dependencies: cloud-geometry, canvas, shared hold help. */
+import {lightDirection,cameraRay,rayCloud,along,pickCloud,localToWorld,sideSurfaceSamples,directIlluminationAt,sideCloudAt,sideLightMarker,SIDE,SIDE_PLOT,sidePixel,sidePoint,spatialGradientColor,earthLightAt,SOURCE_DIAL,CLOUD_LAYERS} from './cloud-geometry.js';
+export function mountCloudSideView({doc,root,canvas:front,instance,help,render}){
+ const make=(tag,props={})=>Object.assign(doc.createElement(tag),props);
+ const heading=make('summary',{textContent:'Side view · world geometry'}),canvas=make('canvas',{width:720,height:390});
+ canvas.setAttribute('aria-label','Side elevation of cloud solids, camera rays, surface normal and a labelled distant sun or moon.');canvas.setAttribute('role','img');
+ const controls=make('div',{className:'geometry-selection'}),label=make('span',{textContent:'selectedCloud'}),buttons=[];
+ controls.append(label);
+ for(const id of CLOUD_LAYERS){
+  const button=make('button',{type:'button',textContent:id});button.addEventListener('click',()=>{selected=id;sample=null;update();render?.();});
+  help?.attach(button,`Select the first cloud in the ${id} layer for side inspection.`,button);buttons.push(button);controls.append(button);
+ }
+ const fieldControls=make('div',{className:'geometry-selection'}),fieldButtons=[];fieldControls.append(make('span',{textContent:'sideField'}));
+ for(const mode of ['combined','earthLight','hue']){
+  const button=make('button',{type:'button',textContent:mode});button.addEventListener('click',()=>{fieldMode=mode;update();});
+  help?.attach(button,`Inspect ${mode==='combined'?'hue multiplied by Earth-shadow intensity':mode==='earthLight'?'Earth-shadow intensity alone':'hue alone, without Earth-shadow dimming'} at X=0.`,button);fieldButtons.push(button);fieldControls.append(button);
+ }
+ const note=make('p',{className:'geometry-note',textContent:'X collapsed. White: viewing ray. Green: surface normal. Cloud fill: direct incident light, before reflection/scattering. Tint: selected field at X=0. earthLight brightens above the shadow; hue reddens away from the source. Sun/Moon inset: direction only, not world position. Tap a cloud in either view.'});
+ root.append(heading,canvas,fieldControls,controls,note);
+ let fieldMode='combined',selected='near',sample=null,scene=null,lastScene=null,surfaces=[];
+ const plot=SIDE_PLOT,map=sidePixel; // Shared equal-scale projection, including the source marker.
+ const line=(ctx,a,b,color,width=1)=>{ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(...map(a));ctx.lineTo(...map(b));ctx.stroke();};
+ function arrow(ctx,p,d,length,color){const q=along(p,d,length);line(ctx,p,q,color,2);const a=map(p),b=map(q),angle=Math.atan2(b[1]-a[1],b[0]-a[0]);ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(...b);ctx.lineTo(b[0]-7*Math.cos(angle-.45),b[1]-7*Math.sin(angle-.45));ctx.lineTo(b[0]-7*Math.cos(angle+.45),b[1]-7*Math.sin(angle+.45));ctx.fill();}
+ function update(){
+  const data=instance.geometry?.();scene=data?.scene;const sun=data?.sun;
+  const ctx=canvas.getContext('2d');ctx.fillStyle='#111c30';ctx.fillRect(0,0,720,390);
+  if(!scene)return;
+  if(lastScene!==scene){
+   lastScene=scene;surfaces=sideSurfaceSamples(scene);
+  }
+  buttons.forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===scene.clouds.find(c=>c.id===selected)?.layerId)));
+  fieldButtons.forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===fieldMode)));
+  // Same palette and coordinate function as the renderer; low opacity keeps geometry readable.
+  const fieldCanvas=make('canvas',{width:120,height:65}),fieldCtx=fieldCanvas.getContext('2d'),fieldImage=fieldCtx.createImageData(120,65);
+  for(let y=0;y<65;y++)for(let x=0;x<120;x++){
+   const p=sidePoint((x+.5)/120,(y+.5)/65),value=earthLightAt(p,data.params,sun),hue=spatialGradientColor(p,data.params,sun);
+   const color=(fieldMode==='earthLight'?[value,value,value]:hue.map(v=>v*(fieldMode==='combined'?value:1))).map(v=>Math.round(255*Math.pow(Math.max(0,Math.min(1,v)),1/2.2)));
+   fieldImage.data.set([...color,130],(y*120+x)*4);
+  }
+  fieldCtx.putImageData(fieldImage,0,0);ctx.drawImage(fieldCanvas,plot.x,plot.y,plot.width,plot.height);
+  ctx.font='14px sans-serif';ctx.fillStyle='#c1cce0';
+  for(let z=0;z<=40;z+=10){line(ctx,[0,-4,z],[0,22,z],'#29394e');ctx.fillText(`${z}`,map([0,0,z])[0]-4,359);}
+  for(let y=0;y<=20;y+=4){line(ctx,[0,y,-3],[0,y,49],'#29394e');ctx.fillText(`${y}`,12,map([0,y,0])[1]+4);}
+  ctx.fillText('altitude',8,17);ctx.fillText('distance → (world units)',475,380);line(ctx,[0,0,-3],[0,0,49],'#698470');
+  ctx.save();ctx.beginPath();ctx.rect(plot.x,plot.y,plot.width,plot.height);ctx.clip();
+  ctx.setLineDash([5,5]);for(const v of [0,1])line(ctx,scene.camera.position,along(scene.camera.position,cameraRay(.5,v),60),'#7286a5');ctx.setLineDash([]);
+  // Paint the selected surface last so its outline survives overlapping side projections.
+  scene.clouds.map((cloud,k)=>({cloud,k})).sort((a,b)=>(a.cloud.id===selected)-(b.cloud.id===selected)).forEach(({cloud,k})=>{
+   const off=make('canvas',{width:SIDE.width,height:SIDE.height}),context=off.getContext('2d'),image=context.createImageData(SIDE.width,SIDE.height),samples=surfaces[k];
+   samples.forEach((sample,i)=>{if(!sample)return;
+    const light=directIlluminationAt(scene,sample.point,sample.normal,sample.geometricNormal,data.params,sun).color;
+    const rgb=light.map(v=>Math.round(255*Math.pow(Math.max(0,Math.min(1,v)),1/2.2)));
+    const edge=cloud.id===selected&&[i-1,i+1,i-SIDE.width,i+SIDE.width].some(j=>!samples[j]);
+    image.data.set(edge?[175,215,235,255]:[...rgb,255],i*4);
+   });context.putImageData(image,0,0);ctx.drawImage(off,plot.x,plot.y,plot.width,plot.height);
+  });
+  const cloud=scene.clouds.find(c=>c.id===selected),anchor=localToWorld(cloud,cloud.shape?.anchor??[0,0,0]),direction=sample??anchor.map((v,i)=>v-scene.camera.position[i]);
+  const len=Math.hypot(...direction),ray=direction.map(v=>v/len),hit=rayCloud(cloud,scene.camera.position,ray)[0];
+  if(hit){const p=along(scene.camera.position,ray,hit.start);line(ctx,scene.camera.position,p,'#e5f6ff',2);arrow(ctx,p,hit.normal,2,'#65f0bd');}
+  const l=lightDirection(sun),incoming=l.map(v=>-v);
+  for(const z of [14,26,38])arrow(ctx,[0,19,z],incoming,5,'#ffdc83');ctx.restore();
+  for(const layer of scene.layers){const [x,y]=map([0,6,layer.depth]);ctx.fillStyle=layer.color;ctx.font='12px sans-serif';ctx.fillText(layer.id,x-28,y-30);}
+  const camera=map(scene.camera.position);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(...camera,4,0,Math.PI*2);ctx.fill();ctx.fillText('camera',camera[0]+8,camera[1]-6);
+  const marker=sideLightMarker(sun),moon=data.source==='moon',color=moon?'#d7e6ff':'#ffdc83';
+  const dial=SOURCE_DIAL;
+  ctx.fillStyle='#111c30';ctx.fillRect(470,22,220,155);
+  ctx.strokeStyle='#7286a5';ctx.lineWidth=1;ctx.beginPath();ctx.arc(dial.x,dial.y,dial.radius,0,Math.PI*2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(dial.x-82,dial.y);ctx.lineTo(dial.x+82,dial.y);ctx.stroke();
+  ctx.fillStyle='#c1cce0';ctx.font='12px sans-serif';ctx.fillText('source direction · angular inset',478,37);ctx.fillText('horizon',638,128);
+  if(!marker.outOfPlane){ctx.strokeStyle=color;ctx.beginPath();ctx.moveTo(dial.x,dial.y);ctx.lineTo(marker.x,marker.y);ctx.stroke();}
+  ctx.fillStyle=color;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(marker.x,marker.y,10,0,Math.PI*2);ctx.fill();
+  if(!moon)for(let a=0;a<Math.PI*2;a+=Math.PI/4){ctx.beginPath();ctx.moveTo(marker.x+14*Math.cos(a),marker.y+14*Math.sin(a));ctx.lineTo(marker.x+19*Math.cos(a),marker.y+19*Math.sin(a));ctx.stroke();}
+  ctx.font='bold 14px sans-serif';const labelX=480,labelY=168;
+  ctx.fillText(`${moon?'Moon':'Sun'} · ∞`,labelX,labelY);
+  if(marker.outOfPlane){ctx.font='13px sans-serif';ctx.fillText(`out of plane (${marker.towardX?'+':'−'}X)`,570,168);}
+  ctx.font='14px sans-serif';ctx.fillStyle=color;ctx.fillText(`elevation ${sun.elevation.toFixed(1)}° · azimuth ${sun.azimuth.toFixed(1)}°`,170,17);
+  canvas.setAttribute('aria-label',`Side elevation. ${moon?'Moon':'Sun'} at infinity: elevation ${sun.elevation.toFixed(1)} degrees, azimuth ${sun.azimuth.toFixed(1)} degrees. ${fieldMode} field at X=0: independent Earth-shadow intensity and perpendicular hue gradient. Source shown on a separate angular inset. Selected ${selected}: ${cloud.shapeName}.`);
+ }
+ canvas.addEventListener('click',event=>{if(!scene)return;const r=canvas.getBoundingClientRect(),x=(event.clientX-r.left)*720/r.width,y=(event.clientY-r.top)*390/r.height,u=(x-plot.x)/plot.width,v=(y-plot.y)/plot.height;if(u<0||u>1||v<0||v>1)return;const id=sideCloudAt(scene,u,v);if(id){selected=id;sample=null;update();render?.();}});
+ front.addEventListener('click',event=>{if(!scene)return;const r=front.getBoundingClientRect(),u=(event.clientX-r.left)/r.width,v=(event.clientY-r.top)/r.height,id=pickCloud(scene,u,v);if(id){selected=id;sample=cameraRay(u,v);update();render?.();}});
+ root.addEventListener('toggle',update);
+ return {update};
+}

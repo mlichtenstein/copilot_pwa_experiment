@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<!-- Purpose: Cloud lighting and linked side geometry shell with fixed canvas and independently scrolling controls.
+     Consumers: browser. Dependencies: normal-lighting.js, core host, style.css, weather-inspector.css, shared presets and scoped worker. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#111c30"><title>Cloud simulator · Normal lighting</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="../shared/presets.css"><link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg"><link rel="stylesheet" href="weather-inspector.css"><style>
+/* Purpose: Keep this prototype’s generated controls legible in its narrow scrolling pane.
+ * Consumers: normal-lighting.html. Dependencies: core host .choice/fieldset markup. */
+#controls fieldset { grid-template-columns: minmax(0, 1fr); }
+#controls .choice { align-items: flex-start; }
+#controls .choice > span { display: grid; gap: 5px; min-width: 0; }
+.normal-workbench .simulation-pane.with-presets { grid-template-rows:auto minmax(100px,1fr) auto auto; overflow-y:auto; }
+#geometry-side { background:#111c30; border:1px solid #3a4b65; border-radius:8px; padding:5px; }
+#geometry-side summary { cursor:pointer; font-size:.85rem; }
+#geometry-side canvas { display:block; width:min(100%,610px); height:auto; margin:auto; aspect-ratio:720/390; image-rendering:auto; }
+.geometry-selection { display:flex; gap:6px; align-items:center; font-size:.75rem; }
+.geometry-selection button { padding:4px 10px; }
+.geometry-selection button[aria-pressed="true"] { outline:2px solid #89d9ef; }
+.geometry-note { font-size:.7rem; color:#a8bbd2; margin:5px 0 0; }
+.normal-workbench .weather-inspector:not([open]) { height:auto; }
+@media(max-width:760px) { .normal-workbench .simulation-pane.with-presets { grid-template-rows:auto auto auto auto; } }
+</style></head>
+<body class="experiment normal-workbench"><main class="experiment-layout"><header id="header" class="experiment-header"></header>
+<section class="viewport simulation-pane with-presets" aria-label="Cloud lighting scene and side geometry"><div id="presets" role="group" aria-label="Rate these settings"></div><div class="inspection-viewport"><p id="inspection-caption" class="inspection-caption">Final combined scene.</p><div class="canvas-fit"><canvas id="sky" width="160" height="100" style="--ar:1.6" role="img" aria-label="Perspective clouds lit by a distant sun or moon."></canvas></div></div><details id="geometry-side" open></details><details id="weather-inspector" class="weather-inspector"><summary title="Read-only live graph of fields, their current connections, and accumulated render passes">Fields &amp; rendering graph</summary></details></section>
+<div class="controls-pane" role="region" aria-label="Scrollable weather controls" tabindex="0"><div id="playback" class="playback"></div><p id="stats" class="stats"></p>
+<section id="controls" class="controls" aria-label="Normal lighting parameters"></section><details><summary>Lighting approximations</summary><p>Each layer chooses its own closed solid. Both views, picking, shadows and transmission use that geometry. Image is a closed approximation inferred from baked depth and thickness. Six samples estimate single scattering; colors and surface response remain artistic. No physical multiple scattering or photo reconstruction is claimed.</p></details><p id="status" role="status"></p><noscript>JavaScript is required.</noscript></div></main><script type="module" src="normal-lighting.js"></script></body></html>

@@ -78,3 +78,14 @@
   .inspector-help { display: none; }
   .inspector-body { height: calc(34dvh - 32px); grid-template-rows: auto auto minmax(0,1fr); }
 }
+
+/* On phones the scene row follows its canvas instead of reserving unused height. */
+@media(max-width:760px) {
+ .experiment-layout { grid-template-rows: auto auto minmax(120px,1fr); overflow-y:auto; }
+ .simulation-pane.with-presets { grid-template-rows:auto auto auto; }
+ .inspection-viewport { min-height:0; grid-template-rows:auto auto; }
+ .simulation-pane .canvas-fit { container-type:normal; }
+ .simulation-pane .canvas-fit canvas { width:min(100%,32dvh * var(--fit-ar)); height:auto; aspect-ratio:var(--fit-ar); }
+}
+.weather-composition li { display:grid; align-content:start; gap:6px; }
+.weather-composition li > label { font-size:.7rem; }

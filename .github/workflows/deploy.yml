@@ -277,7 +277,7 @@ jobs:
           apps="Hello World (site root)|app/|$base/"
           for dir in apps/*/; do
             [ -d "$dir" ] || continue
-            [ -f "${dir}index.html" ] || continue
+            [ -f "${dir}index-ready" ] || continue
             slug=${dir#apps/}
             slug=${slug%/}
             case "$slug" in
