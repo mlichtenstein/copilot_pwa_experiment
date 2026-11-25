@@ -43,7 +43,7 @@ async function mountAll() {
 
 test("the common panel is identical on every experiment page", async () => {
   const pages = await mountAll();
-  assert.equal(pages.length, 8, "all eight experiments are on the shared core");
+  assert.equal(pages.length, 9, "all nine experiments are on the shared core");
   const shared = ({ panel }) => panel.filter(node => !isSunItem(node) && !isSeedItem(node) && !isTimeItem(node) && !isStatesItem(node)).map(describe);
   const reference = shared(pages[0]);
   // The always-present items, in order.
@@ -107,7 +107,7 @@ const navOf = header => descendants(header.children.find(child => child.tagName 
 test("every page has the same header and nav, built from the registry", async () => {
   const pages = await mountAll();
   const all = experiments.map(entry => `${entry.nav} -> ${entry.href}`);
-  assert.deepEqual(experiments.map(entry => entry.nav), ["Combined layers", "Sunset", "Convection", "Horizon", "Shafts", "Noise", "Valley", "Lightning"]);
+  assert.deepEqual(experiments.map(entry => entry.nav), ["Normals", "Combined layers", "Sunset", "Convection", "Horizon", "Shafts", "Noise", "Valley", "Lightning"]);
   for (const { entry, $ } of pages) {
     const header = $("header");
     assert.equal(header.className, "experiment-header");

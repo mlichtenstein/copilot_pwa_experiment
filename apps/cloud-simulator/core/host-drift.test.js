@@ -34,6 +34,7 @@ function pageDocument() {
 }
 
 const EXPECTED = {
+  "normal-lighting": ["gradientStart", "gradientEnd", "gradientWarp", "nightBrightness", "nightSaturation", "shadowHeight", "shadowSoftness", "shadowFloor", "cloudThickness", "layerSpacing", "cloudDensity", "transmissionStrength", "microtextureScale", "microtextureStrength", "heightInfluence", "broadNormalInfluence", "detailShadingStrength", "gradientPosition", "gradientCompression", "gradientStrength", "wrap"],
   weather: ["airDensity", "aerosol", "exposure", "cloudAltitude", "altitudeSpread", "coverage", "textureMix", "wind", "formationSpeed", "cloudOpacity", "cloudSharpness", "haze", "shaftStrength", "edgeFeather", "rainAmount", "storminess", "chargeBias"],
   sunset: ["extinction", "slabDepth", "albedo", "g", "airOpticalDepth", "ambient", "exposure"],
   horizon: ["cloudAltitude", "altitudeSpread", "distanceScale", "airDensity", "aerosol", "exposure"],
