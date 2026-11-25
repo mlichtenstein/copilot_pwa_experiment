@@ -21,7 +21,7 @@ The camera uses a 58° vertical frustum and a 1.6 aspect ratio, shifted upward b
 
 ## Scene layers versus render passes
 
-1. Atmospheric sky from Horizon's spherical-atmosphere helpers.
+1. Atmospheric sky from Horizon's spherical-atmosphere helpers, with output-resolution sun and moon.
 2. All three-band visibility light veils, colored with altitude-dependent direct sunlight.
 3. Far cloud body, rain, channel light, opaque terrain.
 4. Middle cloud body, rain, channel light, opaque terrain.
@@ -30,7 +30,7 @@ The camera uses a 58° vertical frustum and a 1.6 aspect ratio, shifted upward b
 
 Cloud bodies cover the light veils, keeping their shape legible. Cloud silhouettes and visibility share a perspective adapter to the same density grid. Atmospheric transmission changes with height and distance, rather than applying one global sunset tint. The native terrain profile is defined in km and projected through that camera (with a small-angle Earth-curvature approximation).
 
-Lightning reuses the existing deterministic charge/growth model, coupled to the visible clouds through `denseCloudWater` (default 0.65, the old fixed rain threshold). Each of a layer's 12×6 charge cells averages cloud water over a 3×3 sample of its projected footprint; support is that mean over `denseCloudWater`, capped at 1. Buildup scales with support, clear air drains charge about ten times faster, and a channel starts only from a fully supported (dense) cell; a cloud-to-cloud target must be dense too, while ground channels and rain still cross clear air. The standalone Lightning page passes no support, so its fields are unchanged. The one strike prepared at load is dropped unless both its ends are dense. Its normalized geometry is warped from its original ground profile into the combined layer's projected cloud/terrain region. Ground flashes illuminate only that terrain pass; trees/rocks cast contact-light shadows there. **Charge is not yet coupled to visible cloud water.** This adapter is an exposed integration seam, not evidence that all weather already shares a physical geometry/model.
+Lightning reuses the existing deterministic charge/growth model, coupled to the visible clouds through `denseCloudWater` (default 0.65, the old fixed rain threshold). Each of a layer's 12×6 charge cells averages cloud water over a 3×3 sample of its projected footprint; support is that mean over `denseCloudWater`, capped at 1. Buildup scales with support, clear air drains charge about ten times faster, and a channel starts only from a fully supported (dense) cell; a cloud-to-cloud target must be dense too, while ground channels and rain still cross clear air. The standalone Lightning page passes no support, so its fields are unchanged. The one strike prepared at load is dropped unless both its ends are dense. Its normalized geometry is warped from its original ground profile into the combined layer's projected cloud/terrain region. Ground flashes illuminate only that terrain pass; trees/rocks cast contact-light shadows there. This adapter is an exposed integration seam, not evidence that all weather already shares a physical geometry/model.
 
 ## Playing and inspecting
 
@@ -75,3 +75,14 @@ Weather now consumes the common host frame.sun for sky, visibility and cloud ill
 The inspector and accumulated composition previews read the same reconstructed lighting maps as the final scene. Raw field previews retain their native grid presentation.
 
 Randomize changes scene parameters and the internal seed, while preserving the current field/composition view, inspection depth, layer-visibility toggles and lighting comparison mode. Graph tab, compact-preview style and expanded sections are UI state and also remain as chosen. The older studies likewise preserve their diagnostic View selection.
+
+
+## Moon detour
+
+The combined scene adds a stylized full moon on the same 90-second day clock. Its independent ellipse is `azimuth = −22 cos(2π(phase − 0.57))`, `elevation = 24 sin(2π(phase − 0.57))`, in degrees. It rises about 19:41, peaks about 01:41 and sets about 07:41. With the default sun path this leaves roughly 50 minutes of moonless evening and an early-morning overlap. Randomized sun shapes can change those intervals; the moon’s fixed path keeps it within the camera rather than inheriting extreme sun settings. The offset is timing, not a lunar illumination phase or astronomical ephemeris.
+
+A 1.1-degree disc matching the sun, faint halo and analytic crater shading are sampled on the final pixel grid in both lighting modes. Moonlight fades near the horizon and is subdued in daylight. It belongs to the sky composition pass, behind all cloud opacity and terrain, and appears in sky/composition previews. Clouds in front of it receive cool backlighting within 9°, with smooth radial falloff and exponential attenuation through thick cloud cores. The cloud-color inspector uses the same calculation. This is an artistic forward-scattering approximation, with faint cool terrain fill but without a second set of visibility shafts. No extra optical grids, settings or randomization exclusions are introduced. Scrubbing, pausing, saved sun phase and Play use the shared clock; moon geometry does not modify weather state.
+
+The lunar disc is three times its original radiance, preserving crater contrast. Terrain receives a local cool highlight that fades with lunar elevation, disappears in daylight or below the horizon, and is attenuated by the accumulated cloud optical depth toward the moon. The highlight is concentrated below the moon's projected position, fades down from each ridge, and is weighted by the ridge slope normal facing the moon. Terrain props remain silhouettes; this approximation does not add lunar cast shadows.
+
+Terrain highlight strength is amplified fourfold. A narrow exponential rim (about one to two output pixels) makes moon-facing ridge edges much brighter than the interior, with a weaker broad falloff beneath it. The same local footprint and cloud attenuation still apply.

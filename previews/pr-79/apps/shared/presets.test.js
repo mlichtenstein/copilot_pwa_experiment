@@ -85,6 +85,22 @@ function fakeServer(handlers) {
 const memoryStorage = () => { const map = new Map(); return { getItem: k => map.get(k) ?? null, setItem: (k, v) => map.set(k, v), removeItem: k => map.delete(k) }; };
 const options = (server, extra = {}) => ({ app: "demo/app", url: "https://project.supabase.co", key: "sb_publishable_test", fetch: server.fetch, storage: memoryStorage(), now: () => 1_000_000_000_000, ...extra });
 
+test("listRated reads one rating from this app, or from every app with a prefix, without signing in", async () => {
+  const server = fakeServer([() => [200, [{ id: "1" }]], () => [200, []]]);
+  const store = createPresetStore(options(server));
+  assert.deepEqual(await store.listRated("love"), [{ id: "1" }]);
+  assert.deepEqual(await store.listRated("love", { appPrefix: "demo/", limit: 5 }), []);
+  const [own, every] = server.requests;
+  assert.equal(own.method, "GET");
+  assert.equal(own.url.searchParams.get("rating"), "eq.love");
+  assert.equal(own.url.searchParams.get("app_id"), "eq.demo/app");
+  assert.equal(every.url.searchParams.get("app_id"), "like.demo/*");
+  assert.equal(every.url.searchParams.get("limit"), "5");
+  assert.match(every.url.searchParams.get("select"), /app_id.*params/);
+  assert.equal(every.headers.Authorization, undefined);
+  await assert.rejects(store.listRated("meh"), { kind: "invalid" });
+});
+
 test("list reads this app's last ratings newest first with only the publishable key", async () => {
   const server = fakeServer([() => [200, [{ id: "1", display_name: "A" }]]]);
   const rows = await createPresetStore(options(server)).list();

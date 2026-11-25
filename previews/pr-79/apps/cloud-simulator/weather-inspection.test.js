@@ -7,9 +7,10 @@ import {nodes,passes,graphEdges,renderInspection,needsLighting} from "./weather-
 import {mountWeatherInspector} from "./weather-inspector.js";
 import {weather} from "./weather-experiment.js";import {defaultParams} from "./core/experiment.js";
 import {fakeDocument,descendants} from "./core/fake-dom.js";
+import {sunAtPhase} from "./core/sun-path.js";
 const seeds=Array.from({length:3},()=>randomInt(0,4294967296));
 test(`every preview reads the live frame without mutation (fresh seeds ${seeds})`,()=>{
-  for(const seed of seeds){const state=createWeather(seed),maps=buildWeatherLighting(state,defaults),before=JSON.stringify(state);
+  for(const seed of seeds){const state=createWeather(seed),maps=buildWeatherLighting(state,defaults,sunAtPhase(.125)),before=JSON.stringify(state);
     for(const layer of state.layers)for(const node of nodes){const pixels=renderInspection(state,{...defaults,view:node.id,inspectLayer:layer.name},needsLighting(node.id)?maps:null,32,20);assert.equal(pixels.length,32*20*4);assert.ok(pixels.every((v,i)=>i%4!==3||v===255));}
     assert.equal(JSON.stringify(state),before);
     assert.deepEqual(renderInspection(state,{...defaults,view:"scene"},maps,32,20),renderWeather(state,defaults,maps,32,20));

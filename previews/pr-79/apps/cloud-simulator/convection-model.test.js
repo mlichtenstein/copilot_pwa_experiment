@@ -4,6 +4,7 @@
  *   Runs at both page grid sizes (64×48 and 128×96) where size matters.
  * Consumers: Node's test runner. Dependencies: node:test, node:assert and convection-model.js. */
 import test from "node:test";
+import { testSeeds, fuzzing } from "./core/test-seeds.js";
 import assert from "node:assert/strict";
 import { createConvection, step, totalWater, saturation, renderConvection, RAIN_SCALE,
   cloudCover, cloudLayers, capping, billows, fray, haze, facing, HAZE_OPACITY, rainOpacity, sunsetSky, cloudColor,
@@ -65,19 +66,16 @@ function interiorActivity(simulation, ticks, options = {}) {
 // Defaults sit around 1-3e-4 for thousands of ticks; still air with no buoyancy is about 2e-6.
 const ACTIVITY_FLOOR = 6e-5;
 
-// Specific seeds are not meant to matter, so each run draws fresh random seeds and names
-// them in any failure. Reproduce one with CONVECTION_SEEDS=123,456 node --test ...
+// Specific seeds are not meant to matter, so the run uses four seeds pinned in
+// core/test-seeds.js (drawn once at random, not tuned) and names them in any failure.
+// FUZZ_SEEDS=1 draws fresh ones; FUZZ_SEEDS=123,456 (or the older CONVECTION_SEEDS) runs those.
 const randomSeeds = process.env.CONVECTION_SEEDS
   ? process.env.CONVECTION_SEEDS.split(",").map(Number)
-  : [...crypto.getRandomValues(new Uint32Array(4))];
+  : testSeeds(4);
 
-// At the default 64×48, LCL (the default) runs on every seed and no layering on half.
-// The inversion runs at 128×96: at 64×48 its shallow convecting layer can settle on some
-// seeds (a known rough edge), so it is not held to the floor there. 128×96 also gets an
-// LCL run, so both sizes are covered.
 const seedRuns = [...randomSeeds.map(seed => [seed, "lcl", 64, 48]), ...randomSeeds.slice(2).map(seed => [seed, "none", 64, 48]),
   ...randomSeeds.slice(0, 2).map(seed => [seed, "inversion", 128, 96]), [randomSeeds[3], "lcl", 128, 96]];
-test(`blobs keep rising and falling and rain keeps falling on random seeds ${randomSeeds.join(", ")}`, () => {
+test(`blobs keep rising and falling and rain keeps falling on ${fuzzing ? "random" : "pinned"} seeds ${randomSeeds.join(", ")}`, () => {
   for (const [seed, layering, width, height] of seedRuns) {
     const simulation = createConvection({ width, height, seed }), options = { layering };
     const start = totalWater(simulation);

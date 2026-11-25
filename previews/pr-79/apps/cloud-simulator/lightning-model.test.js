@@ -1,18 +1,19 @@
 /* Purpose: Verify charge-triggered independent lightning, connections, discharge, rendering and repeatability.
- * Consumers: Node test runner. Dependencies: node:test, node:assert, node:crypto, scene/session and charge-field modules. */
-import {randomInt} from "node:crypto";
+ * Consumers: Node test runner. Dependencies: node:test, node:assert, core/test-seeds, scene/session and charge-field modules. */
+import {testSeeds,fuzzing} from "./core/test-seeds.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {lightningScene,groundAt} from "./lightning-model.js";
 import {createSession} from "./experiment-session.js";
 import {groundLightRadius,terrainShadowAt,createTerrainObjects} from "./lightning-terrain.js";
 import {createCharge,stepCharge,strongestGradient,chargePoint} from "./charge-field.js";
-const seeds=process.env.LIGHTNING_SEEDS?process.env.LIGHTNING_SEEDS.split(",").map(Number):Array.from({length:4},()=>randomInt(0,4294967296));
+// Pinned seeds (core/test-seeds.js); FUZZ_SEEDS=1 draws fresh ones, LIGHTNING_SEEDS=1,2 still runs a listed set.
+const seeds=process.env.LIGHTNING_SEEDS?process.env.LIGHTNING_SEEDS.split(",").map(Number):testSeeds(4);
 const active=s=>s.state.layers.find(l=>l.phase==="flash"||l.phase==="ready"||l.phase==="leader");
 function finish(s,layer){for(let i=0;i<3000&&["ready","leader"].includes(layer.phase);i++)s.step();assert.equal(layer.phase,"flash");}
 function quiet(s){for(const layer of s.state.layers){layer.phase="quiet";layer.nodes=[];layer.charge.values.fill(0);layer.charge.drift.fill(0);layer.charge.bulkDrift=0;}}
 function forced(kind){const s=createSession(lightningScene,42,{chargeRate:0});quiet(s);const l=s.state.layers[0];l.charge.values[29]=3;if(kind==="cloud")l.charge.values[32]=-3;s.step();assert.equal(l.strike.kind,kind);return {s,l};}
-test(`one inspected event; channels connect with valid ancestors (fresh seeds ${seeds.join(',')})`,()=>{
+test(`one inspected event; channels connect with valid ancestors (${fuzzing?'random':'pinned'} seeds ${seeds.join(',')})`,()=>{
   for(const seed of seeds){const s=createSession(lightningScene,seed),layer=active(s);
     assert.equal(s.state.layers.length,3);assert.equal(s.state.layers.filter(l=>l.phase==="flash").length,1);
     assert.ok(layer.nodes.length<800);const hit=layer.nodes[layer.head];

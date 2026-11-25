@@ -22,7 +22,7 @@ test("Convection study: layout, playback, options, resolution, restarts and save
   const page = mountExperiment(convection, { doc, raf, presets: false, serviceWorker: null, playing: true });
   const tick = () => Number(/^Tick (\d+)/.exec($("stats").textContent)[1]);
   frame();
-  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed", "timeOfDay"]); assert.equal($("play").textContent, "Pause");
+  assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "new-seed", "drift", "drift-speed", "reset-sun", "timeOfDay", "sunPathWidth", "sunPathHeight", "sunPathX", "sunPathY"]); assert.equal($("play").textContent, "Pause");
   const legends = $("controls").children.filter(node => node.tagName === "FIELDSET").map(node => node.children[0].textContent);
   assert.deepEqual(legends, ["Options · part of the run’s parameters", "Starting fields · changing these resets the run"]);
   assert.equal($("controls").children.at(-1).tagName, "FIELDSET", "water sits last, after the rule sliders");
