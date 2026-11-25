@@ -1,6 +1,7 @@
 /*
  * Purpose: The common contract every cloud simulator experiment module meets, plus pure
- *   helpers over its params schema (defaults, cleaning untrusted params, which params drift).
+ *   helpers over its params schema (defaults, cleaning untrusted params, which params drift,
+ *   a named weather state's full params).
  *   An experiment describes its controls in code and draws pixels; core/host.js turns that
  *   into a page (controls, shared loop and clock, shared sun, rating bar, ?p= links).
  * Consumers: core/host.js, core/registry.js, the experiment modules (../*-experiment.js),
@@ -24,7 +25,11 @@
  * (only with `sun`). An experiment declares capabilities; it never builds these itself.
  * Its own controls go in a section below, under its title.
  * Optional capabilities (each generic; an experiment uses only what it needs):
- *   autoplay      start playing on load (unless the reader prefers reduced motion)
+ *   autoplay      start playing on load (unless the reader prefers reduced motion); with
+ *                 `sun`, loading a saved look keeps it playing too
+ *   legacySunShape  false for a `sun` page that only followed the shared sun once the path
+ *                 had settings: its saved looks without sunPath* keys load on the default
+ *                 path, not the older shape (LEGACY_SUN_SHAPE) the first sun pages used
  *   seed          the key of the seed param the common New seed button changes (random, or
  *                 that param's next(value)); without it the panel has no New seed
  *   stepSeconds   clock seconds one Step advances (a number, or (params) => number): one
@@ -44,23 +49,40 @@
  *   stats(params, frame, instance)    one-line status under the buttons
  *   loadError     status line shown if an instance's ready promise rejects
  *   groupNotes    { group: note } bolds those groups' titles and adds the note ("" for none)
+ *   weatherStates named, checked-in weather states the common panel can jump to (one button
+ *                 each, labelled with its id): [{ id, help, params, timeOfDay? }]. params are
+ *                 that state's own values (every other setting takes its default); timeOfDay
+ *                 (hours) sets the shared clock too. weatherStateParams builds the full params,
+ *                 so a later pull-toward (Drift gravitating to a state) can use it as a target
  * An instance is:
  *   update(params, { playing })  take a full, cleaned params object (rebuild what depends on it)
  *   step(dt, frame)  advance any simulation by dt clock seconds; return false if nothing
  *                    visible changed (a fixed-rate simulation between its ticks)
  *   render(frame)    return RGBA pixels (Uint8ClampedArray of width × height × 4), or null
- *                    while not ready
+ *                    while not ready. It reads state and the frame only: it never changes the
+ *                    simulation or draws random numbers (step does that, from the seed), so
+ *                    the same seed and steps always give the same picture
  *   dispose()        release anything held
  *   selfLight()      optional: 0 to 1, how brightly the scene lights itself right now (a
- *                    lightning flash). The host's night step dims the frame by the darker of
- *                    daylight and this, so a flash stays bright at night
+ *                    lightning flash, or any other scene light drawn from state). The host's
+ *                    night step dims the frame by the darker of daylight and this, so a flash
+ *                    stays bright at night. Every experiment with a scene light reports it.
  *   ready            optional promise; the host keeps playback disabled until it settles
- * frame is { time, sun } where time is the shared clock in seconds and sun is
- * sunAt(time, shape) = { phase, azimuth, elevation } (degrees) on the shared vertical
- * figure-eight, sized and placed by the host-owned sunPath* settings.
+ * frame is { time, sun, moon }: the sky lights, all on the shared clock. time is the clock in
+ * seconds; sun is sunAt(time, shape) = { phase, azimuth, elevation } (degrees) on the shared
+ * vertical figure-eight, sized and placed by the host-owned sunPath* settings; moon is
+ * moonAt(time) = { phase, azimuth, elevation } on its fixed path (core/moon-path.js). An
+ * experiment lights from these and never works out its own sun or moon.
+ * The shared vocabulary these follow (fields, rules, render passes, lights, how a frame is
+ * made) is docs/cloud-simulator-combined.md.
  */
 
-// Every kind takes { key, help?, group?, enabled?(params), hidden?, wide?, randomize? }:
+// Every kind takes { key, help?, group?, enabled?(params), hidden?, wide?, randomize?, affects? }:
+// affects says what a change to it invalidates (AFFECTS): "fields" (rebuild derived fields,
+// then lighting), "lighting" (rebuild lighting) or "draw" (only redraw: a setting that just
+// steers the ticks that follow counts here too). Seed and size params leave it out, since
+// changing them rebuilds the instance. paramsAffecting lists the keys for a level, so caches
+// follow the declarations instead of hand-kept lists;
 // randomize: false leaves it out of the common Randomize (a playback speed, a start mode, or an inspection/display setting);
 // wide spans the
 // whole controls row, group puts it in a
@@ -77,6 +99,7 @@
 // size:   { key: "resolution", options: [["WxH", label], …], default }   grid size radios;
 //         switching rebuilds the instance at that size
 export const PARAM_KINDS = ["range", "select", "toggle", "seed", "size"];
+export const AFFECTS = ["fields", "lighting", "draw"];
 export const SEED_MAX = 4294967295;
 // Saved by the host itself: the sun's place on the shared path and the path's four shape
 // settings (core/sun-path.js), the grid size (unless a size param owns it) and Drift.
@@ -108,6 +131,7 @@ export function validateExperiment(experiment) {
       if (!(param.default >= param.min && param.default <= param.max)) problems.push(`range ${name} default is out of range`);
     }
     if (param?.randomize !== undefined && typeof param.randomize !== "boolean") problems.push(`param ${name} randomize must be true or false`);
+    if (param?.affects !== undefined && !AFFECTS.includes(param.affects)) problems.push(`param ${name} affects must be one of ${AFFECTS.join(", ")}`);
   if (param?.kind === "select" && !param.options?.some(([value]) => value === param.default)) problems.push(`select ${name} default is not an option`);
     if (param?.kind === "seed" && !isSeed(param.default)) problems.push(`seed ${name} default must be an integer 0 to ${SEED_MAX}`);
     if (param?.kind === "toggle" && typeof param.default !== "boolean") problems.push(`toggle ${name} default must be true or false`);
@@ -133,6 +157,7 @@ export function validateExperiment(experiment) {
     else if (COMMON_IDS.includes(action.id) || action.id.startsWith("new-")) problems.push(`action id ${action.id} is reserved for the common panel`);
   }
   for (const [id, readout] of Object.entries(experiment?.readouts ?? {})) if (typeof readout !== "function") problems.push(`readout ${id} must be a function`);
+  if (experiment?.weatherStates !== undefined) problems.push(...weatherStateProblems(experiment));
   if (!Array.isArray(experiment?.params)) problems.push("params must be an array");
   if (problems.length) throw new Error(`Experiment ${experiment?.id ?? "?"}: ${problems.join("; ")}`);
   return experiment;
@@ -144,6 +169,9 @@ export function validateInstance(instance) {
   if (missing.length) throw new Error(`Experiment instance is missing ${missing.join(", ")}`);
   return instance;
 }
+
+// Keys of the params that declare one of `levels` (AFFECTS), in schema order.
+export const paramsAffecting = (experiment, ...levels) => experiment.params.filter(param => levels.includes(param.affects)).map(param => param.key);
 
 export const isSeed = value => Number.isInteger(value) && value >= 0 && value <= SEED_MAX;
 
@@ -200,3 +228,42 @@ export function randomParams(experiment, params, random) {
 
 // Sliders Drift may move: visible ranges not marked drift: false (playback speeds and the like).
 export const driftableParams = experiment => experiment.params.filter(param => param.kind === "range" && param.drift !== false && !param.hidden);
+
+// Problems with an experiment's weatherStates: each needs a code-name id (its button's id and
+// label) that no common control, param or action uses, a help sentence, and params that are
+// all known, valid values; timeOfDay, if given, is 0 to 24 hours.
+function weatherStateProblems(experiment) {
+  if (!Array.isArray(experiment.weatherStates)) return ["weatherStates must be an array"];
+  const problems = [], ids = new Set(), byKey = new Map((experiment.params ?? []).map(param => [param?.key, param]));
+  const taken = new Set([...COMMON_IDS, ...byKey.keys(), ...(experiment.actions ?? []).map(action => action?.id)]);
+  for (const state of experiment.weatherStates) {
+    const id = state?.id;
+    if (typeof id !== "string" || !/^[a-z][A-Za-z0-9]*$/.test(id)) { problems.push("every weather state needs a camelCase id"); continue; }
+    if (ids.has(id) || taken.has(id)) problems.push(`weather state id ${id} is already used`);
+    ids.add(id);
+    if (typeof state.help !== "string" || !state.help) problems.push(`weather state ${id} needs help text`);
+    if (state.timeOfDay !== undefined && !(state.timeOfDay >= 0 && state.timeOfDay <= 24)) problems.push(`weather state ${id} timeOfDay must be 0 to 24`);
+    if (!state.params || typeof state.params !== "object") { problems.push(`weather state ${id} needs params`); continue; }
+    for (const [key, value] of Object.entries(state.params)) {
+      const param = byKey.get(key);
+      if (!param) problems.push(`weather state ${id} sets unknown param ${key}`);
+      else if (cleanParam(param, value, null) !== value) problems.push(`weather state ${id} has a bad ${key}`);
+    }
+  }
+  return problems;
+}
+
+// A named weather state's full params: every setting at its default, then the state's own
+// values, with fresh seeds (from `random`, () => [0, 1)). Settings Randomize leaves alone
+// (randomize: false: inspection views, playback speeds, start modes) and the grid size keep
+// their current values unless the state sets them.
+export function weatherStateParams(experiment, state, params, random) {
+  const kept = experiment.params.filter(param => param.kind === "size" || param.randomize === false);
+  const seeds = experiment.params.filter(param => param.kind === "seed");
+  return cleanParams(experiment, {
+    ...defaultParams(experiment),
+    ...Object.fromEntries(kept.map(param => [param.key, params[param.key]])),
+    ...Object.fromEntries(seeds.map(param => [param.key, randomValue(param, random)])),
+    ...state.params
+  });
+}

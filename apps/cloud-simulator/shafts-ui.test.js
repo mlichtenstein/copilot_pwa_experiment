@@ -1,13 +1,14 @@
 /* Purpose: Check Light shafts on the shared host: strategy radios redraw and grey out the
  *   visibility-only sliders, pattern buttons change one cloud picture, Randomize changes the
- *   lighting but keeps the strategy and patterns, the shared sun plays inside the
- *   scene's limits, and old links with fixed sun angles still load.
+ *   lighting, the shared sun plays across its whole swing (off-screen suns stay finite and
+ *   move the light), and old links with fixed sun angles still load.
  * Consumers: Node test runner. Dependencies: node:test, node:assert, shafts-experiment.js,
  *   core/host.js, core/sun-path.js and core/fake-dom.js. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { shafts, sceneSun, SUN_LIMITS } from "./shafts-experiment.js";
 import { mountExperiment } from "./core/host.js";
+import { defaultParams } from "./core/experiment.js";
 import { LEGACY_SUN_SHAPE, SUN_PATH_KEYS, sunAt } from "./core/sun-path.js";
 import { fakeDocument, fakeCanvas, manualFrames, controlIds } from "./core/fake-dom.js";
 
@@ -23,7 +24,7 @@ test("Light shafts: strategies, patterns, Randomize picks every setting, the sha
   frame();
   const first = canvas.pixels();
   assert.deepEqual(controlIds($("playback")), ["play", "step", "randomize", "drift", "drift-speed", "reset-sun", "timeOfDay", ...SUN_PATH_KEYS]);
-  assert.deepEqual($("pattern-buttons").children.map(button => button.textContent), ["Change near", "Change middle", "Change far"]);
+  assert.deepEqual($("pattern-buttons").children.map(button => button.textContent), ["New nearPattern", "New middlePattern", "New farPattern"]);
   assert.equal($("patterns").textContent, "near: 42 · middle: 1039 · far: 2036");
   assert.match($("stats").textContent, /^3 cloud layers · layered visibility · \d+ ms\/frame$/);
   assert.equal($("strategy-layered").checked, true);
@@ -46,10 +47,10 @@ test("Light shafts: strategies, patterns, Randomize picks every setting, the sha
   assert.ok(Number($("haze").value) >= 0 && Number($("haze").value) <= 1);
   strategy("layered");
 
-  // The shared sun moves; the scene follows its elevation and holds it inside its sideways reach.
+  // The shared sun moves; the scene follows its elevation and its whole sideways swing.
   $("play").fire("click"); for (let i = 0; i < 20; i++) frame(200);
   assert.ok(page.clock.time > 0); assert.notDeepEqual(canvas.pixels(), first);
-  assert.deepEqual(sceneSun({ elevation: -5, azimuth: 60 }), { sunElevation: -5, sunAzimuth: SUN_LIMITS.azimuth[1] });
+  assert.deepEqual(sceneSun({ elevation: -5, azimuth: 60 }), { sunElevation: -5, sunAzimuth: 60 });
   assert.deepEqual(sceneSun({ elevation: 60, azimuth: -10 }), { sunElevation: 60, sunAzimuth: -10 });
   assert.ok(SUN_LIMITS.elevation[0] <= -45 && SUN_LIMITS.elevation[1] >= 60, "the whole slider-reachable path is followed");
 
@@ -60,4 +61,25 @@ test("Light shafts: strategies, patterns, Randomize picks every setting, the sha
   assert.ok(Math.hypot(sun.azimuth + 8, sun.elevation - 8) < 4);
   assert.equal(page.getParams().strategy, "visibility"); assert.equal(page.getParams().haze, 0.5);
   assert.equal($("play").textContent, "Play");
+});
+
+test("Light shafts: suns at the path's extreme azimuths are off-screen, finite and still move the light", () => {
+  // The four sliders reach azimuth ±90° (sunPathX ± sunPathWidth / 2).
+  assert.equal(sunAt(90 * 0.125 / 1, { sunPathWidth: 90, sunPathX: 45 }).azimuth.toFixed(6), "90.000000");
+  let previous = -Infinity;
+  for (let azimuth = -90; azimuth <= 90; azimuth += 5) {
+    const { sunAzimuth } = sceneSun({ elevation: 10, azimuth });
+    assert.ok(Number.isFinite(sunAzimuth) && Math.abs(sunAzimuth) < SUN_LIMITS.azimuth[1] && sunAzimuth > previous, `azimuth ${azimuth} → ${sunAzimuth}`);
+    previous = sunAzimuth;
+  }
+  assert.equal(sceneSun({ elevation: 10, azimuth: Number.NaN }).sunAzimuth, 0);
+  for (const strategy of ["visibility", "layered", "geometric"]) {
+    const instance = shafts.create({ width: 64, height: 40, params: { ...defaultParams(shafts), strategy } });
+    const shots = [-90, 0, 90].map(azimuth => {
+      const pixels = instance.render({ sun: { azimuth, elevation: 20, phase: 0 } });
+      assert.ok(pixels.every(Number.isFinite), `${strategy} at ${azimuth}°`);
+      return Array.from(pixels);
+    });
+    assert.notDeepEqual(shots[0], shots[2], `${strategy}: left and right suns differ`);
+  }
 });

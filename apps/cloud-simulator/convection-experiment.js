@@ -1,19 +1,23 @@
 /*
  * Purpose: Convection study as a cloud simulator experiment module: a heated, wet floor and a
- *   cooled lid overturn a box of moist air into cloud and rain. Its sunset lighting is baked
- *   into the model's Sunset view (a low sun at the lower right), so it does not follow the
- *   shared sun.
+ *   cooled lid overturn a box of moist air into cloud and rain. Its Sunset view is lit by the
+ *   shared sun (core/sun-light.js): from the sun's side and height, fading at dusk.
  * Consumers: convection.js (mounts it with core/host.js), core/registry.js,
  *   core/experiment.test.js, convection-ui.test.js.
  * Dependencies: convection-model.js (simulation and rendering); the contract in core/experiment.js.
  */
 import { defaults, createConvection, step, totalWater, renderConvection } from "./convection-model.js";
+import { sunLight } from "./core/sun-light.js";
 
 const OPTIONS = "Options · part of the run’s parameters", START = "Starting fields · changing these resets the run";
-const slider = (key, min, max, stepSize, help, extra = {}) => ({ key, kind: "range", min, max, step: stepSize, default: defaults[key], help, ...extra });
+// affects: how far a change reaches (core/experiment.js). The run holds no cache of its own:
+// a rule change just steers the ticks that follow, so it only needs a redraw ("draw"). Water
+// and the seed restart the run (water declares "fields"; the seed and size params restart it
+// through the instance and host, as in Weather).
+const slider = (key, min, max, stepSize, help, extra = {}) => ({ key, kind: "range", min, max, step: stepSize, default: defaults[key], help, affects: "draw", ...extra });
 const legends = {
-  sunset: "Sunset: solid clouds = cloudy air that is rising or warm, or pressed flat under warmer air above it (the inversion); with the LCL they sit on flat bases at one height over clear air, lit peach and pink from a low sun at lower right and grey-violet in their own shadow, with frayed wisps at the edges; faint veil = still cloud and near-saturated haze; soft curtains = falling rain.",
-  sunsetRaw: "Sunset, raw cloud water: every bit of simulated cloud drawn by its own amount, lit from a low sun at lower right; it reads as smoke. Soft curtains = falling rain.",
+  sunset: "Sunset: solid clouds = cloudy air that is rising or warm, or pressed flat under warmer air above it (the inversion); with the LCL they sit on flat bases at one height over clear air, lit from the sun's side (peach and pink while it is low, whiter when high) and grey-violet in their own shadow, with frayed wisps at the edges; faint veil = still cloud and near-saturated haze; soft curtains = falling rain.",
+  sunsetRaw: "Sunset, raw cloud water: every bit of simulated cloud drawn by its own amount, lit from the sun's side; it reads as smoke. Soft curtains = falling rain.",
   lamp: "Lava lamp: orange = warmer than the row average (rising), blue = cooler (sinking), pale cyan = falling rain (cloud is hidden here; see Cloud and rain).",
   water: "Cloud and rain: dark air, blue tint = vapor, gray-white = cloud, pale cyan = falling rain. Fixed color scale; no decorative trails.",
   temperature: "Temperature: blue = cold, red = warm. The floor is heated and the lid is cooled.",
@@ -35,15 +39,16 @@ export const convection = {
   app: "cloud-simulator/convection",
   width: 64,
   height: 48,
-  sun: false,
+  sun: true,
+  legacySunShape: false,
   autoplay: true,
   // The common New seed starts a new run; Step is one tick at the current speed.
   seed: "seed",
   stepSeconds: params => 1 / params.speed,
   params: [
-    { key: "view", randomize: false, kind: "select", default: "sunset",
+    { key: "view", randomize: false, kind: "select", affects: "draw", default: "sunset",
       options: [["sunset", "Sunset"], ["lamp", "Lava lamp"], ["water", "Cloud and rain"], ["temperature", "Temperature"], ["buoyancy", "Buoyancy"], ["humidity", "Relative humidity"]] },
-    { key: "layering", kind: "select", display: "radio", group: OPTIONS, default: "lcl", help: "What shapes the cloud layer.",
+    { key: "layering", kind: "select", affects: "draw", display: "radio", group: OPTIONS, default: "lcl", help: "What shapes the cloud layer.",
       options: [["none", "None: plain overturning"],
         ["inversion", "Inversion (cap): a warm, stable layer aloft stops the rising air, as a trade-wind inversion does; clouds spread flat under it"],
         ["lcl", "LCL (flat bases): a well-mixed layer under the lifting condensation level; every thermal saturates at one height, so cumulus sit on flat bases and billow up"]] },
@@ -52,10 +57,10 @@ export const convection = {
     // Switching restarts the same seed and parameters at the new size (the host rebuilds).
     { key: "resolution", kind: "size", group: OPTIONS, default: "64x48", help: "Grid size; switching restarts the same seed.",
       options: [["64x48", "Pixel art 64×48"], ["128x96", "Detailed 128×96"]] },
-    { key: "cloudStyle", kind: "select", display: "radio", group: OPTIONS, default: "cumulus", help: "How the Sunset view draws cloud water.",
+    { key: "cloudStyle", kind: "select", affects: "draw", display: "radio", group: OPTIONS, default: "cumulus", help: "How the Sunset view draws cloud water.",
       options: [["cumulus", "Cumulus: rising or capped cloud, billowed"], ["raw", "Raw cloud water (smoky first version)"]] },
-    { key: "feather", kind: "toggle", group: OPTIONS, default: true, help: "Fray cumulus edges into wisps that fade over a few pixels; cores stay solid.", enabled: params => params.cloudStyle !== "raw" },
-    { key: "pixelArt", kind: "toggle", group: OPTIONS, default: true, help: "Banded sky, a few hard-stepped cloud shades, dithered fringe and rain.", enabled: params => params.cloudStyle !== "raw" },
+    { key: "feather", kind: "toggle", affects: "draw", group: OPTIONS, default: true, help: "Fray cumulus edges into wisps that fade over a few pixels; cores stay solid.", enabled: params => params.cloudStyle !== "raw" },
+    { key: "pixelArt", kind: "toggle", affects: "draw", group: OPTIONS, default: true, help: "Banded sky, a few hard-stepped cloud shades, dithered fringe and rain.", enabled: params => params.cloudStyle !== "raw" },
     slider("buoyancy", 0, 0.03, 0.001, "How strongly a sideways temperature difference spins the air; warm sides rise."),
     slider("viscosity", 0, 0.24, 0.01, "Fraction of spin shared with neighbors per tick; higher makes fatter, slower blobs."),
     slider("heating", 0, 1, 0.05, "Fraction of the gap to the hot floor temperature closed per tick in the bottom row."),
@@ -67,9 +72,9 @@ export const convection = {
     slider("autoconversion", 0, 1, 0.05, "Fraction of cloud above 0.005 per pixel that gathers into rain drops per tick."),
     slider("fallSpeed", 0, 1, 0.05, "Fraction of each pixel’s rain moving down one pixel per tick; 1 outruns the fastest updraft."),
     slider("flicker", 0, 1.5, 0.05, "Seeded random wobble of the floor temperature per column; keeps the flow from locking."),
-    { key: "speed", kind: "range", min: 1, max: 60, step: 1, default: 30, drift: false, randomize: false, help: "Simulation ticks per second; playback speed, not a wind speed." },
+    { key: "speed", kind: "range", min: 1, max: 60, step: 1, default: 30, affects: "draw", drift: false, randomize: false, help: "Simulation ticks per second; playback speed, not a wind speed." },
     // Changing water restarts the run, so Drift leaves it alone.
-    { key: "water", kind: "range", min: 0, max: 0.4, step: 0.01, default: 0.11, group: START, drift: false, help: "Mean water per pixel (vapor + cloud + rain + puddles); conserved for the whole run." },
+    { key: "water", kind: "range", min: 0, max: 0.4, step: 0.01, default: 0.11, affects: "fields", group: START, drift: false, help: "Mean water per pixel (vapor + cloud + rain + puddles); conserved for the whole run." },
     // Seeds only make a run reproducible; behavior should look alike on any seed, so the
     // page picks one at random; New seed starts another.
     { key: "seed", kind: "seed", default: 42, random: true, hidden: true }
@@ -100,7 +105,7 @@ export const convection = {
         while (carry >= 1 - 1e-9) { step(instance.simulation, rules); carry -= 1; changed = true; }
         return changed;
       },
-      render: () => renderConvection(instance.simulation, current.view, rulesOf(current)),
+      render: frame => renderConvection(instance.simulation, current.view, rulesOf(current), sunLight(frame.sun)),
       dispose() {}
     };
     instance.restart();
