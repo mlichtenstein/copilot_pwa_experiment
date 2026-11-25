@@ -10,14 +10,14 @@ export const nodes=[
   {id:"bitmap",label:"Cloud texture",description:"Fixed Horizon mask, sampled with this layer’s altitude and wind. Produces part of cloud water."},
   {id:"reveal",label:"Cloud reveal noise",description:"Current Perlin reveal factor. Shares its noise sample with diagnostic humidity and the cloud supplier."},
   {id:"humidity",label:"Humidity",description:"Normalized diagnostic field from the supplier noise. It does not currently drive rain or cloud water."},
-  {id:"cloudWater",label:"Cloud water",description:"Bitmap/noise mixture times coverage and reveal. Read by opacity, visibility masks and the current simple rain source."},
+  {id:"cloudWater",label:"Cloud water",description:"Bitmap/noise mixture times coverage and reveal. Read by opacity, visibility masks, the rain source and the cloud support of charge."},
   {id:"opacity",label:"Cloud opacity",description:"1 − exp(−cloudOpacity × cloud water), in the native field grid. Controls cloud-body blending."},
   {id:"mask",label:"Threshold mask",description:"Middle visibility-band mask: cloudOpacity × sharpened density ≥ 0.5. The other bands use thresholds 1 and 0.25."},
   {id:"cloudColor",label:"Cloud color",description:"Projected cloud-body contribution on black, before compositing. Uses atmospheric paths and visibility from farther layers, not its own silhouette."},
   {id:"visibility",label:"Visibility polygon",description:"This layer’s actual middle-band coverage in the camera plane, including feathered caps. White is reachable sunlight."},
   {id:"rain",label:"Rain water",description:"Separately transported rain field. The current illustrative source reads cloud water; stronger formation/interaction rules are next-PR work."},
   {id:"shafts",label:"Light veil",description:"This depth’s three-band veil contribution on black. Intersects visibility of this layer and all farther layers, then applies atmospheric sun color."},
-  {id:"charge",label:"Charge potential",description:"Independent signed 12×6 potential field. Red/blue are opposite signs. No cloud-water-to-charge connection exists yet."},
+  {id:"charge",label:"Charge potential",description:"Signed 12×6 potential field per depth. Red/blue are opposite signs. Builds only where cloud water reaches denseCloudWater; lightning starts only from those dense cells."},
   {id:"lightning",label:"Lightning light",description:"Current projected channel glow and core contribution on black. Black means there is no visible leader/flash."},
   {id:"terrain",label:"Terrain + props",description:"This depth’s projected ground and fixed tree/rock silhouettes, shown without atmospheric color."},
   {id:"groundLight",label:"Ground light / shadows",description:"Actual local contact-light pool after prop shadowing, on black. Only a ground flash activates it; cloud flashes leave it black."}
@@ -32,9 +32,9 @@ const contracts={
  mask:["Boolean field · cloud / clear","Cloud water; cloudSharpness; cloudOpacity; band threshold","Sharpen density, then compare cloudOpacity × sharpened density ≥ threshold. Middle band shown: 0.5; other bands: 1 and 0.25."],
  cloudColor:["RGB color field · linear light","Cloud opacity; atmospheric direct light/transmission; sky; moon position; farther visibility","Add cool lunar backlight within 9°, attenuated by cloud optical depth. Multiply cloud lighting by opacity; direct light is weighted by farther-layer visibility. Tone map for display; own silhouette does not shade its cloud body."],
  visibility:["Scalar field · 0–1 light coverage","Threshold mask; sun position; band radius; edgeFeather","Build sun visibility polygon through the thresholded cloud edges; feather cloud-facing caps. Camera-plane middle band shown; ray sides remain crisp."],
- rain:["Scalar field · normalized rain","Previous rain above; cloud water q; rainAmount","Every 0.1 s: rain = clamp(0.94 × rainAbove + max(0, q − 0.65) × rainAmount × 0.25, 0, 1). Top boundary has no incoming rain."],
+ rain:["Scalar field · normalized rain","Previous rain above; cloud water q; rainAmount; denseCloudWater D","Every 0.1 s: rain = clamp(0.94 × rainAbove + max(0, q − D) × rainAmount × 0.25, 0, 1). Top boundary has no incoming rain."],
  shafts:["RGB color field · linear light","Same/farther visibility bands; atmospheric sun color; haze; shaftStrength","Intersect visibility from this depth outward; weight three bands and blend their colored light contributions. Tone map for display."],
- charge:["Signed scalar field · 12×6","Previous charge; stochastic increments; storminess; chargeBias","Existing lightning dynamics drift/diffuse charge and discharge excessive gradients into channels. Independent of cloud water; red/blue display opposite signs."],
+ charge:["Signed scalar field · 12×6","Previous charge; stochastic increments; storminess; chargeBias; cloud water q; denseCloudWater D","Support s = min(1, mean q over the cell ÷ D). Buildup (bias + drift) is scaled by s and clear air relaxes faster (0.025 + 0.25 × (1 − s)); lightning starts only from cells with s = 1, and a cloud-to-cloud target must be dense too. Red/blue display opposite signs."],
  lightning:["RGB color field · channel raster","Charge gradients; channel geometry; strike age; terrain contact","Rasterize current channel core and glow using strike timing. No visible strike → black; tone map the light contribution."],
  terrain:["Geometry + boolean silhouette raster","Layer distance; fixed ridge; seeded trees/rocks","Project the ridge and rasterize props. Preview uses neutral colors; terrain supplies contact geometry and shadow occluders."],
  groundLight:["RGB color field · local illumination","Ground-contact flash; terrain; trees/rocks","pool = flashPower × max(0, 1 − distance / radius)² × propShadow. Only below terrain and during ground flashes; tone map for display."]
@@ -45,7 +45,7 @@ export const passes=renderOrder.map((id,index)=>({id,index,label:["Sky","+ Light
 export function graphEdges(){
   const edges=[];
   for(const layer of ["near","middle","far"]){
-    for(const [from,to] of [["bitmap","cloudWater"],["reveal","cloudWater"],["reveal","humidity"],["cloudWater","opacity"],["cloudWater","mask"],["opacity","cloudColor"],["mask","visibility"],["cloudWater","rain"],["charge","lightning"],["terrain","lightning"],["terrain","groundLight"],["lightning","groundLight"]])edges.push({from:`${layer}:${from}`,to:`${layer}:${to}`});
+    for(const [from,to] of [["bitmap","cloudWater"],["reveal","cloudWater"],["reveal","humidity"],["cloudWater","opacity"],["cloudWater","mask"],["opacity","cloudColor"],["mask","visibility"],["cloudWater","rain"],["cloudWater","charge"],["charge","lightning"],["terrain","lightning"],["terrain","groundLight"],["lightning","groundLight"]])edges.push({from:`${layer}:${from}`,to:`${layer}:${to}`});
     for(const to of ["cloudColor","shafts","visibility"])edges.push({from:"sun",to:`${layer}:${to}`});
   }
   const names=["near","middle","far"];
