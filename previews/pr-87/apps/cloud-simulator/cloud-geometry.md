@@ -41,7 +41,7 @@ Perspective camera rays intersect closed solids. Source direction points toward 
 
 Six midpoint samples per interval approximate single scattering with an artistic forward bias. Direct surface response, ambient fill and volume scattering are separately inspectable; historical `diffusion`/`diffusionAdded` field IDs now consistently mean volume scattering for all shapes. `transmission` is the nearest interval's unscaled transport coefficient. A camera-facing surface can stay dark while thinner paths glow.
 
-These are homogeneous solids with a fixed camera, flat ground and stylized colors. Mesh tessellation, image thresholding, six-sample integration and surface-plus-volume blending are approximations. Intersecting separate layers are composited as successive intervals rather than solved as a combined participating medium. No Earth curvature, multiple scattering, calibrated atmospheric colors or energy-conserving surface/volume coupling is claimed.
+These are procedurally textured solids with a fixed camera, flat ground and stylized colors. Mesh tessellation, image thresholding, six-sample integration and surface-plus-volume blending are approximations. Intersecting separate layers are composited as successive intervals rather than solved as a combined participating medium. No Earth curvature, multiple scattering, calibrated atmospheric colors or energy-conserving surface/volume coupling is claimed.
 
 ## Verification
 
@@ -52,3 +52,9 @@ Tests cover closed volumes from front/side/inside, cluster-union thickness, inde
 ## Direct illumination in the side view
 
 Cloud fills show `directIncident`: the shared incoming hue and Earth-shadow value multiplied by cloud-path visibility, before normal-facing reflection or volume scattering. Side rays along +X cache real surface points and normals, then relight those samples whenever lighting changes. This is a view of the same solids from another direction; it need not match the front-facing surface colors pixel for pixel. Selected silhouettes have a pale outline; unselected cloud colors are not dimmed. Identity colors remain only on labels. No second illumination mode is added to the side cloud fills.
+
+## Microtexture
+
+`microtextureScale` controls the frequency of two-octave smooth 3D noise in normalized cloud coordinates; `microtextureStrength` controls density contrast and tangent normal perturbation. The default strength is 0.65; zero restores the previous rendering. Noise follows each cloud transform, never the camera or light. Broad normals, hue coordinates, intersections and silhouettes are unchanged.
+
+The same positive density field modulates camera extinction, source obstruction (including side-view incident illumination), and scattering. Six midpoint samples approximate each ray interval; small features and long grazing paths are approximate at this resolution. No new assets or dependencies are required.
