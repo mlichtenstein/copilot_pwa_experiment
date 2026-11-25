@@ -2,7 +2,7 @@
  * Consumers: Node test runner. Dependencies: cloud-geometry and normal-lighting models. */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {CAMERA,createCloudScene,cameraRay,projectDirection,lightDirection,intersectEllipsoid,surfaceNormal,opticalDepth,pickCloud,renderCloudScene,dot,gradientAxis,gradientCoordinate,spatialGradientColor,hueColor,earthLightAt,illuminationAt,along,directIlluminationAt,sideSurfaceSamples,rayCloud} from './cloud-geometry.js';
+import {CAMERA,createCloudScene,cameraRay,projectDirection,lightDirection,intersectEllipsoid,surfaceNormal,opticalDepth,pickCloud,renderCloudScene,dot,gradientAxis,gradientCoordinate,spatialGradientColor,hueColor,earthLightAt,illuminationAt,along,directIlluminationAt,sideSurfaceSamples,rayCloud,microDensity,localToWorld} from './cloud-geometry.js';
 import {shadeCloud,gradientColor} from './normal-lighting-model.js';
 const sphere={id:'test',center:[0,0,6],radii:[2,2,2]};
 const scene={camera:{...CAMERA,position:[0,0,0],pitch:0},clouds:[sphere]};
@@ -99,4 +99,24 @@ test('five layers contain two distinct clouds with open sky in the default compo
  let sky=0,cloud=0;const visible=new Set();
  for(let y=0;y<50;y++)for(let x=0;x<80;x++){const id=pickCloud(world,(x+.5)/80,(y+.5)/50);if(id){cloud++;visible.add(id);}else sky++;}
  assert.ok(sky>cloud,'retain more sky than solid coverage');assert.ok(cloud>100,'clouds visibly populate the scene');assert.equal(visible.size,10);
+});
+
+test('microtexture stays attached to cloud transforms and has positive bounded density',()=>{
+ const rotated={...sphere,center:[3,4,5],yaw:.7},params={microtextureStrength:1,microtextureScale:4};
+ const values=[];
+ for(let i=0;i<20;i++){
+  const q=[i/20-.5,.2,.3],a=microDensity(sphere,localToWorld({...sphere,yaw:0},q),params),b=microDensity(rotated,localToWorld(rotated,q),params);
+  assert.ok(Math.abs(a-b)<1e-12);assert.ok(a>=.1&&a<=1.9);values.push(a);
+ }
+ assert.ok(Math.max(...values)-Math.min(...values)>.2);
+});
+test('microtexture varies transport and fine shading without changing geometry or hue',()=>{
+ const sun={azimuth:120,elevation:20},params={microtextureStrength:.8,microtextureScale:3};
+ const smooth=renderCloudScene(scene,{},sun,24,16),textured=renderCloudScene(scene,params,sun,24,16);
+ for(const key of ['depth','thickness','broadNormals','colorCoordinate','layerIndex'])assert.deepEqual(textured[key],smooth[key]);
+ for(const key of ['coverage','diffusion','normals','scene'])assert.ok(textured[key].some((v,i)=>Math.abs(v-smooth[key][i])>1e-5),key);
+ for(const field of Object.values(textured))assert.ok(field.every(Number.isFinite));
+ const disabled=renderCloudScene(scene,{microtextureStrength:0,microtextureScale:8},sun,24,16);
+ assert.deepEqual(disabled,smooth);
+ assert.deepEqual(renderCloudScene(scene,params,sun,24,16),textured);
 });

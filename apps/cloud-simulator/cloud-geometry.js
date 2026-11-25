@@ -53,8 +53,32 @@ export function rayCloud(cloud,origin,direction,withNormals=true){
  return withNormals?hits.map(hit=>({...hit,normal:normal(hit.normal),geometricNormal:normal(hit.geometricNormal),cloud})):hits;
 }
 export function sceneIntervals(scene,origin,direction){return scene.clouds.flatMap(cloud=>rayCloud(cloud,origin,direction)).sort((a,b)=>a.start-b.start);}
-export function opticalDepth(scene,origin,direction,density){
- let length=0;for(const cloud of scene.clouds)for(const hit of rayCloud(cloud,origin,direction,false))length+=hit.end-hit.start;return length*density;
+// Smooth deterministic value noise, attached to normalized cloud coordinates.
+function noise3(p){
+ const base=p.map(Math.floor),f=p.map((v,i)=>{const t=v-base[i];return t*t*(3-2*t);});
+ let value=0;
+ for(let z=0;z<2;z++)for(let y=0;y<2;y++)for(let x=0;x<2;x++){
+  let h=Math.imul(base[0]+x,374761393)^Math.imul(base[1]+y,668265263)^Math.imul(base[2]+z,1442695041);
+  h=Math.imul(h^(h>>>13),1274126177);h^=h>>>16;
+  value+=(h>>>0)/4294967295*(x?f[0]:1-f[0])*(y?f[1]:1-f[1])*(z?f[2]:1-f[2]);
+ }
+ return value;
+}
+export function microDensity(cloud,p,params={}){
+ const strength=clamp(params.microtextureStrength??0);if(!strength)return 1;
+ const scale=Math.max(.5,params.microtextureScale??4);
+ const q=rotate(p.map((v,i)=>v-cloud.center[i]),-(cloud.yaw??0)).map((v,i)=>v/cloud.radii[i]*scale+17+i*31);
+ const noise=.75*noise3(q)+.25*noise3(q.map(v=>v*2.03));
+ return 1+strength*(2*noise-1)*.9;
+}
+function intervalOpticalDepth(cloud,origin,direction,start,end,density,params){
+ if(!params.microtextureStrength)return (end-start)*density;
+ const ds=(end-start)/6;let optical=0;
+ for(let i=0;i<6;i++)optical+=microDensity(cloud,along(origin,direction,start+(i+.5)*ds),params)*density*ds;
+ return optical;
+}
+export function opticalDepth(scene,origin,direction,density,params={}){
+ let optical=0;for(const cloud of scene.clouds)for(const hit of rayCloud(cloud,origin,direction,false))optical+=intervalOpticalDepth(cloud,origin,direction,hit.start,hit.end,density,params);return optical;
 }
 export function pickCloud(scene,u,v){return sceneIntervals(scene,scene.camera.position,cameraRay(u,v,scene.camera))[0]?.cloud.id??null;}
 export const SIDE={width:240,height:130,minZ:-3,maxZ:49,minY:-4,maxY:22};
@@ -110,7 +134,7 @@ export function illuminationAt(p,params={},sun={},normal=[0,0,0]){
 // Direct incident light arriving at a surface, before normal-facing reflection or scattering.
 export function directIlluminationAt(scene,p,normal,geometricNormal,params={},sun={}){
  const incoming=illuminationAt(p,params,sun,normal);
- const visibility=Math.exp(-opticalDepth(scene,along(p,geometricNormal,.001),lightDirection(sun),params.cloudDensity??.7));
+ const visibility=Math.exp(-opticalDepth(scene,along(p,geometricNormal,.001),lightDirection(sun),params.cloudDensity??.7,params));
  return {incoming,visibility,color:incoming.map(v=>v*visibility)};
 }
 export function sideSurfaceSamples(scene){
@@ -147,18 +171,25 @@ export function renderCloudScene(scene,params={},sun={},width=96,height=60){
    const {start,end,normal:n,geometricNormal}=hit,length=Math.min(end,ground)-start,p=along(scene.camera.position,ray,start);
    // Small tangent perturbation changes detail normals, never body boundaries or broad colors.
    const noise=[Math.sin(p[0]*9+p[2]*3),Math.sin(p[2]*8-p[1]*5),Math.sin(p[1]*11+p[0]*4)];
-   const normalNoise=dot(noise,n),fine=unit(n.map((v,c)=>v+.12*(noise[c]-normalNoise*v)));
+   const normalNoise=dot(noise,n),baseFine=n.map((v,c)=>v+.12*(noise[c]-normalNoise*v));
+   const epsilon=.03,gradient=[0,1,2].map(c=>{
+    const a=[...p],b=[...p];a[c]+=epsilon;b[c]-=epsilon;
+    return (microDensity(hit.cloud,a,params)-microDensity(hit.cloud,b,params))/(2*epsilon);
+   }),normalGradient=dot(gradient,n);
+   const fine=unit(baseFine.map((v,c)=>v-.35*(gradient[c]-normalGradient*n[c])));
    const coordinate=gradientCoordinate(p,params,sun,n);
    const incident=directIlluminationAt(scene,p,n,geometricNormal,params,sun),color=incident.incoming;
    const mu=facing(dot(fine,l),params.lightingModel??'lambert',params.wrap??.4);
    const surfaceFacing=1-(params.detailShadingStrength??1)+(params.detailShadingStrength??1)*mu;
    const visibility=incident.visibility;
-   const opacity=1-Math.exp(-density*length),weight=cameraTransmission*opacity;
+   const opacity=1-Math.exp(-intervalOpticalDepth(hit.cloud,p,ray,0,length,density,params)),weight=cameraTransmission*opacity;
    let transmission=0,scatteredColor=[0,0,0];
-   const ds=length/6;
+   const ds=length/6;let viewOptical=0;
    for(let step=0;step<6;step++){
     const t=(step+.5)*ds,point=along(p,ray,t);
-    const transport=Math.exp(-density*t-opticalDepth(scene,point,l,density))*density*ds;
+    const localDensity=density*microDensity(hit.cloud,point,params);
+    const transport=Math.exp(-viewOptical-localDensity*ds*.5-opticalDepth(scene,point,l,density,params))*localDensity*ds;
+    viewOptical+=localDensity*ds;
     transmission+=transport;const incoming=illuminationAt(point,params,sun,n);
     for(let c=0;c<3;c++)scatteredColor[c]+=incoming[c]*transport;
    }
